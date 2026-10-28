@@ -121,6 +121,7 @@ def _details(chargen: list[str]) -> list[dict]:
 			"kt_chargen_stufe as stufe",
 			"manufacturing_date as herstelldatum",
 			"kt_ursprungsdatum as ursprungsdatum",
+			"kt_backtag as backtag",
 			"expiry_date as verfall",
 			"supplier as lieferant",
 			"batch_qty as bestand",
@@ -133,10 +134,13 @@ def _details(chargen: list[str]) -> list[dict]:
 _STUFEN_REIHENFOLGE = {
 	"Rohstoff": 0,
 	"Packmittel": 1,
-	"Teig": 2,
-	"Rework": 3,
-	"Backware lose": 4,
-	"Fertigware": 5,
+	"Halbfabrikat": 2,
+	"Grundteig": 3,
+	"Teig veredelt": 4,
+	"Rework": 5,
+	"Backware": 6,
+	"Ware lose": 7,
+	"Fertigware": 8,
 }
 
 

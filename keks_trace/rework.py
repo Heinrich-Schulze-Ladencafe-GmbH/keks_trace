@@ -1,11 +1,13 @@
 """Rework-Regeln, geprüft bei jeder Fertigungs- und Umpackbuchung.
 
 Blockierend:
-- Rework darf nur in Teig eingesetzt werden (oder in denselben Rework-Artikel umgefüllt werden).
+- Rework darf nur in Grundteig oder veredelten Teig eingesetzt werden
+  (oder in denselben Rework-Artikel umgefüllt werden).
 - Für die Kombination Rework-Artikel -> Teig muss eine aktive Rework-Regel existieren (Rework-Matrix).
 - Das Rework darf keine Allergene enthalten, die der Zielteig nicht hat (auch wenn eine Regel existiert).
 - Der Rework-Anteil am Teig darf das Maximum der Regel nicht überschreiten.
-- Abgelaufene Rework-Chargen sind gesperrt (Verfall = Ursprungsdatum + Haltbarkeit des Rework-Artikels).
+- Abgelaufene Rework-Chargen sind gesperrt (siehe keks_trace.pruefungen, Verfall = Ursprungsdatum
+  + Haltbarkeit des Rework-Artikels).
 
 Nur Hinweis (FIFO): es gibt eine ältere, noch verfügbare Rework-Charge desselben Artikels.
 """
@@ -16,6 +18,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, formatdate, getdate
 
+from keks_trace.install import REWORK_ZIELE
 from keks_trace.utils import (
 	allergene,
 	artikel_stufe,
@@ -26,9 +29,7 @@ from keks_trace.utils import (
 )
 
 
-def pruefe_stock_entry(doc, method=None):
-	if doc.purpose not in ("Manufacture", "Repack"):
-		return
+def pruefe(doc):
 
 	eingaenge = eingangs_zeilen(doc)
 	ausgaenge = [r for r in ausgangs_zeilen(doc) if r.is_finished_item] or ausgangs_zeilen(doc)
@@ -42,8 +43,6 @@ def pruefe_stock_entry(doc, method=None):
 	ziel = ausgaenge[0].item_code
 	ziel_stufe = artikel_stufe(ziel)
 
-	_pruefe_alter(doc, rework_zeilen)
-
 	rework_menge = defaultdict(float)
 	for r in rework_zeilen:
 		rework_menge[r.item_code] += zeilen_menge(r)
@@ -55,9 +54,9 @@ def pruefe_stock_entry(doc, method=None):
 			# Umfüllen/Zusammenführen von Rework-Behältern desselben Artikels.
 			continue
 
-		if ziel_stufe != "Teig":
+		if ziel_stufe not in REWORK_ZIELE:
 			frappe.throw(
-				_("Rework {0} darf nur in Teig eingesetzt werden, nicht in {1} ({2}).").format(
+				_("Rework {0} darf nur in Grundteig oder veredelten Teig, nicht in {1} ({2}).").format(
 					frappe.bold(rework_artikel), frappe.bold(ziel), ziel_stufe or _("ohne Stufe")
 				),
 				title=_("Rework nicht zulässig"),
@@ -112,25 +111,6 @@ def _pruefe_allergene(rework_artikel: str, ziel: str):
 			),
 			title=_("Allergenkonflikt"),
 		)
-
-
-def _pruefe_alter(doc, rework_zeilen):
-	stichtag = getdate(doc.posting_date)
-	for r in rework_zeilen:
-		for charge, _menge in zeilen_chargen(r):
-			verfall, ursprung = frappe.db.get_value("Batch", charge, ["expiry_date", "kt_ursprungsdatum"])
-			if verfall and getdate(verfall) < stichtag:
-				frappe.throw(
-					_(
-						"Rework-Charge {0} ist abgelaufen (verwendbar bis {1}, Ursprung {2}). "
-						"Bitte entsorgen, nicht einsetzen."
-					).format(
-						frappe.bold(charge),
-						formatdate(verfall),
-						formatdate(ursprung) if ursprung else "-",
-					),
-					title=_("Rework abgelaufen"),
-				)
 
 
 def _fifo_hinweis(doc, rework_zeilen):

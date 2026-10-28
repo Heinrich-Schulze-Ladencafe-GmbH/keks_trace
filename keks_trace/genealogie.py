@@ -5,18 +5,22 @@ eine Kante in `Chargen Genealogie`. Daraus rechnet die Rückverfolgung in beide
 Richtungen, auch über mehrere Rework-Generationen.
 
 Datumsregeln für die erzeugten Chargen:
-- Ursprungsdatum = ältestes Herstelldatum aller eingeflossenen Produktionschargen
-  (Teig, Rework, Backware lose, Fertigware). Rohstoffe zählen nicht.
+- Ursprungsdatum = ältestes Herstelldatum aller eingeflossenen Teig-/Gebäckchargen
+  (Grundteig, Teig veredelt, Rework, Backware, Ware lose). Rohstoffe und Füllungen zählen nicht.
 - Rework: Herstelldatum = Ursprungsdatum. Damit zählt das Rework-Alter ab dem ältesten
-  Backtag in der Kette, und Rework-Ketten sind automatisch auf das Höchstalter begrenzt.
-- Fertigware: Herstelldatum = ältester Backtag der eingesetzten Backware lose (MHD ab Backtag).
-- Verfall/MHD = Herstelldatum + Haltbarkeit des Artikels (ERPNext-Standardfelder).
+  Tag in der Kette, und Rework-Ketten sind automatisch auf das Höchstalter begrenzt.
+- Backtag: bei Backware der Buchungstag, sonst vom ältesten Input mit Backtag geerbt.
+- Komponenten-MHD: frühestes MHD der Füllungen, Glasuren, Schokolade, die nach dem Backen
+  aufgebracht werden (Rohstoff/Halbfabrikat in Ware lose oder Fertigware), weitergereicht über Ware lose.
+- Ware lose: Verfall (max. Lagerdauer) = min(Backtag + Haltbarkeit, Komponenten-MHD).
+- Fertigware: Herstelldatum = Backtag, MHD = min(Backtag + Haltbarkeit, Komponenten-MHD).
+- Sonst: Verfall = Herstelldatum + Haltbarkeit des Artikels (ERPNext-Standardfelder).
 """
 
 import frappe
 from frappe.utils import add_days, getdate
 
-from keks_trace.install import PRODUKTIONS_STUFEN
+from keks_trace.install import KOMPONENTEN_STUFEN, PRODUKTIONS_STUFEN
 from keks_trace.utils import artikel_stufe, ausgangs_zeilen, eingangs_zeilen, zeilen_chargen
 
 
@@ -71,36 +75,53 @@ def _setze_daten(doc, out_charge, out_item, eingaenge):
 	buchungstag = getdate(doc.posting_date)
 	stufe = artikel_stufe(out_item)
 
-	ursprungsdaten = []
-	backtage = []
+	ursprungsdaten, backtage, komponenten_mhd = [], [], []
 	for in_charge, in_item, _menge in eingaenge:
 		in_stufe = artikel_stufe(in_item)
-		if in_stufe not in PRODUKTIONS_STUFEN:
-			continue
-		ursprung, herstell = frappe.db.get_value(
-			"Batch", in_charge, ["kt_ursprungsdatum", "manufacturing_date"]
+		ursprung, herstell, backtag, verfall, kmhd = frappe.db.get_value(
+			"Batch",
+			in_charge,
+			["kt_ursprungsdatum", "manufacturing_date", "kt_backtag", "expiry_date", "kt_komponenten_mhd"],
 		)
-		datum = ursprung or herstell
-		if datum:
-			ursprungsdaten.append(getdate(datum))
-		if in_stufe == "Backware lose" and herstell:
-			backtage.append(getdate(herstell))
+		if in_stufe in PRODUKTIONS_STUFEN and (ursprung or herstell):
+			ursprungsdaten.append(getdate(ursprung or herstell))
+		if backtag:
+			backtage.append(getdate(backtag))
+		if stufe in ("Ware lose", "Fertigware"):
+			if in_stufe in KOMPONENTEN_STUFEN and verfall:
+				komponenten_mhd.append(getdate(verfall))
+			if kmhd:
+				komponenten_mhd.append(getdate(kmhd))
 
 	vorhandenes = frappe.db.get_value("Batch", out_charge, "manufacturing_date")
 	herstelldatum = getdate(vorhandenes) if vorhandenes else buchungstag
 	ursprung = min([*ursprungsdaten, herstelldatum])
 
+	if stufe == "Backware":
+		backtag = herstelldatum
+	else:
+		backtag = min(backtage) if backtage else None
+
 	if stufe == "Rework":
 		herstelldatum = ursprung
-	elif stufe == "Fertigware" and backtage:
-		herstelldatum = min(backtage)
+	elif stufe == "Fertigware" and backtag:
+		herstelldatum = backtag
 
-	werte = {"manufacturing_date": herstelldatum, "kt_ursprungsdatum": min(ursprung, herstelldatum)}
+	werte = {
+		"manufacturing_date": herstelldatum,
+		"kt_ursprungsdatum": min(ursprung, herstelldatum),
+		"kt_backtag": backtag,
+		"kt_komponenten_mhd": min(komponenten_mhd) if komponenten_mhd else None,
+	}
 
 	hat_verfall, haltbarkeit = frappe.get_cached_value(
 		"Item", out_item, ["has_expiry_date", "shelf_life_in_days"]
 	)
 	if hat_verfall and haltbarkeit:
-		werte["expiry_date"] = add_days(herstelldatum, haltbarkeit)
+		basis = backtag if stufe in ("Ware lose", "Fertigware") and backtag else herstelldatum
+		verfall = getdate(add_days(basis, haltbarkeit))
+		if werte["kt_komponenten_mhd"]:
+			verfall = min(verfall, werte["kt_komponenten_mhd"])
+		werte["expiry_date"] = verfall
 
 	frappe.db.set_value("Batch", out_charge, werte)

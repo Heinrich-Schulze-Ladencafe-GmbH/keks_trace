@@ -1,0 +1,150 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-10-28 22:00:00.000000",
+ "description": "Historie: welche Charge wann in welchem Träger lag. Wird beim Buchen geschrieben.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "traeger",
+  "charge",
+  "artikel",
+  "offen",
+  "column_break_1",
+  "menge_eingang",
+  "menge_aktuell",
+  "von",
+  "bis",
+  "section_break_1",
+  "stock_entry_eingang",
+  "stock_entry_ausgang"
+ ],
+ "fields": [
+  {
+   "fieldname": "traeger",
+   "fieldtype": "Link",
+   "options": "Produkttraeger",
+   "label": "Träger",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "charge",
+   "fieldtype": "Link",
+   "options": "Batch",
+   "label": "Charge",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "artikel",
+   "fieldtype": "Link",
+   "options": "Item",
+   "label": "Artikel"
+  },
+  {
+   "fieldname": "offen",
+   "fieldtype": "Check",
+   "label": "Offen",
+   "default": "1",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "menge_eingang",
+   "fieldtype": "Float",
+   "label": "Eingefüllt",
+   "precision": "3"
+  },
+  {
+   "fieldname": "menge_aktuell",
+   "fieldtype": "Float",
+   "label": "Aktueller Inhalt",
+   "precision": "3",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "von",
+   "fieldtype": "Datetime",
+   "label": "Von"
+  },
+  {
+   "fieldname": "bis",
+   "fieldtype": "Datetime",
+   "label": "Bis"
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "stock_entry_eingang",
+   "fieldtype": "Link",
+   "options": "Stock Entry",
+   "label": "Befüllt durch"
+  },
+  {
+   "fieldname": "stock_entry_ausgang",
+   "fieldtype": "Link",
+   "options": "Stock Entry",
+   "label": "Geleert durch"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Traeger Belegung",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "naming_rule": "Random",
+ "in_create": 1
+}

@@ -15,10 +15,11 @@ after_migrate = "keks_trace.install.after_migrate"
 
 doc_events = {
 	"Stock Entry": {
-		# Läuft VOR der ERPNext-Prüfung, damit Bediener klare deutsche Meldungen sehen.
-		"before_validate": "keks_trace.rework.pruefe_stock_entry",
-		# Genealogie-Kanten und Ursprungs-/Verfallsdaten der erzeugten Chargen.
-		"on_submit": "keks_trace.genealogie.on_submit",
-		"on_cancel": "keks_trace.genealogie.on_cancel",
+		# Läuft VOR der ERPNext-Prüfung, damit Bediener klare deutsche Meldungen sehen:
+		# Verfall, Rework-Regeln, Allergene, Behälter.
+		"before_validate": "keks_trace.pruefungen.pruefe_stock_entry",
+		# Genealogie-Kanten, Ursprungs-/Backtag-/MHD-Daten und Behälterinhalt.
+		"on_submit": ["keks_trace.genealogie.on_submit", "keks_trace.traeger.on_submit"],
+		"on_cancel": ["keks_trace.genealogie.on_cancel", "keks_trace.traeger.on_cancel"],
 	}
 }

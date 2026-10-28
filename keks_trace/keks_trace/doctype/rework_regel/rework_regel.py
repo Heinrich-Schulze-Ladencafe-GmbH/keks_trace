@@ -3,6 +3,8 @@ from frappe import _
 from frappe.model.document import Document
 from frappe.utils import flt
 
+from keks_trace.install import REWORK_ZIELE
+
 
 class ReworkRegel(Document):
 	def validate(self):
@@ -12,9 +14,11 @@ class ReworkRegel(Document):
 					self.rework_artikel
 				)
 			)
-		if frappe.get_cached_value("Item", self.ziel_artikel, "kt_chargen_stufe") != "Teig":
+		if frappe.get_cached_value("Item", self.ziel_artikel, "kt_chargen_stufe") not in REWORK_ZIELE:
 			frappe.throw(
-				_("{0} ist kein Teig-Artikel (Chargenstufe muss 'Teig' sein).").format(self.ziel_artikel)
+				_("{0} ist kein Teig (Chargenstufe muss {1} sein).").format(
+					self.ziel_artikel, " oder ".join(REWORK_ZIELE)
+				)
 			)
 		if not 0 < flt(self.max_anteil_prozent) <= 100:
 			frappe.throw(_("Der maximale Rework-Anteil muss zwischen 0 und 100 % liegen."))
