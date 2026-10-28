@@ -1,0 +1,158 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-10-28 22:00:00.000000",
+ "description": "Kanten der Chargen-Genealogie. Wird automatisch beim Buchen geschrieben, nie von Hand.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "input_batch",
+  "input_item",
+  "column_break_1",
+  "output_batch",
+  "output_item",
+  "section_break_1",
+  "menge",
+  "anteil",
+  "column_break_2",
+  "stock_entry",
+  "posting_date",
+  "quelle",
+  "storniert"
+ ],
+ "fields": [
+  {
+   "fieldname": "input_batch",
+   "fieldtype": "Link",
+   "options": "Batch",
+   "label": "Input-Charge",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "input_item",
+   "fieldtype": "Link",
+   "options": "Item",
+   "label": "Input-Artikel",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "output_batch",
+   "fieldtype": "Link",
+   "options": "Batch",
+   "label": "Output-Charge",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "output_item",
+   "fieldtype": "Link",
+   "options": "Item",
+   "label": "Output-Artikel"
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "menge",
+   "fieldtype": "Float",
+   "label": "Menge (Lagereinheit)",
+   "precision": "3"
+  },
+  {
+   "fieldname": "anteil",
+   "fieldtype": "Float",
+   "label": "Anteil am Output (0-1)",
+   "precision": "6",
+   "description": "Anteil der Input-Charge an der gesamten Einsatzmenge dieser Buchung."
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "stock_entry",
+   "fieldtype": "Link",
+   "options": "Stock Entry",
+   "label": "Lagerbuchung",
+   "search_index": 1
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "label": "Buchungsdatum"
+  },
+  {
+   "fieldname": "quelle",
+   "fieldtype": "Select",
+   "options": "Buchung\nSilo",
+   "label": "Quelle",
+   "default": "Buchung"
+  },
+  {
+   "fieldname": "storniert",
+   "fieldtype": "Check",
+   "label": "Storniert",
+   "in_standard_filter": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Chargen Genealogie",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "naming_rule": "Random",
+ "in_create": 1,
+ "read_only": 0
+}

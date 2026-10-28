@@ -1,0 +1,117 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-10-28 22:00:00.000000",
+ "description": "Rework-Matrix: welches Rework in welchen Teig, mit welchem Höchstanteil.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "rework_artikel",
+  "ziel_artikel",
+  "column_break_1",
+  "max_anteil_prozent",
+  "aktiv",
+  "section_break_1",
+  "bemerkung"
+ ],
+ "fields": [
+  {
+   "fieldname": "rework_artikel",
+   "fieldtype": "Link",
+   "options": "Item",
+   "label": "Rework-Artikel",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "ziel_artikel",
+   "fieldtype": "Link",
+   "options": "Item",
+   "label": "Ziel-Teig",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "max_anteil_prozent",
+   "fieldtype": "Percent",
+   "label": "Max. Rework-Anteil (%)",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Anteil des Reworks an der gesamten Einwaage des Teigs."
+  },
+  {
+   "fieldname": "aktiv",
+   "fieldtype": "Check",
+   "label": "Aktiv",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Rework Regel",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "naming_rule": "Random"
+}
