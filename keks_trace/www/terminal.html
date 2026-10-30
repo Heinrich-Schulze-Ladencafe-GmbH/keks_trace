@@ -55,16 +55,17 @@
 	.x { background: none; border: none; color: var(--muted); font-size: 26px; cursor: pointer; padding: 0 8px; }
 	.dialog { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; padding: 16px; }
 	.dialog .panel { max-width: 520px; width: 100%; }
-	.ziffern { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; max-width: 560px; }
-	.ziffern button, .tasten button { min-height: 66px; border: none; border-radius: 10px; background: var(--panel2); color: var(--text); font-size: 28px; font-weight: 600; cursor: pointer; touch-action: manipulation; }
-	.ziffern button:active, .tasten button:active { background: #3a414a; }
-	#kt .ziffern .ok { background: var(--gruen); color: #fff; grid-row: span 2; }
-	#kt .tasten .ok { color: #fff; }
-	.ziffern .weg { background: #3a2a2a; }
-	.tasten { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; margin: 10px 0; }
-	.tasten button { min-height: 56px; font-size: 22px; padding: 0; }
-	.tasten .breit { grid-column: span 2; }
-	.tasten .ok { background: var(--gruen); color: #fff; }
+	#tasten { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; gap: 8px; padding: 10px max(12px, calc((100vw - 1100px) / 2)) 14px;
+		background: #0b0c0e; border-top: 1px solid var(--panel2); box-shadow: 0 -6px 20px rgba(0,0,0,.5); }
+	#tasten.zahl { grid-template-columns: repeat(4, minmax(0, 150px)); justify-content: center; }
+	#tasten.text { grid-template-columns: repeat(10, 1fr); }
+	#tasten button { min-height: 60px; border: none; border-radius: 10px; background: var(--panel2); color: var(--text); font-size: 26px; font-weight: 600; cursor: pointer; touch-action: manipulation; padding: 0; }
+	#tasten.text button { min-height: 52px; font-size: 21px; }
+	#tasten button:active { background: #3a414a; }
+	#tasten .ok { background: var(--gruen); color: #fff; }
+	#tasten.zahl .ok { grid-row: span 2; }
+	#tasten .weg { background: #3a2a2a; }
+	#tasten .breit { grid-column: span 2; }
 	.einheiten { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
 	.einheiten button { flex: 1 1 120px; min-height: 56px; border: 2px solid var(--panel2); border-radius: 10px; background: var(--panel); color: var(--text); font-size: 20px; cursor: pointer; }
 	.einheiten button.an { border-color: #6ea0ff; background: var(--blau); }
@@ -81,8 +82,8 @@
 		body { font-size: 18px; }
 		.knopf { min-height: 72px; font-size: 20px; }
 		.gross { font-size: 26px; }
-		.ziffern button { min-height: 58px; }
-		.tasten button { min-height: 46px; font-size: 18px; }
+		#tasten button { min-height: 50px; font-size: 22px; }
+		#tasten.text button { min-height: 42px; font-size: 17px; }
 	}
 </style>
 {% endblock %}
@@ -198,52 +199,125 @@
 		if (f) f.focus();
 	});
 
-	// ------------------------------------------------------------------ Ziffernblock und Tastatur
-	// Felder bekommen inputmode="none": Scanner und echte Tastatur gehen, die kleine Systemtastatur nicht.
+	// ------------------------------------------------------------------ Bildschirmtastatur und Scanner
+	// Eine Tastatur unten am Bildschirm schreibt in das angetippte Feld: Ziffern bei Mengen/Datum,
+	// Buchstaben bei Text. Felder haben inputmode="none" (keine kleine Systemtastatur).
+	// Scanner tippen sehr schnell und schließen mit Enter: ein Scan landet immer im Scanfeld
+	// (data-scan), auch wenn gerade ein Mengenfeld aktiv ist; dessen Inhalt bleibt erhalten.
+	function feld(id, label, wert, art, scan) {
+		return `<label for="${id}">${label}</label><input id="${id}" class="feld" data-art="${art}" ${scan ? "data-scan" : ""}
+			inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(wert == null ? "" : wert)}">`;
+	}
 	function zahlFeld(id, label, wert) {
-		return `<label>${label}</label><input id="${id}" class="feld" inputmode="none" autocomplete="off" value="${esc(wert == null ? "" : String(wert).replace(".", ","))}">
-			<div class="ziffern" data-feld="${id}">
-				${["7", "8", "9", "⌫", "4", "5", "6", "C", "1", "2", "3", "OK", "0", ","].map((z) =>
-					`<button type="button" data-z="${z}" class="${z === "OK" ? "ok" : z === "⌫" || z === "C" ? "weg" : ""}" ${z === "0" ? 'style="grid-column: span 2"' : ""}>${z}</button>`).join("")}
-			</div>`;
+		return feld(id, label, wert == null || wert === "" ? "" : String(wert).replace(".", ","), "zahl");
 	}
-	function textFeld(id, label, wert) {
-		return `<label>${label}</label>
-			<div class="mitknopf"><input id="${id}" class="feld" inputmode="none" autocomplete="off" value="${esc(wert || "")}">
-			<button type="button" class="knopf" data-tastatur="${id}">⌨ Tastatur</button></div>
-			<div class="tasten" id="tasten-${id}" data-feld="${id}" style="display:none"></div>`;
+	function textFeld(id, label, wert) { return feld(id, label, wert, "text", true); }
+	function datumFeld(id, label) { return feld(id, label + ' <span class="fehlt">(TT.MM.JJ oder TTMMJJ)</span>', "", "datum"); }
+	function datumIso(t) {
+		const z = String(t || "").replace(/\D/g, "");
+		let d, m, y;
+		if (/^\d{1,2}\.\d{1,2}\.\d{2,4}$/.test(String(t).trim())) [d, m, y] = String(t).trim().split(".");
+		else if (z.length === 6) [d, m, y] = [z.slice(0, 2), z.slice(2, 4), z.slice(4)];
+		else if (z.length === 8) [d, m, y] = [z.slice(0, 2), z.slice(2, 4), z.slice(4)];
+		else return null;
+		y = String(y).length === 2 ? "20" + y : String(y);
+		const iso = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+		const dt = new Date(iso + "T12:00:00");
+		return isNaN(dt) || dt.getDate() !== +d ? null : iso;
 	}
-	const TASTEN = ["1234567890", "QWERTZUIOP", "ASDFGHJKL-", "YXCVBNM./"];
-	function tastaturZeigen(id) {
-		const box = document.getElementById("tasten-" + id);
-		if (!box) return;
-		if (box.style.display !== "none") { box.style.display = "none"; return; }
-		box.innerHTML = TASTEN.map((r) => r.split("").map((z) => `<button type="button" data-z="${z}">${z}</button>`).join("")).join("") +
-			`<button type="button" data-z="⌫" class="breit">⌫</button><button type="button" data-z="C" class="breit">C</button>` +
-			`<button type="button" data-z="OK" class="ok breit" style="grid-column: span 6">OK</button>`;
-		box.style.display = "grid";
-		fokus(id);
+
+	const tasten = document.createElement("div");
+	tasten.id = "tasten";
+	document.body.appendChild(tasten);
+	let tastenArt = null;
+	const BELEGUNG = {
+		zahl: ["7", "8", "9", "⌫", "4", "5", "6", "C", "1", "2", "3", "OK", "ZU", "0", ","],
+		datum: ["7", "8", "9", "⌫", "4", "5", "6", "C", "1", "2", "3", "OK", "ZU", "0", "."],
+		text: ["1234567890", "QWERTZUIOP", "ASDFGHJKL-", "YXCVBNM./"],
+	};
+	function tastenZeigen() {
+		const f = document.activeElement;
+		const art = f && f.dataset ? f.dataset.art : null;
+		if (!art) { tasten.style.display = "none"; app.style.paddingBottom = ""; tastenArt = null; return; }
+		if (art !== tastenArt) {
+			tastenArt = art;
+			if (art === "text") {
+				tasten.className = "text";
+				tasten.innerHTML = BELEGUNG.text.map((r) => r.split("").map((z) => `<button type="button" data-z="${z}">${z}</button>`).join("")).join("") +
+					`<button type="button" data-z="⌫" class="breit weg">⌫</button><button type="button" data-z="C" class="breit weg">C</button>` +
+					`<button type="button" data-z="ZU" class="breit">▾</button><button type="button" data-z="OK" class="ok" style="grid-column: span 4">OK</button>`;
+			} else {
+				tasten.className = "zahl";
+				tasten.innerHTML = BELEGUNG[art].map((z) =>
+					`<button type="button" data-z="${z}" class="${z === "OK" ? "ok" : z === "⌫" || z === "C" ? "weg" : ""}">${z === "ZU" ? "▾" : z}</button>`).join("");
+			}
+		}
+		tasten.style.display = "grid";
+		app.style.paddingBottom = tasten.offsetHeight + 40 + "px";
+		setTimeout(() => f.scrollIntoView({ block: "nearest", behavior: "smooth" }), 20);
 	}
-	app.addEventListener("click", (e) => {
-		const t = e.target.closest("[data-tastatur]");
-		if (t) return tastaturZeigen(t.dataset.tastatur);
+	document.addEventListener("focusin", tastenZeigen);
+	document.addEventListener("focusout", () => setTimeout(tastenZeigen, 60));
+	tasten.addEventListener("pointerdown", (e) => e.preventDefault()); // Fokus bleibt im Feld
+	tasten.addEventListener("click", (e) => {
 		const b = e.target.closest("[data-z]");
-		if (!b) return;
-		const box = b.closest("[data-feld]");
-		const f = box && document.getElementById(box.dataset.feld);
-		if (!f) return;
+		const f = document.activeElement;
+		if (!b || !f || !f.dataset || !f.dataset.art) return;
 		const z = b.dataset.z;
-		if (z === "OK") {
-			if (box.classList.contains("tasten")) box.style.display = "none";
-			f.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+		if (z === "OK") return weiter(f);
+		if (z === "ZU") return f.blur();
+		const markiert = f.value && f.selectionStart === 0 && f.selectionEnd === f.value.length;
+		if (markiert && z !== "⌫" && z !== "C") f.value = ""; // markierter Vorschlag wird überschrieben
+		if (z === "⌫") f.value = markiert ? "" : f.value.slice(0, -1);
+		else if (z === "C") f.value = "";
+		else if ((z === "," || z === ".") && f.dataset.art === "zahl" && f.value.includes(",")) return;
+		else f.value += z === "." && f.dataset.art === "zahl" ? "," : z;
+		f.setSelectionRange(f.value.length, f.value.length);
+		f.dispatchEvent(new Event("input", { bubbles: true }));
+	});
+	// OK/Enter: Formular-Logik des Bildschirms auslösen; ändert die nichts am Fokus, ins nächste Feld
+	function weiter(f) {
+		f.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+		setTimeout(() => {
+			if (document.activeElement !== f || !document.body.contains(f)) return;
+			const felder = [...app.querySelectorAll("input[data-art], select")].filter((x) => x.offsetParent);
+			const n = felder[felder.indexOf(f) + 1];
+			if (n) n.focus();
+			else f.blur(); // letztes Feld: Tastatur weg, Buchen-Knopf frei
+		}, 80);
+	}
+
+	// Scanner erkennen: viele Zeichen in kurzem Abstand, dann Enter
+	const scanPuffer = { text: "", zeit: 0, feld: null, vorher: "" };
+	document.addEventListener("keydown", (e) => {
+		const f = document.activeElement;
+		const jetzt = performance.now();
+		if (e.key === "Enter") {
+			const istScan = scanPuffer.text.length >= 4 && scanPuffer.feld === f && jetzt - scanPuffer.zeit < 80;
+			const code = scanPuffer.text;
+			scanPuffer.text = "";
+			if (!istScan || !f || !f.dataset) return;
+			const ziel = f.dataset.scan !== undefined ? null
+				: [...app.querySelectorAll("[data-scan]")].find((x) => x.offsetParent && !x.value) || app.querySelector("[data-scan]");
+			if (f.dataset.scan !== undefined) return; // Scan im Scanfeld: normal weiter
+			e.preventDefault();
+			e.stopImmediatePropagation();
+			f.value = scanPuffer.vorher; // Mengenfeld behält seinen Inhalt
+			if (!ziel) return meldung("rot", "Gescannt: " + code + ". Hier bitte erst die Eingabe abschließen.");
+			ziel.value = code;
+			ziel.focus();
+			ziel.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
 			return;
 		}
-		if (z === "⌫") f.value = f.value.slice(0, -1);
-		else if (z === "C") f.value = "";
-		else if (z === "," && f.value.includes(",")) return;
-		else f.value += z;
-		f.focus();
-	});
+		if (e.key.length !== 1) return;
+		if (jetzt - scanPuffer.zeit > 50 || scanPuffer.feld !== f) {
+			scanPuffer.text = "";
+			scanPuffer.feld = f;
+			scanPuffer.vorher = f && "value" in f ? f.value : "";
+		}
+		scanPuffer.text += e.key;
+		scanPuffer.zeit = jetzt;
+	}, true);
 
 	function einheitWahl(einheiten, aktiv) {
 		if (!einheiten || einheiten.length < 2) return "";
@@ -620,7 +694,7 @@
 		let gebindeart = "Sack";
 		app.innerHTML = kopf(art.name, true) +
 			textFeld("scan", "Charge des Lieferanten (scannen oder eingeben)") +
-			`${art.has_expiry_date ? `<label>MHD</label><input id="mhd" class="feld" type="date">` : ""}
+			`${art.has_expiry_date ? datumFeld("mhd", "MHD") : ""}
 			${art.silo ? `<label>Wohin?</label><select id="ziel" class="feld"><option value="${esc(art.silo)}">ins ${esc(art.silo)}</option><option value="">als Gebinde ins Lager</option></select>` : ""}
 			<div id="gebinde-box" style="${art.silo ? "display:none" : ""}">
 				<label>Gebindeart</label><div class="einheiten">${ARTEN.map((a) => `<button type="button" data-a="einheit" data-e="${a}" class="${a === gebindeart ? "an" : ""}">${a}</button>`).join("")}</div>
@@ -642,13 +716,14 @@
 			try {
 				const ziel = document.getElementById("ziel");
 				const mhd = document.getElementById("mhd");
+				if (mhd && mhd.value && !datumIso(mhd.value)) throw new Error("MHD " + mhd.value + " ist kein gültiges Datum (z. B. 300628 oder 30.06.28).");
 				const silo = ziel ? ziel.value || null : null;
 				const e = await api("wareneingang", {
 					station: zustand.station,
 					artikel: art.artikel,
 					lieferantencharge: document.getElementById("scan").value.trim(),
 					menge: zahl(document.getElementById("menge").value),
-					mhd: mhd ? mhd.value || null : null,
+					mhd: mhd ? datumIso(mhd.value) : null,
 					silo,
 					gebinde: silo ? 0 : Math.max(1, Math.round(zahl(document.getElementById("anzahl").value))),
 					gebindeart: silo ? null : gebindeart,

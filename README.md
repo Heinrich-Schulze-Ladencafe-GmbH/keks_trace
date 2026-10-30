@@ -148,8 +148,10 @@ an Lagerbuchung und Lieferschein).
 | Lager | Wareneingang (Lieferantencharge, MHD, ins Silo oder als Sackware), Silo leer, Info-Scan |
 | Versand | Lieferung (Kunde wählen, Lose scannen → Lieferschein), Info-Scan |
 
-Mengen gibt man über einen großen Ziffernblock ein, Text (z. B. eine unlesbare Lieferantencharge)
-über die Bildschirmtastatur hinter „⌨ Tastatur“. Scanner und echte Tastatur funktionieren immer.
+Eine Bildschirmtastatur unten schreibt in das angetippte Feld: Ziffern bei Mengen und Datum
+(MHD als `300628` oder `30.06.28`), Buchstaben bei Text. OK springt ins nächste Feld, ▾ blendet
+sie aus. Der Scanner wird an der Tippgeschwindigkeit erkannt: ein Scan landet immer im Scanfeld,
+auch wenn gerade ein Mengenfeld aktiv ist (dessen Inhalt bleibt). Echte Tastatur geht immer.
 
 Gescannt werden Behälter-Codes, Silo-Namen, Paletten (NVE) oder Chargennummern. Jede Zeile wird beim Scannen
 geprüft (Rezept, Sperre, Verfall, Rework-Regel, Allergene, Bestand im Behälter/Silo). Stationen
