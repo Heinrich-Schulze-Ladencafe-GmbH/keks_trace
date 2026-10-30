@@ -6,9 +6,9 @@ Ausführen:
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from frappe.utils import add_days, nowdate
+from frappe.utils import add_days, add_months, getdate, nowdate
 
-from keks_trace import demo, palette, sperre, terminal
+from keks_trace import demo, los, palette, sperre, terminal
 from keks_trace.terminal import TerminalFehler
 
 
@@ -150,7 +150,7 @@ class TestTerminal(IntegrationTestCase):
 		self.assertAlmostEqual(sum(terminal.charge_lager(fw).values()), 18)
 
 	# ------------------------------------------------------------------ Silo leer
-	def test_08_silo_leer(self):
+	def test_99_silo_leer(self):
 		e = terminal.silo_leer("Lager", self.silo["KT-ZUCKER"])
 		self.assertTrue(e["ausbuchung"])
 		self.assertEqual(frappe.db.get_value("Stock Entry", e["ausbuchung"], "kt_station"), "Lager")
@@ -189,11 +189,11 @@ class TestTerminal(IntegrationTestCase):
 		self.assertEqual(palette.nve_aus_scan("(00)" + nve), nve)
 
 	def test_11_verpacken_auf_palette_umpacken_liefern(self):
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
 		lp = terminal.palette_neu("Verpackung")["nve"]
 		e = self._verpacken(20, lp)
 		self.assertEqual(e["palette"], lp)
 		self.assertAlmostEqual(e["menge"], 48)
-		self.assertTrue(e["charge"].startswith("L"))
 		i = terminal.palette_info(lp)
 		self.assertEqual(
 			[(p["charge"], p["anzahl"], p["einheit"]) for p in i["positionen"]], [(e["charge"], 20, "Karton")]
@@ -254,7 +254,10 @@ class TestTerminal(IntegrationTestCase):
 		self.assertEqual(terminal.palette_info(lp)["positionen"][0]["anzahl"], 15)
 
 	def test_12_lose_kartons_und_palette_geschlossen(self):
+		# Eigenes Los je Vorgang, damit sich die Tests nicht ein Tages-Los teilen
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
 		e = self._verpacken(20)  # ohne Palette: 20 lose Kartons
+		self.assertTrue(e["charge"].startswith("L"))
 		lp = terminal.palette_neu("Verpackung")["nve"]
 		terminal.palette_beladen("Verpackung", lp, e["charge"], 12, "Karton")
 		with self.assertRaisesRegex(palette.PalettenFehler, "lose"):
@@ -276,3 +279,111 @@ class TestTerminal(IntegrationTestCase):
 		b.anzahl = 1
 		with self.assertRaises(frappe.ValidationError):
 			b.save()
+
+	# ------------------------------------------------------------------ Los, MHD, Gebinde, Aufträge
+	def test_13_jwwt(self):
+		self.assertEqual(los.jwwt("2026-10-30"), "6445")  # Freitag KW 44
+		self.assertEqual(los.jwwt("2027-01-01"), "6535")  # ISO: gehört noch zur KW 53 von 2026
+		self.assertEqual(los.jwwt("2029-12-31"), "0011")  # Montag KW 1 von 2030
+
+	def test_14_tages_los_und_mhd_in_monaten(self):
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "JWWT")
+		frappe.db.set_value(
+			"Item", "KT-FW-KAKAO-NOUGAT", {"kt_mhd_monate": 32, "kt_mhd_bezug": "Verpackungstag"}
+		)
+		frappe.clear_cache(doctype="Item")
+		try:
+			e1 = self._verpacken(10)
+			e2 = self._verpacken(5)
+			self.assertEqual(e1["charge"], e2["charge"])
+			self.assertEqual(e1["los"], los.jwwt(nowdate()))
+			b = frappe.db.get_value(
+				"Batch", e1["charge"], ["expiry_date", "manufacturing_date"], as_dict=True
+			)
+			self.assertEqual(getdate(b.expiry_date), getdate(add_months(nowdate(), 32)))
+			self.assertAlmostEqual(palette.lagerbestand(e1["charge"]), 15 * 2.4)
+			v = terminal.vorschau("Verpackung", "KT-FW-KAKAO-NOUGAT", [])
+			self.assertEqual((v["los"], v["los_vorhanden"]), (e1["los"], True))
+			# Gesperrtes Tages-Los: nicht weiter verpacken
+			sperre.sperren(e1["charge"], "Test")
+			with self.assertRaisesRegex(frappe.ValidationError, "gesperrt"):
+				self._verpacken(1)
+		finally:
+			frappe.db.set_value("Item", "KT-FW-KAKAO-NOUGAT", {"kt_mhd_monate": 0, "kt_mhd_bezug": None})
+			frappe.clear_cache(doctype="Item")
+
+	def test_15_gebinde(self):
+		e = terminal.wareneingang(
+			"Lager",
+			"KT-HASELNUSS",
+			f"HNG{self.h}",
+			25,
+			add_days(nowdate(), 100),
+			gebinde=3,
+			gebindeart="Sack",
+		)
+		self.assertEqual(len(e["gebinde"]), 3)
+		self.assertAlmostEqual(e["menge"], 75)
+		g = e["gebinde"][0]
+		t = frappe.db.get_value("Produkttraeger", g, ["typ", "gebindeart", "charge", "menge"], as_dict=True)
+		self.assertEqual((t.typ, t.gebindeart, t.charge, t.menge), ("Gebinde", "Sack", e["charge"], 25))
+		# Teilentnahme aus dem Sack in der Backstube
+		self._butter_frei()
+		gt = self._grundteig(None)
+		tv = terminal.herstellen(
+			"Backstube", "KT-TV-NUSS", [{"code": gt["charge"], "menge": 50}, {"code": g, "menge": 10}]
+		)
+		self.assertAlmostEqual(frappe.db.get_value("Produkttraeger", g, "menge"), 15)
+		self.assertIn(
+			e["charge"],
+			frappe.get_all("Chargen Genealogie", {"output_batch": tv["charge"]}, pluck="input_batch"),
+		)
+		with self.assertRaises(TerminalFehler):
+			terminal.pruefe_zeile("Backstube", "KT-TV-NUSS", g, 16)
+		# Ein Gebinde ist nie Zielbehälter
+		with self.assertRaisesRegex(TerminalFehler, "Gebinde"):
+			terminal._ziel_behaelter(e["gebinde"][2])
+
+	def test_16_kundenauftrag(self):
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
+		so = frappe.get_doc(
+			{
+				"doctype": "Sales Order",
+				"customer": self.ctx.kunde,
+				"company": self.ctx.company,
+				"transaction_date": nowdate(),
+				"delivery_date": add_days(nowdate(), 3),
+				"items": [{"item_code": "KT-FW-KAKAO-NOUGAT", "qty": 30, "uom": "Karton", "conversion_factor": 2.4,
+				           "rate": 10, "warehouse": self.ctx.fertig}],
+			}
+		).insert()  # fmt: skip
+		so.submit()
+		a = [z for z in terminal.auftraege("Verpackung") if z.auftrag == so.name]
+		self.assertEqual((a[0].offen_verpacken, a[0].einheit), (30, "Karton"))
+		p = terminal.palette_neu("Verpackung")["nve"]
+		wl = demo.neue_charge("KT-WL-KAKAO-NOUGAT", f"WLA{_hash()}", nowdate())
+		demo.buchen(
+			self.ctx, "Material Receipt", nowdate(), "05:00:00", ausgaenge=[("KT-WL-KAKAO-NOUGAT", wl, 60)]
+		)
+		sperre.freigeben(wl, "Test")
+		fol = demo.neue_charge("KT-FOLIE", f"FOLA{_hash()}")
+		demo.buchen(self.ctx, "Material Receipt", nowdate(), "05:00:00", ausgaenge=[("KT-FOLIE", fol, 5)])
+		e = terminal.herstellen(
+			"Verpackung", "KT-FW-KAKAO-NOUGAT", [{"code": wl, "menge": 48}, {"code": fol, "menge": 1}],
+			anzahl=20, einheit="Karton", ziel_behaelter=p, kundenauftrag=so.name,
+		)  # fmt: skip
+		self.assertEqual(frappe.db.get_value("Stock Entry", e["buchung"], "kt_kundenauftrag"), so.name)
+		self.assertEqual(frappe.db.get_value("Palette", p, "kundenauftrag"), so.name)
+		a = next(z for z in terminal.auftraege("Verpackung") if z.auftrag == so.name)
+		self.assertEqual((a.verpackt, a.offen_verpacken), (20, 10))
+		ls = terminal.lieferung("Versand", self.ctx.kunde, [{"palette": p, "ganz": 1}], kundenauftrag=so.name)
+		so.reload()
+		self.assertAlmostEqual(so.items[0].delivered_qty, 20)
+		self.assertEqual(
+			frappe.db.get_value("Delivery Note Item", {"parent": ls["lieferschein"]}, "against_sales_order"),
+			so.name,
+		)
+		with self.assertRaisesRegex(TerminalFehler, "nicht bestellt"):
+			terminal.herstellen(
+				"Verpackung", "KT-FW-NUSS-SCHOKO", [{"code": fol, "menge": 1}], kundenauftrag=so.name
+			)

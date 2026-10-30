@@ -14,6 +14,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, formatdate, getdate, now_datetime, nowdate
 
+from keks_trace import los as los_modul
 from keks_trace import palette as paletten
 from keks_trace.install import REWORK_ZIELE
 from keks_trace.utils import allergene, artikel_stufe
@@ -144,12 +145,62 @@ def wareneingang_artikel() -> list[dict]:
 	artikel = frappe.get_all(
 		"Item",
 		filters={"kt_chargen_stufe": ["in", ["Rohstoff", "Packmittel"]], "disabled": 0, "has_batch_no": 1},
-		fields=["name as artikel", "item_name as name", "has_expiry_date", "kt_freigabe_pflicht"],
+		fields=[
+			"name as artikel",
+			"item_name as name",
+			"has_expiry_date",
+			"kt_freigabe_pflicht",
+			"stock_uom",
+		],
 		order_by="item_name",
 	)
 	for a in artikel:
 		a["silo"] = silos.get(a["artikel"])
 	return artikel
+
+
+@frappe.whitelist()
+def auftraege(station: str, kunde: str | None = None) -> list[dict]:
+	"""Offene Kundenaufträge (Fertigware): was ist bestellt, verpackt, geliefert, noch offen."""
+	_station(station)
+	bedingung = "and so.customer = %(kunde)s" if kunde else ""
+	zeilen = frappe.db.sql(
+		f"""
+		select so.name as auftrag, so.customer as kunde, so.customer_name as kundenname,
+			soi.name as position, soi.item_code as artikel, soi.item_name as name,
+			soi.qty as menge, soi.uom as einheit, soi.conversion_factor as faktor,
+			soi.stock_qty, soi.delivered_qty * soi.conversion_factor as geliefert,
+			coalesce(soi.delivery_date, so.delivery_date) as termin
+		from `tabSales Order Item` soi
+		join `tabSales Order` so on so.name = soi.parent
+		join `tabItem` i on i.name = soi.item_code
+		where so.docstatus = 1 and so.status not in ('Completed', 'Closed', 'On Hold')
+			and i.kt_chargen_stufe = 'Fertigware' and soi.delivered_qty < soi.qty {bedingung}
+		order by termin, so.name, soi.idx
+		""",
+		{"kunde": kunde},
+		as_dict=True,
+	)
+	verpackt = {}
+	if zeilen:
+		for v in frappe.db.sql(
+			"""
+			select se.kt_kundenauftrag as auftrag, sed.item_code as artikel, sum(sed.transfer_qty) as menge
+			from `tabStock Entry Detail` sed join `tabStock Entry` se on se.name = sed.parent
+			where se.docstatus = 1 and se.kt_kundenauftrag in %(a)s and sed.is_finished_item = 1
+			group by se.kt_kundenauftrag, sed.item_code
+			""",
+			{"a": tuple({z.auftrag for z in zeilen})},
+			as_dict=True,
+		):
+			verpackt[(v.auftrag, v.artikel)] = flt(v.menge)
+	for z in zeilen:
+		f = flt(z.faktor) or 1
+		z["verpackt"] = flt(verpackt.get((z.auftrag, z.artikel), 0) / f, 3)
+		z["geliefert"] = flt(flt(z.geliefert) / f, 3)
+		z["offen_verpacken"] = max(flt(z.menge - z.verpackt, 3), 0)
+		z["termin"] = formatdate(z.termin) if z.termin else None
+	return zeilen
 
 
 @frappe.whitelist()
@@ -388,6 +439,7 @@ def _zeile(code, menge, ziel=None, erlaubt=None):
 		"behaelter": r.get("behaelter"),
 		"silo": r.get("silo"),
 		"menge": flt(menge, 3),
+		"einheit": frappe.get_cached_value("Item", artikel, "stock_uom"),
 		"rework": ist_rework,
 		"max_anteil": max_anteil,
 	}
@@ -424,6 +476,8 @@ def _neue_charge(artikel, herstelldatum=None, charge_id=None, lieferant=None, ve
 	}
 	if verfall:
 		werte["expiry_date"] = verfall
+	if artikel_stufe(artikel) == "Fertigware":
+		werte["kt_los"] = charge_id
 	return frappe.get_doc(werte).insert().name
 
 
@@ -442,6 +496,16 @@ def _se_zeile(z, s_warehouse=None, t_warehouse=None):
 		"batch_no": z.get("charge"),
 		"kt_traeger": z.get("behaelter"),
 	}
+
+
+def _neues_gebinde(gebindeart=None) -> str:
+	from frappe.model.naming import getseries
+
+	code = "G" + getseries("KT-GEBINDE-", 6)
+	frappe.get_doc(
+		{"doctype": "Produkttraeger", "code": code, "typ": "Gebinde", "gebindeart": gebindeart}
+	).insert(ignore_permissions=True)
+	return code
 
 
 def _ziel_lager(s, artikel):
@@ -464,6 +528,8 @@ def _ziel_behaelter(code):
 		_fehler(_("{0} ist kein Behälter.").format(code))
 	if r["status"] in ("Reinigung", "Gesperrt"):
 		_fehler(_("Behälter {0} ist auf '{1}' gesetzt.").format(code, r["status"]))
+	if r["behaelter_typ"] == "Gebinde":
+		_fehler(_("{0} ist ein Gebinde vom Wareneingang, kein Zielbehälter.").format(code))
 	if r.get("charge"):
 		_fehler(_("Behälter {0} ist noch mit {1} belegt.").format(code, r["charge"]))
 	return code
@@ -485,6 +551,36 @@ def _meldungen():
 
 
 @frappe.whitelist()
+def vorschau(station: str, ziel: str, zeilen) -> dict:
+	"""Los und MHD, bevor gebucht wird (zum Einstellen des Beuteldruckers)."""
+	from keks_trace.genealogie import daten_berechnen
+
+	_station(station)
+	if artikel_stufe(ziel) != "Fertigware":
+		return {}
+	eingaenge = []
+	for z in _liste(zeilen):
+		r = aufloesen(z["code"])
+		if r.get("charge") and r["typ"] != "silo":
+			eingaenge.append((r["charge"], r["artikel"], flt(z.get("menge"))))
+	charge, los = None, None
+	if los_modul.format_() == "JWWT":
+		los = los_modul.jwwt(nowdate())
+		name = f"{ziel}-{getdate(nowdate()).isocalendar()[0]}-{los}"
+		charge = name if frappe.db.exists("Batch", name) else None
+	werte = daten_berechnen(ziel, eingaenge, nowdate(), charge, "-")
+	vorher = frappe.db.get_value("Batch", charge, "expiry_date") if charge else None
+	mhd = werte.get("expiry_date")
+	return {
+		"los": los,
+		"los_vorhanden": bool(charge),
+		"mhd": formatdate(mhd) if mhd else None,
+		"mhd_sinkt": bool(vorher and mhd and getdate(mhd) < getdate(vorher)),
+		"mhd_bisher": formatdate(vorher) if vorher else None,
+	}
+
+
+@frappe.whitelist()
 def herstellen(
 	station: str,
 	ziel: str,
@@ -493,6 +589,7 @@ def herstellen(
 	ziel_behaelter: str | None = None,
 	anzahl: float | None = None,
 	einheit: str | None = None,
+	kundenauftrag: str | None = None,
 ) -> dict:
 	"""Fertigung buchen: Zutaten (gescannt) -> neue Charge des Ziels, optional in einen Behälter.
 
@@ -513,6 +610,10 @@ def herstellen(
 	else:
 		anzahl, einheit = None, None
 	ausbringung = flt(ausbringung) or flt(summe * r["ausbeute"], 3)
+	if kundenauftrag and not frappe.db.exists(
+		"Sales Order Item", {"parent": kundenauftrag, "item_code": ziel, "docstatus": 1}
+	):
+		_fehler(_("{0} ist im Kundenauftrag {1} nicht bestellt.").format(ziel, kundenauftrag))
 	palette = paletten.finde(ziel_behaelter) if ziel_behaelter else None
 	if palette and r["stufe"] != "Fertigware":
 		_fehler(_("Auf eine Palette kommt nur Fertigware."))
@@ -520,7 +621,10 @@ def herstellen(
 	if palette:
 		paletten._offen(palette)
 
-	charge = _neue_charge(ziel, getdate(nowdate()))
+	if r["stufe"] == "Fertigware" and los_modul.format_() == "JWWT":
+		charge, _los, _neu = los_modul.tages_charge(ziel, nowdate())
+	else:
+		charge = _neue_charge(ziel, getdate(nowdate()))
 	jetzt = now_datetime()
 	ausgabe = _se_zeile(
 		{"artikel": ziel, "charge": charge, "menge": ausbringung, "behaelter": behaelter},
@@ -537,11 +641,21 @@ def herstellen(
 			"posting_date": jetzt.date(),
 			"posting_time": jetzt.time().strftime("%H:%M:%S"),
 			"kt_station": s.name,
+			"kt_kundenauftrag": kundenauftrag,
 			"items": [_se_zeile(z, s_warehouse=z["lager"]) for z in eingaenge] + [ausgabe],
 		}
 	)
 	se.insert()
 	se.submit()
+	if palette and kundenauftrag:
+		frappe.db.set_value(
+			"Palette",
+			palette,
+			{
+				"kundenauftrag": kundenauftrag,
+				"kunde": frappe.db.get_value("Sales Order", kundenauftrag, "customer"),
+			},
+		)
 	if palette:
 		paletten.beladen(
 			palette, charge, anzahl or ausbringung, einheit or frappe.get_cached_value("Item", ziel, "stock_uom"),
@@ -551,9 +665,10 @@ def herstellen(
 	hinweise = list(se.flags.kt_fifo_warnungen or [])
 	if se.flags.kt_fehlende_zutaten:
 		hinweise.append(_("Laut Rezept nicht gescannt: {0}").format(", ".join(se.flags.kt_fehlende_zutaten)))
-	b = frappe.db.get_value("Batch", charge, ["expiry_date", "kt_status"], as_dict=True)
+	b = frappe.db.get_value("Batch", charge, ["expiry_date", "kt_status", "kt_los"], as_dict=True)
 	return {
 		"charge": charge,
+		"los": b.kt_los,
 		"artikel": ziel,
 		"name": r["name"],
 		"menge": ausbringung,
@@ -561,6 +676,7 @@ def herstellen(
 		"einheit": einheit,
 		"behaelter": behaelter,
 		"palette": palette,
+		"kundenauftrag": kundenauftrag,
 		"mhd": formatdate(b.expiry_date) if b.expiry_date else None,
 		"gesperrt": b.kt_status == "Gesperrt",
 		"buchung": se.name,
@@ -639,10 +755,17 @@ def wareneingang(
 	mhd: str | None = None,
 	lieferant: str | None = None,
 	silo: str | None = None,
+	gebinde: int | None = None,
+	gebindeart: str | None = None,
 ) -> dict:
-	"""Wareneingang mit Lieferantencharge, ins Rohstofflager oder direkt ins Silo."""
+	"""Wareneingang mit Lieferantencharge, ins Rohstofflager oder direkt ins Silo.
+
+	gebinde = Anzahl Gebinde (Sack, Fass, IBC, ...); menge ist dann die Menge JE Gebinde. Jedes Gebinde
+	bekommt einen eigenen Code (Etikett) und wird später in der Backstube gescannt.
+	"""
 	s = _station(station)
 	menge = flt(menge)
+	gebinde = cint(gebinde) if not silo else 0
 	lieferantencharge = (lieferantencharge or "").strip()
 	if menge <= EPS:
 		_fehler(_("Bitte eine Menge größer 0 eingeben."))
@@ -672,12 +795,18 @@ def wareneingang(
 	)
 
 	jetzt = now_datetime()
-	zeile = _se_zeile({"artikel": artikel, "charge": charge, "menge": menge}, t_warehouse=lager)
+	codes = [_neues_gebinde(gebindeart) for _i in range(gebinde)]
 	rate = flt(frappe.get_cached_value("Item", artikel, "valuation_rate"))
-	if rate:
-		zeile["basic_rate"] = rate
-	else:
-		zeile["allow_zero_valuation_rate"] = 1
+	zeilen = []
+	for code in codes or [None]:
+		zeile = _se_zeile(
+			{"artikel": artikel, "charge": charge, "menge": menge, "behaelter": code}, t_warehouse=lager
+		)
+		if rate:
+			zeile["basic_rate"] = rate
+		else:
+			zeile["allow_zero_valuation_rate"] = 1
+		zeilen.append(zeile)
 	se = frappe.get_doc(
 		{
 			"doctype": "Stock Entry",
@@ -688,7 +817,7 @@ def wareneingang(
 			"posting_date": jetzt.date(),
 			"posting_time": jetzt.time().strftime("%H:%M:%S"),
 			"kt_station": s.name,
-			"items": [zeile],
+			"items": zeilen,
 		}
 	)
 	se.insert()
@@ -697,7 +826,8 @@ def wareneingang(
 	return {
 		"charge": charge,
 		"name": frappe.get_cached_value("Item", artikel, "item_name"),
-		"menge": menge,
+		"menge": flt(menge * (len(codes) or 1), 3),
+		"gebinde": codes,
 		"lager": silo or lager,
 		"mhd": formatdate(b.expiry_date) if b.expiry_date else None,
 		"gesperrt": b.kt_status == "Gesperrt",
@@ -797,14 +927,30 @@ def pruefe_lieferzeile(
 
 
 @frappe.whitelist()
-def lieferung(station: str, kunde: str, zeilen) -> dict:
-	"""Lieferschein an einen Kunden mit gescannten Paletten und Losen."""
+def lieferung(station: str, kunde: str, zeilen, kundenauftrag: str | None = None) -> dict:
+	"""Lieferschein an einen Kunden mit gescannten Paletten und Losen, optional zu einem Kundenauftrag."""
 	s = _station(station)
 	if not frappe.db.exists("Customer", kunde):
 		_fehler(_("Kunde {0} unbekannt.").format(kunde))
 	positionen = [p for z in _liste(zeilen) for p in _lieferpositionen(z)]
 	if not positionen:
 		_fehler(_("Nichts gescannt."))
+	auftrag_pos = {}
+	if kundenauftrag:
+		if frappe.db.get_value("Sales Order", kundenauftrag, "customer") != kunde:
+			_fehler(_("Kundenauftrag {0} gehört nicht zu {1}.").format(kundenauftrag, kunde))
+		for r in frappe.get_all(
+			"Sales Order Item",
+			{"parent": kundenauftrag},
+			["name", "item_code", "rate", "conversion_factor"],
+			order_by="idx",
+		):
+			auftrag_pos.setdefault(r.item_code, r.name)
+			# Preis je Lagereinheit aus dem Auftrag (ERPNext prüft gleiche Preise im Verkaufsprozess)
+			auftrag_pos.setdefault(("preis", r.item_code), flt(r.rate) / (flt(r.conversion_factor) or 1))
+		fremd = sorted({p["artikel"] for p in positionen if p["artikel"] not in auftrag_pos})
+		if fremd:
+			_fehler(_("Nicht im Kundenauftrag {0} bestellt: {1}").format(kundenauftrag, ", ".join(fremd)))
 	jetzt = now_datetime()
 	dn = frappe.get_doc(
 		{
@@ -821,11 +967,17 @@ def lieferung(station: str, kunde: str, zeilen) -> dict:
 					"qty": p["anzahl"],
 					"uom": p["einheit"],
 					"conversion_factor": p["faktor"],
-					"rate": flt(frappe.get_cached_value("Item", p["artikel"], "standard_rate")) * p["faktor"],
+					"rate": flt(
+						auftrag_pos.get(("preis", p["artikel"]))
+						or frappe.get_cached_value("Item", p["artikel"], "standard_rate")
+					)
+					* p["faktor"],
 					"warehouse": p["lager"],
 					"use_serial_batch_fields": 1,
 					"batch_no": p["charge"],
 					"kt_palette": p["palette"],
+					"against_sales_order": kundenauftrag if kundenauftrag else None,
+					"so_detail": auftrag_pos.get(p["artikel"]),
 				}
 				for p in positionen
 			],
@@ -835,6 +987,7 @@ def lieferung(station: str, kunde: str, zeilen) -> dict:
 	dn.submit()
 	return {
 		"lieferschein": dn.name,
+		"kundenauftrag": kundenauftrag,
 		"kunde": dn.customer_name,
 		"positionen": len(positionen),
 		"menge": flt(sum(p["menge"] for p in positionen), 3),

@@ -10,6 +10,7 @@
   "code",
   "typ",
   "status",
+  "gebindeart",
   "column_break_1",
   "charge",
   "artikel",
@@ -35,7 +36,7 @@
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "options": "Teigbehälter\nRework-Behälter\nKiste lose Ware\nSonstiges"
+   "options": "Teigbehälter\nRework-Behälter\nKiste lose Ware\nGebinde\nSonstiges"
   },
   {
    "fieldname": "status",
@@ -46,6 +47,13 @@
    "in_standard_filter": 1,
    "options": "Frei\nBelegt\nReinigung\nGesperrt",
    "description": "Belegt/Frei setzt das System beim Buchen. Reinigung und Gesperrt setzt ein Mensch; dann kann nicht befüllt werden."
+  },
+  {
+   "fieldname": "gebindeart",
+   "fieldtype": "Select",
+   "label": "Gebindeart",
+   "options": "\nSack\nFass\nIBC\nEimer\nKarton\nKanister\nBigBag\nSonstiges",
+   "depends_on": "eval:doc.typ=='Gebinde'"
   },
   {
    "fieldname": "column_break_1",

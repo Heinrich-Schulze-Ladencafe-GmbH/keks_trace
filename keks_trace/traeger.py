@@ -23,6 +23,11 @@ def pruefe(doc):
 		if not r.get("kt_traeger"):
 			continue
 		t = _traeger(r.kt_traeger)
+		if t.typ == "Gebinde" and doc.purpose != "Material Receipt":
+			frappe.throw(
+				_("{0} ist ein Gebinde vom Wareneingang und kann nicht neu befüllt werden.").format(t.code),
+				title=_("Gebinde"),
+			)
 		if t.status in ("Reinigung", "Gesperrt"):
 			frappe.throw(
 				_("Behälter {0} ist auf '{1}' gesetzt und kann nicht befüllt werden.").format(
@@ -65,8 +70,11 @@ def pruefe(doc):
 			)
 
 
+ZWECKE = ("Manufacture", "Repack", "Material Receipt", "Material Issue")
+
+
 def on_submit(doc, method=None):
-	if doc.purpose not in ("Manufacture", "Repack"):
+	if doc.purpose not in ZWECKE:
 		return
 	zeit = get_datetime(f"{doc.posting_date} {doc.posting_time}")
 
@@ -80,7 +88,7 @@ def on_submit(doc, method=None):
 
 
 def on_cancel(doc, method=None):
-	if doc.purpose not in ("Manufacture", "Repack"):
+	if doc.purpose not in ZWECKE:
 		return
 
 	# Beim Storno kann ERPNext das Feld batch_no schon geleert haben: Charge aus dem Bundle holen.

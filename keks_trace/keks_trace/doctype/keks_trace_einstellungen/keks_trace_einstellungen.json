@@ -12,7 +12,9 @@
   "section_nve",
   "gs1_basisnummer",
   "nve_reserveziffer",
-  "absender"
+  "absender",
+  "section_los",
+  "los_format"
  ],
  "fields": [
   {
@@ -53,6 +55,19 @@
    "fieldtype": "Data",
    "label": "Absender auf dem Etikett",
    "description": "Leer = Firmenname."
+  },
+  {
+   "fieldname": "section_los",
+   "fieldtype": "Section Break",
+   "label": "Los (Fertigware)"
+  },
+  {
+   "fieldname": "los_format",
+   "fieldtype": "Select",
+   "label": "Los-Format",
+   "options": "JWWT\nLJJMMTT-NN",
+   "default": "JWWT",
+   "description": "JWWT = Jahr (1 Stelle), Kalenderwoche, Wochentag (1 = Montag) nach ISO 8601; ein Los je Artikel und Tag. LJJMMTT-NN = neues Los je Verpackungsvorgang."
   }
  ],
  "index_web_pages_for_search": 0,

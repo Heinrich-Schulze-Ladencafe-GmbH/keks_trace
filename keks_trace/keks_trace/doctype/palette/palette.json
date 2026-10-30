@@ -11,6 +11,7 @@
   "column_break_1",
   "station",
   "kunde",
+  "kundenauftrag",
   "lieferschein",
   "test_nve",
   "section_break_1",
@@ -63,6 +64,12 @@
    "fieldtype": "Link",
    "label": "Kunde",
    "options": "Customer"
+  },
+  {
+   "fieldname": "kundenauftrag",
+   "fieldtype": "Link",
+   "label": "Kundenauftrag",
+   "options": "Sales Order"
   },
   {
    "fieldname": "lieferschein",

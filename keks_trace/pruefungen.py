@@ -15,6 +15,9 @@ from keks_trace.utils import artikel_stufe, eingangs_zeilen, zeilen_chargen
 def pruefe_stock_entry(doc, method=None):
 	silo.zuteilen(doc)  # zuerst: Silo-Entnahmen bekommen ihre Chargen, dann greifen alle Prüfungen
 	sperre.pruefe_stock_entry(doc)
+	if doc.purpose in ("Material Receipt", "Material Issue"):
+		traeger.pruefe(doc)
+		return
 	if doc.purpose not in ("Manufacture", "Repack"):
 		return
 	_pruefe_verfall(doc)

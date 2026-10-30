@@ -156,6 +156,32 @@ geprüft (Rezept, Sperre, Verfall, Rework-Regel, Allergene, Bestand im Behälter
 werden unter **Terminal Station** gepflegt (Typ und Lagerorte); `keks_trace.demo.stammdaten`
 legt die vier Demo-Stationen an.
 
+## Kundenaufträge, Los und MHD
+
+- **Kundenaufträge** (Sales Order) steuern das Verpacken: Das Terminal Verpackung zeigt offene
+  Aufträge mit Restmenge und Termin; Verpackung, Palette und Lieferschein hängen am Auftrag,
+  ERPNext führt „geliefert“ im Auftrag mit. Ohne Auftrag geht es weiterhin.
+- **Los JWWT** (Einstellung „Los-Format“): Jahr, ISO-Kalenderwoche, Wochentag. Ein Los je
+  Artikel und Tag; mehrere Verpackungen am Tag gehen in dieselbe Charge (`<Artikel>-<Jahr>-<Los>`).
+  Ein gesperrtes Los wird nicht weiter befüllt. Vor dem Buchen zeigt das Terminal Los und MHD
+  zum Einstellen des Beuteldruckers; sinkt das MHD durch ältere Ware, gibt es eine Warnung.
+- **MHD**: am Artikel „Haltbarkeit in Monaten“ und „MHD zählt ab“ (Backtag/Verpackungstag).
+  Beim Tages-Los gilt immer der älteste Backtag und das früheste Komponenten-MHD.
+- **Gebinde** (Sack, Fass, IBC, ...): Wareneingang mit Anzahl und Menge je Gebinde, jedes Gebinde
+  bekommt einen eigenen Code und ein QR-Etikett (`/gebinde_etikett?codes=…`). Die Backstube
+  scannt den Gebinde-Code; der Rest im Gebinde wird mitgeführt.
+
+## Pilot Honig Lebkuchen
+
+```bash
+bench --site keks.localhost execute keks_trace.pilot.anlegen       # Stammdaten
+bench --site keks.localhost execute keks_trace.pilot.durchspielen  # ein Tag komplett
+```
+
+Echte Rezepturen 5812 (Grundteig Honig) und 5888 (Honig Moppen), Artikel 17846/17670 mit EANs,
+MHD 32 Monate. Ausgedachte Werte (Beutelgrößen, Gebinde, Ruhezeit, Packmittel) stehen in
+`keks_trace/pilot.py` unter `PLATZHALTER`.
+
 ## Paletten (NVE / SSCC)
 
 - **Verpacken** zählt in Karton oder Beutel (Umrechnung in kg steht am Artikel unter „Einheiten“).

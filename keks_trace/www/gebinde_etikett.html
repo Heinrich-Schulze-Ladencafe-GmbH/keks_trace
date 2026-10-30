@@ -1,0 +1,38 @@
+{% extends "templates/base.html" %}
+{% block title %}Gebinde-Etiketten{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block style %}
+<style>
+	@page { size: 100mm 70mm; margin: 0; }
+	html, body { background: #888 !important; margin: 0; }
+	.etikett { width: 100mm; height: 70mm; box-sizing: border-box; margin: 10px auto; padding: 3mm 4mm; background: #fff; color: #000;
+		font: 9pt/1.25 Arial, Helvetica, sans-serif; display: grid; grid-template-columns: 34mm 1fr; gap: 3mm; page-break-after: always; overflow: hidden; }
+	.qr svg { width: 34mm; height: 34mm; }
+	.code { font: bold 15pt monospace; margin-top: 1mm; text-align: center; }
+	.name { font-size: 13pt; font-weight: bold; line-height: 1.15; }
+	.k { font-size: 7pt; text-transform: uppercase; color: #333; margin-top: 1.5mm; }
+	.w { font-size: 10.5pt; font-weight: bold; }
+	.knopf { display: block; margin: 12px auto; padding: 12px 30px; font-size: 18px; }
+	@media print { html, body { background: #fff !important; } .etikett { margin: 0; } .knopf { display: none; } }
+</style>
+{% endblock %}
+{% block content %}
+<button class="knopf" onclick="window.print()">Drucken ({{ etiketten|length }})</button>
+{% for e in etiketten %}
+<div class="etikett">
+	<div><div class="qr">{{ e.qr|safe }}</div><div class="code">{{ e.code }}</div></div>
+	<div>
+		<div class="name">{{ e.name or "" }}</div>
+		<div>Art.-Nr. {{ e.artikel or "" }} · {{ e.art }}</div>
+		<div class="k">Charge (Lieferant)</div><div class="w">{{ e.charge or "" }}</div>
+		<div class="k">MHD</div><div class="w">{{ e.mhd }}</div>
+		<div class="k">Menge · Eingang</div><div class="w">{{ ("%g" % (e.menge or 0))|replace(".", ",") }} {{ e.einheit }} · {{ e.eingang }}</div>
+		{% if e.lieferant %}<div class="k">Lieferant</div><div>{{ e.lieferant }}</div>{% endif %}
+	</div>
+</div>
+{% endfor %}
+{% endblock %}
+{% block script %}
+{% if drucken %}<script>window.addEventListener("load", () => setTimeout(() => window.print(), 300));</script>{% endif %}
+{% endblock %}
