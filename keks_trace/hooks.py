@@ -1,5 +1,15 @@
 app_name = "keks_trace"
 app_title = "Keks Trace"
+
+# Symbol auf der ERPNext-Startseite (Desktop) mit Link zur Startseite „Keks Trace“
+add_to_apps_screen = [
+	{
+		"name": "keks_trace",
+		"logo": "/assets/keks_trace/images/keks-trace-logo.svg",
+		"title": "Keks Trace",
+		"route": "/desk/keks-trace",
+	}
+]
 app_publisher = "Heinrich Schulze Ladencafe GmbH"
 app_description = "Chargenrückverfolgung mit Rework für die Keksproduktion"
 app_email = ""
