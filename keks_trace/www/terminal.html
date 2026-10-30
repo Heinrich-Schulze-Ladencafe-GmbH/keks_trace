@@ -125,12 +125,12 @@
 		for (let i = 0; i < stufen.length; i++) {
 			const e = stufen[i];
 			const letzte = i === stufen.length - 1 || (stufen[i + 1].faktor === 1 && e.faktor !== 1);
-			if (letzte) { const x = menge / e.faktor; if (x > 1e-6) teile.push(n(x, e.einheit)); break; }
+			if (letzte) { const x = Math.round((menge / e.faktor) * 100) / 100; if (x >= 0.05) teile.push(n(x, e.einheit)); break; }
 			const x = Math.floor(menge / e.faktor + 1e-6);
 			if (x) { teile.push(n(x, e.einheit)); menge = rund(menge - x * e.faktor, 6); }
 			if (menge <= 1e-6) break;
 		}
-		return teile.join(" + ");
+		return teile.join(" + ") || "0 " + (stufen.find((e) => e.einheit !== "Palette") || stufen[0]).einheit;
 	}
 	function textAus(html) {
 		const d = document.createElement("div");
@@ -194,7 +194,11 @@
 		setTimeout(() => { const f = document.getElementById(id || "scan"); if (f) f.focus(); }, 30);
 	}
 	document.addEventListener("click", (e) => {
-		if (e.target.closest("input, select, textarea, button, .dialog")) return;
+		if (e.target.closest("input, select, textarea, button, .dialog, #tasten")) return;
+		// Nur wenn gerade kein Feld aktiv ist: sonst würde ein Tipp, der wegen der aufgehenden Tastatur
+		// danebengeht, den Cursor aus dem gerade angetippten Feld holen.
+		const aktiv = document.activeElement;
+		if (aktiv && aktiv !== document.body && aktiv.matches("input, select")) return;
 		const f = document.getElementById("scan");
 		if (f) f.focus();
 	});
@@ -235,9 +239,14 @@
 		datum: ["7", "8", "9", "⌫", "4", "5", "6", "C", "1", "2", "3", "OK", "ZU", "0", "."],
 		text: ["1234567890", "QWERTZUIOP", "ASDFGHJKL-", "YXCVBNM./"],
 	};
+	// Buchstaben nur nach Antippen (Scanfelder bekommen den Cursor automatisch, da stört die Tastatur);
+	// Ziffern erscheinen auch automatisch, wenn eine Menge gefragt ist.
+	let angetippt = null;
+	document.addEventListener("pointerdown", (e) => { angetippt = e.target.closest("input[data-art]"); }, true);
 	function tastenZeigen() {
 		const f = document.activeElement;
-		const art = f && f.dataset ? f.dataset.art : null;
+		let art = f && f.dataset ? f.dataset.art : null;
+		if (art === "text" && angetippt !== f) art = null;
 		if (!art) { tasten.style.display = "none"; app.style.paddingBottom = ""; tastenArt = null; return; }
 		if (art !== tastenArt) {
 			tastenArt = art;
@@ -558,7 +567,7 @@
 
 	function ansatzAbschluss() {
 		const r = ansatz.rezept;
-		const summe = ansatz.zeilen.reduce((s, z) => s + z.menge, 0);
+		const summe = ansatz.zeilen.filter((z) => !z.einheit || z.einheit === (r.einheit || "Kg")).reduce((s, z) => s + z.menge, 0);
 		const zaehlen = r.einheiten && r.einheiten.length > 1;
 		let einheit = ansatz.einheit || (zaehlen ? r.einheiten[0].einheit : null);
 		const kgVorschlag = rund(summe * r.ausbeute);

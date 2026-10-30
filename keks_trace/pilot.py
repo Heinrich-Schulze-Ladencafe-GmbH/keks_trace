@@ -197,7 +197,7 @@ def kundenauftrag(ctx, neu: bool = False) -> str:
 			"doctype": "Sales Order",
 			"customer": ctx.kunde,
 			"company": ctx.company,
-			"po_no": "PILOT-PAL",
+			"po_no": "PILOT-PAL" if not neu else f"PILOT-PAL-{frappe.generate_hash(length=4)}",
 			"transaction_date": nowdate(),
 			"delivery_date": add_days(nowdate(), 7),
 			"items": [

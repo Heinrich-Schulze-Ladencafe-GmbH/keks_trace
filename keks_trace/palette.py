@@ -78,8 +78,8 @@ def zerlegen(artikel: str, menge: float) -> str:
 	for i, e in enumerate(stufen):
 		letzte = i == len(stufen) - 1 or (stufen[i + 1]["faktor"] == 1 and e["faktor"] != 1)
 		if letzte:
-			n = menge / e["faktor"]
-			if n > EPS:
+			n = round(menge / e["faktor"], 2)
+			if n >= 0.05:  # Rundungsreste (z. B. 0,0002 kg) nicht anzeigen
 				teile.append(_n(n, e["einheit"]))
 			break
 		n = int(menge / e["faktor"] + 1e-6)
@@ -88,6 +88,8 @@ def zerlegen(artikel: str, menge: float) -> str:
 			menge = flt(menge - n * e["faktor"], 6)
 		if menge <= 1e-6:
 			break
+	if not teile:
+		return "0 " + next(e["einheit"] for e in stufen if e["einheit"] not in NUR_ANZEIGE)
 	return " + ".join(teile)
 
 

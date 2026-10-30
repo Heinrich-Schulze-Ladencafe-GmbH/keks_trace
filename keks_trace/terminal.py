@@ -121,7 +121,10 @@ def rezept(artikel: str, menge: float | None = None) -> dict:
 		"stufe": artikel_stufe(artikel),
 		"bom": bom,
 		"sollmenge": flt(menge or b.quantity, 3),
-		"ausbeute": flt(b.quantity) / (sum(flt(z.qty) for z in b.items) or 1),
+		# Ausbeute nur über Zutaten in der Einheit des Produkts (kg); Packmittel in Stück zählen nicht
+		"ausbeute": flt(b.quantity)
+		/ (sum(flt(z.stock_qty or z.qty) for z in b.items if (z.stock_uom or z.uom) == b.uom) or 1),
+		"einheit": b.uom,
 		"zutaten": zutaten,
 		"rework_moeglich": artikel_stufe(artikel) in REWORK_ZIELE,
 		"ausgabe_silo": silos.get(artikel),
@@ -613,7 +616,7 @@ def herstellen(
 	if not eingaenge:
 		_fehler(_("Keine Zutaten gescannt."))
 
-	summe = sum(z["menge"] for z in eingaenge)
+	summe = sum(z["menge"] for z in eingaenge if z.get("einheit", r["einheit"]) == r["einheit"])
 	if flt(anzahl) > EPS and einheit:
 		ausbringung = flt(flt(anzahl) * paletten.faktor(ziel, einheit), 6)
 	else:

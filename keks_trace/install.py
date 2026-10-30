@@ -225,6 +225,7 @@ def after_migrate():
 	_aenderungsprotokoll()
 	_buchungsarten()
 	_einheiten()
+	_genauigkeit()
 
 
 def _einheiten():
@@ -254,6 +255,26 @@ def _aenderungsprotokoll():
 		make_property_setter(
 			doctype, None, "track_changes", 1, "Check", for_doctype=True, validate_fields_for_doctype=False
 		)
+
+
+# Aufträge in Paletten: 20 Karton = 0,476190 Palette. Mit 3 Nachkommastellen würden daraus 79,97 kg.
+GENAU = {
+	"Delivery Note Item": ("qty", "stock_qty", "received_qty"),
+	"Sales Invoice Item": ("qty", "stock_qty"),
+	"Sales Order Item": ("delivered_qty", "returned_qty", "work_order_qty"),
+}
+
+
+def _genauigkeit():
+	from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+
+	for doctype, felder in GENAU.items():
+		vorhanden = {f.fieldname for f in frappe.get_meta(doctype).fields}
+		for feld in felder:
+			if feld in vorhanden:
+				make_property_setter(
+					doctype, feld, "precision", "6", "Select", validate_fields_for_doctype=False
+				)
 
 
 def _lager_einstellungen():
