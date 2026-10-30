@@ -113,6 +113,24 @@
 	function stk(n, e) { return rund(n).toLocaleString("de-DE") + " " + (e || ""); }
 	function ein(e) { return !e || e === "Kg" ? "kg" : e === "Nos" ? "Stk" : e; }
 	function mg(n, e) { return !e || e === "Kg" ? kg(n) : stk(n, ein(e)); }
+	// Menge (Lagereinheit) in gemischten Einheiten: „3 Paletten + 5 Karton“ (wie palette.zerlegen)
+	function zerlegen(einheiten, menge) {
+		const stufen = (einheiten || []).filter((e) => e.einheit !== "Lage");
+		if (!stufen.length) return kg(menge);
+		const mz = { Palette: "Paletten", Lage: "Lagen" };
+		const n = (x, e) => rund(x).toLocaleString("de-DE") + " " + (rund(x) !== 1 && mz[e] ? mz[e] : e);
+		if (menge <= 1e-6) return "0 " + (stufen.find((e) => e.einheit !== "Palette") || stufen[0]).einheit;
+		const teile = [];
+		for (let i = 0; i < stufen.length; i++) {
+			const e = stufen[i];
+			const letzte = i === stufen.length - 1 || (stufen[i + 1].faktor === 1 && e.faktor !== 1);
+			if (letzte) { const x = menge / e.faktor; if (x > 1e-6) teile.push(n(x, e.einheit)); break; }
+			const x = Math.floor(menge / e.faktor + 1e-6);
+			if (x) { teile.push(n(x, e.einheit)); menge = rund(menge - x * e.faktor, 6); }
+			if (menge <= 1e-6) break;
+		}
+		return teile.join(" + ");
+	}
 	function textAus(html) {
 		const d = document.createElement("div");
 		d.innerHTML = html;
@@ -349,7 +367,7 @@
 			if (verpackung) {
 				document.getElementById("auftraege").innerHTML = auftragsListe.length
 					? auftragsListe.map((z, i) => `<button class="knopf blau" data-a="auftrag" data-i="${i}">${esc(z.kundenname)} · ${esc(z.name)}
-						<small>${esc(z.auftrag)} · noch ${esc(stk(z.offen_verpacken, z.einheit))} von ${esc(stk(z.menge, z.einheit))}${z.termin ? " · Termin " + esc(z.termin) : ""}</small></button>`).join("")
+						<small>${esc(z.auftrag)} · noch ${esc(z.offen_text)} von ${esc(z.menge_text)}${z.termin ? " · Termin " + esc(z.termin) : ""}</small></button>`).join("")
 					: `<span class="fehlt">Keine offenen Kundenaufträge.</span>`;
 			}
 			document.getElementById("liste").innerHTML = liste.length
@@ -369,12 +387,12 @@
 			const zaehlen = r.einheiten && r.einheiten.length > 1;
 			let einheit = zaehlen ? r.einheiten[0].einheit : null;
 			let vorschlag = zaehlen ? Math.round(r.sollmenge / r.einheiten[0].faktor) : r.sollmenge;
-			if (auftrag && zaehlen && r.einheiten.some((e) => e.einheit === auftrag.einheit)) {
-				einheit = auftrag.einheit;
-				vorschlag = auftrag.offen_verpacken;
+			if (auftrag && zaehlen) {
+				if (r.einheiten.some((e) => e.einheit === auftrag.einheit)) einheit = auftrag.einheit;
+				vorschlag = Math.ceil(auftrag.offen_kg / faktorVon(r.einheiten, einheit) - 1e-6);
 			}
 			app.innerHTML = kopf(r.name, true) +
-				(auftrag ? `<div class="panel">Für Auftrag <b>${esc(auftrag.auftrag)}</b> · ${esc(auftrag.kundenname)}<br><span class="fehlt">bestellt ${esc(stk(auftrag.menge, auftrag.einheit))}, schon verpackt ${esc(stk(auftrag.verpackt, auftrag.einheit))}</span></div>` : "") +
+				(auftrag ? `<div class="panel">Für Auftrag <b>${esc(auftrag.auftrag)}</b> · ${esc(auftrag.kundenname)}<br><span class="fehlt">bestellt ${esc(auftrag.menge_text)}, schon verpackt ${esc(auftrag.verpackt_text)}, offen ${esc(auftrag.offen_text)}</span></div>` : "") +
 				(zaehlen ? einheitWahl(r.einheiten, einheit) : "") +
 				zahlFeld("soll", zaehlen ? `Soll – wie viele <span id="einheit-text">${esc(einheit)}</span>?` : `Sollmenge (kg) – laut Rezept ${esc(kg(r.sollmenge))}`, vorschlag);
 			const weiter = () => {
@@ -716,6 +734,8 @@
 		app.innerHTML = kopf("Palette", true) + `
 			<div class="panel"><div class="nve">${esc(p.nve.slice(0, -6))}<span style="color:#6ea0ff">${esc(p.nve.slice(-6))}</span> ${statusMarke(p.status)}
 				<br><small>${esc(p.art)}${p.kartons ? " · " + esc(p.kartons) : ""}${p.menge ? " · " + esc(kg(p.menge)) : ""}${p.lieferschein ? " · Lieferschein " + esc(p.lieferschein) : ""}</small></div>
+				${p.fuellung ? `<div style="margin-top:10px"><div style="height:14px;background:var(--panel2);border-radius:7px;overflow:hidden"><div style="height:100%;width:${Math.min(100, Math.round(p.fuellung.anteil * 100))}%;background:${p.fuellung.ueber ? "var(--rot)" : p.fuellung.voll ? "var(--gruen)" : "var(--blau)"}"></div></div>
+					<div class="fehlt" style="font-size:16px;margin-top:4px">${p.fuellung.ueber ? "ÜBERLADEN · " : p.fuellung.voll ? "VOLL · " : ""}${esc(p.fuellung.text || Math.round(p.fuellung.anteil * 100) + " % voll")}</div></div>` : ""}
 				${p.test ? `<div class="meldung orange">Test-NVE: Etikett nicht an Kunden geben (GS1-Basisnummer fehlt in den Einstellungen).</div>` : ""}
 			</div>
 			${aktiv && p.positionen.length ? `<p class="fehlt">Position antippen, um Kartons auf eine andere Palette umzupacken.</p>` : ""}
@@ -811,7 +831,7 @@
 		if (!namen.length) return lieferungZeigen();
 		app.innerHTML = kopf("Lieferung an " + lieferung.titel, true) + `<p>Zu welchem Kundenauftrag?</p><div class="raster">
 			${namen.map((n) => `<button class="knopf blau" data-a="auftrag" data-n="${esc(n)}">${esc(n)}<small>${auftraege[n].map((z) =>
-				esc(z.name) + ": " + esc(stk(z.menge - z.geliefert, z.einheit)) + " offen").join("<br>")}${auftraege[n][0].termin ? "<br>Termin " + esc(auftraege[n][0].termin) : ""}</small></button>`).join("")}
+				esc(z.name) + ": " + esc(z.offen_liefern_text) + " offen").join("<br>")}${auftraege[n][0].termin ? "<br>Termin " + esc(auftraege[n][0].termin) : ""}</small></button>`).join("")}
 			<button class="knopf" data-a="ohne">Ohne Auftrag</button></div>`;
 		aktionen((a, d) => {
 			if (a === "auftrag") { lieferung.auftrag = d.n; lieferung.positionen = auftraege[d.n]; return lieferungZeigen(); }
@@ -837,7 +857,7 @@
 			const offen = (z.menge - z.geliefert) * (z.faktor || 1);
 			const jetzt = gescanntJe[z.artikel] || 0;
 			const fertig = jetzt >= offen - 1e-6;
-			return `<div class="zeile"><div class="${fertig ? "ok" : ""}">${fertig ? "✔" : "○"} ${esc(z.name)}</div><div class="rechts ${fertig ? "ok" : "fehlt"}">${esc(stk(jetzt / (z.faktor || 1), z.einheit))} / ${esc(stk(offen / (z.faktor || 1), z.einheit))}</div></div>`;
+			return `<div class="zeile"><div class="${fertig ? "ok" : ""}">${fertig ? "✔" : "○"} ${esc(z.name)}</div><div class="rechts ${fertig ? "ok" : "fehlt"}">${esc(zerlegen(z.einheiten, jetzt))}<br><small>von ${esc(zerlegen(z.einheiten, offen))}</small></div></div>`;
 		}).join("")}</div>` : "";
 		app.innerHTML = kopf("Lieferung an " + lieferung.titel, true) + auftragHtml +
 			textFeld("scan", "Palette oder Los scannen") +

@@ -6,7 +6,7 @@ Ausführen:
 
 import frappe
 from frappe.tests import IntegrationTestCase
-from frappe.utils import add_days, add_months, getdate, nowdate
+from frappe.utils import add_days, add_months, flt, getdate, nowdate
 
 from keks_trace import demo, los, palette, sperre, terminal
 from keks_trace.terminal import TerminalFehler
@@ -387,3 +387,46 @@ class TestTerminal(IntegrationTestCase):
 			terminal.herstellen(
 				"Verpackung", "KT-FW-NUSS-SCHOKO", [{"code": fol, "menge": 1}], kundenauftrag=so.name
 			)
+
+	def test_17_auftrag_in_paletten(self):
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
+		item = frappe.get_doc("Item", "KT-FW-KAKAO-NOUGAT")
+		if not any(u.uom == "Palette" for u in item.uoms):
+			item.append("uoms", {"uom": "Palette", "conversion_factor": 24})  # 10 Karton à 2,4 kg
+			item.save()
+		self.assertEqual(palette.zerlegen("KT-FW-KAKAO-NOUGAT", 3 * 24 + 5 * 2.4), "3 Paletten + 5 Karton")
+		self.assertEqual(
+			palette.zerlegen("KT-FW-KAKAO-NOUGAT", 24 + 2.4 + 0.4), "1 Palette + 1 Karton + 2 Beutel"
+		)
+		# Palette ist nur Rechen-/Anzeigeeinheit, gezählt wird in Karton/Beutel
+		self.assertNotIn("Palette", [e["einheit"] for e in palette.einheiten("KT-FW-KAKAO-NOUGAT")])
+
+		so = frappe.get_doc(
+			{
+				"doctype": "Sales Order",
+				"customer": self.ctx.kunde,
+				"company": self.ctx.company,
+				"transaction_date": nowdate(),
+				"delivery_date": add_days(nowdate(), 3),
+				"items": [{"item_code": "KT-FW-KAKAO-NOUGAT", "qty": 2, "uom": "Palette", "conversion_factor": 24,
+				           "rate": 100, "warehouse": self.ctx.fertig}],
+			}
+		).insert()  # fmt: skip
+		so.submit()
+		a = next(z for z in terminal.auftraege("Verpackung") if z.auftrag == so.name)
+		self.assertEqual(a.menge_text, "2 Paletten")
+		p = terminal.palette_neu("Verpackung")["nve"]
+		e = self._verpacken(10, p)
+		frappe.db.set_value("Stock Entry", e["buchung"], "kt_kundenauftrag", so.name)
+		f = terminal.palette_info(p)["fuellung"]
+		self.assertTrue(f["voll"])
+		self.assertEqual(f["text"], "10 von 10 Karton")
+		a = next(z for z in terminal.auftraege("Verpackung") if z.auftrag == so.name)
+		self.assertEqual((a.verpackt_text, a.offen_text), ("1 Palette", "1 Palette"))
+
+		ls = terminal.lieferung("Versand", self.ctx.kunde, [{"palette": p, "ganz": 1}], kundenauftrag=so.name)
+		r = frappe.get_doc("Delivery Note", ls["lieferschein"]).items[0]
+		self.assertEqual((r.uom, flt(r.qty, 3), r.kt_anzahl, r.kt_einheit), ("Palette", 1.0, 10, "Karton"))
+		self.assertEqual(frappe.db.get_value("Palette", p, "status"), "Versendet")
+		so.reload()
+		self.assertAlmostEqual(so.items[0].delivered_qty, 1)

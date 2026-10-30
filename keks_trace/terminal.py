@@ -196,10 +196,19 @@ def auftraege(station: str, kunde: str | None = None) -> list[dict]:
 			verpackt[(v.auftrag, v.artikel)] = flt(v.menge)
 	for z in zeilen:
 		f = flt(z.faktor) or 1
-		z["verpackt"] = flt(verpackt.get((z.auftrag, z.artikel), 0) / f, 3)
-		z["geliefert"] = flt(flt(z.geliefert) / f, 3)
+		verpackt_kg = flt(verpackt.get((z.auftrag, z.artikel), 0))
+		z["verpackt"] = flt(verpackt_kg / f, 3)
+		geliefert_kg = flt(z.geliefert)
+		z["geliefert"] = flt(geliefert_kg / f, 3)
 		z["offen_verpacken"] = max(flt(z.menge - z.verpackt, 3), 0)
 		z["termin"] = formatdate(z.termin) if z.termin else None
+		# Klartext in gemischten Einheiten, z. B. „3 Paletten + 5 Karton“
+		z["menge_text"] = paletten.zerlegen(z.artikel, z.stock_qty)
+		z["verpackt_text"] = paletten.zerlegen(z.artikel, verpackt_kg)
+		z["offen_text"] = paletten.zerlegen(z.artikel, max(flt(z.stock_qty) - verpackt_kg, 0))
+		z["offen_liefern_text"] = paletten.zerlegen(z.artikel, max(flt(z.stock_qty) - geliefert_kg, 0))
+		z["offen_kg"] = max(flt(z.stock_qty) - verpackt_kg, 0)
+		z["einheiten"] = paletten.einheiten(z.artikel, alle=True)
 	return zeilen
 
 
@@ -926,6 +935,36 @@ def pruefe_lieferzeile(
 	)  # fmt: skip
 
 
+def _lieferzeile(p, kundenauftrag, auftrag_pos) -> dict:
+	"""Lieferscheinposition. Mit Auftrag in dessen Einheit (z. B. 0,48 Palette), gezählt bleibt 20 Karton."""
+	zeile = {
+		"item_code": p["artikel"],
+		"qty": p["anzahl"],
+		"uom": p["einheit"],
+		"conversion_factor": p["faktor"],
+		"rate": flt(frappe.get_cached_value("Item", p["artikel"], "standard_rate")) * p["faktor"],
+		"warehouse": p["lager"],
+		"use_serial_batch_fields": 1,
+		"batch_no": p["charge"],
+		"kt_palette": p["palette"],
+		"kt_anzahl": p["anzahl"],
+		"kt_einheit": p["einheit"],
+	}
+	if kundenauftrag and auftrag_pos.get(p["artikel"]):
+		uom, cf, rate = auftrag_pos[("einheit", p["artikel"])]
+		zeile.update(
+			{
+				"qty": flt(p["menge"] / cf, 6),
+				"uom": uom,
+				"conversion_factor": cf,
+				"rate": rate,
+				"against_sales_order": kundenauftrag,
+				"so_detail": auftrag_pos[p["artikel"]],
+			}
+		)
+	return zeile
+
+
 @frappe.whitelist()
 def lieferung(station: str, kunde: str, zeilen, kundenauftrag: str | None = None) -> dict:
 	"""Lieferschein an einen Kunden mit gescannten Paletten und Losen, optional zu einem Kundenauftrag."""
@@ -942,12 +981,14 @@ def lieferung(station: str, kunde: str, zeilen, kundenauftrag: str | None = None
 		for r in frappe.get_all(
 			"Sales Order Item",
 			{"parent": kundenauftrag},
-			["name", "item_code", "rate", "conversion_factor"],
+			["name", "item_code", "rate", "conversion_factor", "uom"],
 			order_by="idx",
 		):
 			auftrag_pos.setdefault(r.item_code, r.name)
-			# Preis je Lagereinheit aus dem Auftrag (ERPNext prüft gleiche Preise im Verkaufsprozess)
-			auftrag_pos.setdefault(("preis", r.item_code), flt(r.rate) / (flt(r.conversion_factor) or 1))
+			# ERPNext verlangt im Lieferschein dieselbe Einheit wie im Auftrag (z. B. Palette)
+			auftrag_pos.setdefault(
+				("einheit", r.item_code), (r.uom, flt(r.conversion_factor) or 1, flt(r.rate))
+			)
 		fremd = sorted({p["artikel"] for p in positionen if p["artikel"] not in auftrag_pos})
 		if fremd:
 			_fehler(_("Nicht im Kundenauftrag {0} bestellt: {1}").format(kundenauftrag, ", ".join(fremd)))
@@ -961,26 +1002,7 @@ def lieferung(station: str, kunde: str, zeilen, kundenauftrag: str | None = None
 			"posting_date": jetzt.date(),
 			"posting_time": jetzt.time().strftime("%H:%M:%S"),
 			"kt_station": s.name,
-			"items": [
-				{
-					"item_code": p["artikel"],
-					"qty": p["anzahl"],
-					"uom": p["einheit"],
-					"conversion_factor": p["faktor"],
-					"rate": flt(
-						auftrag_pos.get(("preis", p["artikel"]))
-						or frappe.get_cached_value("Item", p["artikel"], "standard_rate")
-					)
-					* p["faktor"],
-					"warehouse": p["lager"],
-					"use_serial_batch_fields": 1,
-					"batch_no": p["charge"],
-					"kt_palette": p["palette"],
-					"against_sales_order": kundenauftrag if kundenauftrag else None,
-					"so_detail": auftrag_pos.get(p["artikel"]),
-				}
-				for p in positionen
-			],
+			"items": [_lieferzeile(p, kundenauftrag, auftrag_pos) for p in positionen],
 		}
 	)
 	dn.insert()

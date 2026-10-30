@@ -4,7 +4,7 @@ Echt (aus Rezeptur und Spezifikation):
 - Grundteig Honig 100 % (5812): Zitronensäurelösung 1,14 / Weizenmehl 812 lose 109 / Honig Knigge 90 kg
 - Honig Moppen (5888): Grundteig 200 / ABC-Trieb 1 / Pottasche gelöst 1 / Palmfett 5 /
   Lebkuchengewürz VCS 0,9 / Acrylaway 0,03 / Karamellzuckersirup 0,65 kg; Backverlust 208,58 -> 188,687 kg
-- Honig Lebkuchen Beutel 17846, Karton 17670, EAN Beutel 4032744178468, Karton 04032744176709,
+- Honig Lebkuchen Beutel 17846 (Gewicht/Aufbau siehe PLATZHALTER), Karton 17670, EAN Beutel 4032744178468, Karton 04032744176709,
   MHD 32 Monate, Allergene Gluten, Los JWWT
 - Verpackung je Beutel: Schlauchbeutel OPP, 2 Etiketten, 1 Clip
 
@@ -20,9 +20,9 @@ from frappe.utils import add_days, flt, nowdate
 from keks_trace import demo
 
 PLATZHALTER = {
-	"Beutel 17846 netto": "500 g",
-	"Beutel je Karton 17670": 12,
-	"zweite Beutelgröße": "17847 Honig Lebkuchen 250 g, 20 Beutel je Karton, ohne EAN",
+	"Beutel 17846 netto": "200 g",
+	"Aufbau 17846": "20 Beutel je Karton (4 kg), 6 Karton je Lage, 7 Lagen = 42 Karton = 168 kg je Palette (Beispiel)",
+	"zweite Beutelgröße": "17847 Honig Lebkuchen 250 g, 20 Beutel je Karton, 48 Karton je Palette, ohne EAN",
 	"Zitronensäurelösung 1144": "aus 0,5 kg Zitronensäure 1143 je 1 kg (Wasser nicht chargenpflichtig)",
 	"Pottasche gelöst 1145": "aus 0,5 kg Pottasche 1146 je 1 kg",
 	"Ruhezeit Grundteig Honig": "120 Tage",
@@ -52,7 +52,7 @@ ARTIKEL = {
 	"5812": ("Grundteig Honig 100 %", "Grundteig", "Kg", 120, None, "Honigteig"),
 	"5888": ("Honig Moppen Teig", "Teig veredelt", "Kg", 2, None, "Honigteig"),
 	"5888-LOSE": ("Honig Moppen lose", "Ware lose", "Kg", None, 12, "Honigteig"),
-	"17846": ("Honig Lebkuchen 500 g", "Fertigware", "Kg", None, 32, "Honigteig"),
+	"17846": ("Honig Lebkuchen 200 g", "Fertigware", "Kg", None, 32, "Honigteig"),
 	"17847": ("Honig Lebkuchen 250 g", "Fertigware", "Kg", None, 32, "Honigteig"),
 	"RW-HONIG": ("Rework Honigteig / Bruch", "Rework", "Kg", 14, None, "Honigteig"),
 }
@@ -68,14 +68,19 @@ REZEPTE = {
 	"5888": (208.58, [("5812", 200), ("4150", 1), ("1145", 1), ("6200", 5), ("7171", 0.9), ("1700", 0.03), ("4042", 0.65)]),
 	"5888-LOSE": (188.687, [("5888", 208.58)]),
 	# Fertigware je Karton: 12 x 500 g bzw. 20 x 250 g
-	"17846": (6, [("5888-LOSE", 6), ("9101", 12), ("9102", 24), ("9103", 12)]),
+	"17846": (4, [("5888-LOSE", 4), ("9101", 20), ("9102", 40), ("9103", 20)]),
 	"17847": (5, [("5888-LOSE", 5), ("9101", 20), ("9102", 40), ("9103", 20)]),
 }  # fmt: skip
 
 # Fertigware: Einheit -> (kg, EAN oder None)
 VERPACKUNG = {
-	"17846": {"Beutel": (0.5, "4032744178468"), "Karton": (6.0, "04032744176709")},
-	"17847": {"Beutel": (0.25, None), "Karton": (5.0, None)},
+	"17846": {
+		"Beutel": (0.2, "4032744178468"),
+		"Karton": (4.0, "04032744176709"),
+		"Lage": (24.0, None),
+		"Palette": (168.0, None),
+	},
+	"17847": {"Beutel": (0.25, None), "Karton": (5.0, None), "Lage": (40.0, None), "Palette": (240.0, None)},
 }
 
 SILO = ("Silo Weizenmehl 812", "4974", 150, 30000)
@@ -119,7 +124,10 @@ def anlegen(company: str | None = None) -> frappe._dict:
 	for code, einheiten in VERPACKUNG.items():
 		item = frappe.get_doc("Item", code)
 		for uom, (kg, ean) in einheiten.items():
-			if not any(u.uom == uom for u in item.uoms):
+			vorhanden = next((u for u in item.uoms if u.uom == uom), None)
+			if vorhanden:
+				vorhanden.conversion_factor = kg
+			else:
 				item.append("uoms", {"uom": uom, "conversion_factor": kg})
 			ean = (ean.lstrip("0") if ean and len(ean) == 14 else ean) or None  # GTIN-14 mit 0 = EAN-13
 			if ean and not frappe.db.exists("Item Barcode", {"barcode": ean}):
@@ -171,7 +179,7 @@ def anlegen(company: str | None = None) -> frappe._dict:
 
 
 def kundenauftrag(ctx, neu: bool = False) -> str:
-	"""Offener Beispiel-Kundenauftrag: 40 Karton 500 g und 10 Karton 250 g (Platzhalter-Preise)."""
+	"""Offener Beispiel-Kundenauftrag: 5 Paletten 200 g und 10 Karton 250 g (Platzhalter-Preise)."""
 	if not neu:
 		offen = frappe.db.get_value(
 			"Sales Order",
@@ -179,7 +187,7 @@ def kundenauftrag(ctx, neu: bool = False) -> str:
 				"customer": ctx.kunde,
 				"docstatus": 1,
 				"status": ["not in", ["Completed", "Closed"]],
-				"po_no": "PILOT",
+				"po_no": "PILOT-PAL",
 			},
 		)
 		if offen:
@@ -189,11 +197,11 @@ def kundenauftrag(ctx, neu: bool = False) -> str:
 			"doctype": "Sales Order",
 			"customer": ctx.kunde,
 			"company": ctx.company,
-			"po_no": "PILOT",
+			"po_no": "PILOT-PAL",
 			"transaction_date": nowdate(),
 			"delivery_date": add_days(nowdate(), 7),
 			"items": [
-				{"item_code": "17846", "qty": 40, "uom": "Karton", "conversion_factor": 6, "rate": 27.0,
+				{"item_code": "17846", "qty": 5, "uom": "Palette", "conversion_factor": 168, "rate": 1008.0,
 				 "warehouse": ctx.fertig, "delivery_date": add_days(nowdate(), 7)},
 				{"item_code": "17847", "qty": 10, "uom": "Karton", "conversion_factor": 5, "rate": 24.0,
 				 "warehouse": ctx.fertig, "delivery_date": add_days(nowdate(), 7)},
@@ -294,7 +302,7 @@ def durchspielen():
 	p = terminal.palette_neu("Verpackung")["nve"]
 	fw = herstellen(
 		"Verpackung", "17846",
-		[(kl, 120), (folie["gebinde"][0], 240), (etikett["gebinde"][0], 480), (clip["gebinde"][0], 240)],
+		[(kl, 80), (folie["gebinde"][0], 400), (etikett["gebinde"][0], 800), (clip["gebinde"][0], 400)],
 		anzahl=20, einheit="Karton", ziel_behaelter=p, kundenauftrag=ctx.auftrag,
 	)  # fmt: skip
 	ls = terminal.lieferung("Versand", ctx.kunde, [{"palette": p, "ganz": 1}], kundenauftrag=ctx.auftrag)

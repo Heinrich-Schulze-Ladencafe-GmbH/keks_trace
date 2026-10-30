@@ -161,6 +161,11 @@ legt die vier Demo-Stationen an.
 - **Kundenaufträge** (Sales Order) steuern das Verpacken: Das Terminal Verpackung zeigt offene
   Aufträge mit Restmenge und Termin; Verpackung, Palette und Lieferschein hängen am Auftrag,
   ERPNext führt „geliefert“ im Auftrag mit. Ohne Auftrag geht es weiterhin.
+- **Paletten als Einheit**: am Artikel die Einheiten „Lage“ und „Palette“ mit kg je Palette
+  (z. B. 42 Karton × 4 kg = 168 kg). Aufträge dürfen in Paletten stehen; das Terminal zeigt
+  gemischt („offen 4 Paletten + 22 Karton“), gezählt wird weiter in Karton/Beutel. Die Palette
+  zeigt ihre Füllung („35 von 42 Karton“) und meldet „voll“ bzw. „überladen“. Der Lieferschein
+  steht in der Auftragseinheit (z. B. 0,48 Palette), die gezählten Kartons stehen daneben.
 - **Los JWWT** (Einstellung „Los-Format“): Jahr, ISO-Kalenderwoche, Wochentag. Ein Los je
   Artikel und Tag; mehrere Verpackungen am Tag gehen in dieselbe Charge (`<Artikel>-<Jahr>-<Los>`).
   Ein gesperrtes Los wird nicht weiter befüllt. Vor dem Buchen zeigt das Terminal Los und MHD

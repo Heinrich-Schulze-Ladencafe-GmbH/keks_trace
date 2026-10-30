@@ -38,13 +38,20 @@ def _fehler(text):
 # ---------------------------------------------------------------------------
 
 
-def einheiten(artikel: str) -> list[dict]:
-	"""Zähleinheiten eines Artikels mit Umrechnung in die Lagereinheit, größte zuerst."""
+# Einheiten, die nur zum Rechnen und Anzeigen dienen (nicht zum Zählen am Packtisch)
+NUR_ANZEIGE = ("Palette", "Lage")
+
+
+def einheiten(artikel: str, alle: bool = False) -> list[dict]:
+	"""Zähleinheiten eines Artikels mit Umrechnung in die Lagereinheit, größte zuerst.
+
+	Palette und Lage nur mit alle=True (Aufträge in Paletten, Anzeige); gezählt wird in Karton/Beutel.
+	"""
 	lager_einheit = frappe.get_cached_value("Item", artikel, "stock_uom")
 	liste = [
 		{"einheit": u.uom, "faktor": flt(u.conversion_factor)}
 		for u in frappe.get_cached_doc("Item", artikel).uoms
-		if u.uom != lager_einheit and flt(u.conversion_factor) > EPS
+		if u.uom != lager_einheit and flt(u.conversion_factor) > EPS and (alle or u.uom not in NUR_ANZEIGE)
 	]
 	liste.sort(key=lambda e: -e["faktor"])
 	liste.append({"einheit": lager_einheit, "faktor": 1.0})
@@ -54,10 +61,63 @@ def einheiten(artikel: str) -> list[dict]:
 def faktor(artikel: str, einheit: str | None) -> float:
 	if not einheit:
 		return 1.0
-	for e in einheiten(artikel):
+	for e in einheiten(artikel, alle=True):
 		if e["einheit"] == einheit:
 			return e["faktor"]
 	_fehler(_("Einheit {0} ist für {1} nicht eingerichtet.").format(einheit, artikel))
+
+
+def zerlegen(artikel: str, menge: float) -> str:
+	"""Menge (Lagereinheit) als „3 Paletten + 5 Karton“; Reste in der kleinsten Zähleinheit."""
+	menge = flt(menge, 6)
+	stufen = [e for e in einheiten(artikel, alle=True) if e["einheit"] != "Lage"]
+	if menge <= EPS:
+		zaehl = [e["einheit"] for e in stufen if e["einheit"] not in NUR_ANZEIGE]
+		return "0 " + zaehl[0]
+	teile = []
+	for i, e in enumerate(stufen):
+		letzte = i == len(stufen) - 1 or (stufen[i + 1]["faktor"] == 1 and e["faktor"] != 1)
+		if letzte:
+			n = menge / e["faktor"]
+			if n > EPS:
+				teile.append(_n(n, e["einheit"]))
+			break
+		n = int(menge / e["faktor"] + 1e-6)
+		if n:
+			teile.append(_n(n, e["einheit"]))
+			menge = flt(menge - n * e["faktor"], 6)
+		if menge <= 1e-6:
+			break
+	return " + ".join(teile)
+
+
+def _n(n, einheit):
+	mehrzahl = {"Palette": "Paletten", "Lage": "Lagen"}
+	text = f"{flt(n, 3):g}".replace(".", ",")
+	return f"{text} {mehrzahl.get(einheit, einheit) if flt(n) != 1 else einheit}"
+
+
+def fuellung(palette: str, pos=None) -> dict | None:
+	"""Wie voll ist die Palette? Anteil je Artikel nach „Palette“-Umrechnung am Artikel."""
+	pos = inhalt(palette) if pos is None else pos
+	anteil, ohne = 0.0, False
+	for x in pos:
+		f = next((e["faktor"] for e in einheiten(x["artikel"], alle=True) if e["einheit"] == "Palette"), None)
+		if not f:
+			ohne = True
+			continue
+		anteil += x["menge"] / f
+	if ohne or not pos:
+		return None
+	artikel = {x["artikel"] for x in pos}
+	text = None
+	if len(artikel) == 1:
+		a = next(iter(artikel))
+		karton = faktor(a, "Karton") if any(e["einheit"] == "Karton" for e in einheiten(a)) else None
+		voll = faktor(a, "Palette")
+		if karton:
+			text = f"{flt(sum(x['menge'] for x in pos) / karton, 2):g} von {flt(voll / karton, 2):g} Karton"
+	return {"anteil": flt(anteil, 4), "voll": anteil >= 1 - 1e-6, "ueber": anteil > 1 + 1e-6, "text": text}
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +253,7 @@ def info(palette: str) -> dict:
 		"positionen": pos,
 		"kartons": _summe_text(pos),
 		"menge": flt(sum(x["menge"] for x in pos), 3),
+		"fuellung": fuellung(palette, pos),
 	}
 
 
@@ -287,7 +348,29 @@ def beladen(
 			)
 		)
 	_bewegung(palette, "Zugang", art, charge, anzahl, einheit, station, beleg_typ, beleg)
-	return info(palette)
+	i = info(palette)
+	_hinweis_fuellung(i)
+	return i
+
+
+def _hinweis_fuellung(i):
+	f = i.get("fuellung")
+	if not f:
+		return
+	if f["ueber"]:
+		frappe.msgprint(
+			_("Palette {0} ist überladen ({1} %). Bitte Kartons auf eine neue Palette.").format(
+				i["nve"], round(f["anteil"] * 100)
+			),
+			indicator="orange",
+			alert=True,
+		)
+	elif f["voll"]:
+		frappe.msgprint(
+			_("Palette {0} ist voll. Schließen, Etikett anbringen, neue Palette beginnen.").format(i["nve"]),
+			indicator="green",
+			alert=True,
+		)
 
 
 def _anzahl_text(artikel, menge, einheit):
@@ -321,7 +404,9 @@ def umpacken(von, nach, charge, anzahl, einheit, station=None) -> dict:
 	_bewegung(von, "Abgang", "Umpacken", charge, anzahl, einheit, station, gegen=nach)
 	_bewegung(nach, "Zugang", "Umpacken", charge, anzahl, einheit, station, gegen=von)
 	_status_pruefen(von)
-	return info(nach)
+	i = info(nach)
+	_hinweis_fuellung(i)
+	return i
 
 
 def schliessen(palette) -> dict:
@@ -373,7 +458,8 @@ def pruefe_lieferung(doc, method=None):
 			status = frappe.db.get_value("Palette", r.kt_palette, "status")
 			if status not in AKTIV:
 				_fehler(_("Palette {0} ist {1}.").format(r.kt_palette, (status or "unbekannt").lower()))
-			von_palette[(r.kt_palette, r.batch_no, r.uom)] += flt(r.qty)
+			anzahl, einheit = _gezaehlt(r)
+			von_palette[(r.kt_palette, r.batch_no, einheit)] += anzahl
 		elif artikel_stufe(r.item_code) == "Fertigware":
 			lose_bedarf[r.batch_no] += menge
 
@@ -401,6 +487,13 @@ def pruefe_lieferung(doc, method=None):
 			)
 
 
+def _gezaehlt(r):
+	"""Am Terminal gezählte Anzahl und Einheit einer Lieferscheinposition (sonst Menge/Einheit der Zeile)."""
+	if r.get("kt_einheit") and flt(r.get("kt_anzahl")):
+		return flt(r.kt_anzahl), r.kt_einheit
+	return flt(r.qty), r.uom
+
+
 def _position_charge(palette, charge):
 	return any(x["charge"] == charge for x in inhalt(palette))
 
@@ -411,8 +504,9 @@ def lieferung_on_submit(doc, method=None):
 	betroffen = set()
 	for r in doc.items:
 		if r.get("kt_palette") and r.batch_no:
+			anzahl, einheit = _gezaehlt(r)
 			_bewegung(
-				r.kt_palette, "Abgang", "Lieferung", r.batch_no, r.qty, r.uom,
+				r.kt_palette, "Abgang", "Lieferung", r.batch_no, anzahl, einheit,
 				doc.get("kt_station"), "Delivery Note", doc.name,
 			)  # fmt: skip
 			betroffen.add(r.kt_palette)

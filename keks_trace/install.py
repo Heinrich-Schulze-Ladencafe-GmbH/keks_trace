@@ -175,6 +175,22 @@ CUSTOM_FIELDS = {
 			"insert_after": "batch_no",
 			"description": "Ware kommt von dieser Palette. Leer = lose Kartons ohne Palette.",
 		},
+		{
+			"fieldname": "kt_anzahl",
+			"label": "Gezählt (Anzahl)",
+			"fieldtype": "Float",
+			"read_only": 1,
+			"insert_after": "kt_palette",
+			"description": "Am Terminal gezählt, z. B. 20 Karton (Menge im Lieferschein kann in Paletten stehen).",
+		},
+		{
+			"fieldname": "kt_einheit",
+			"label": "Gezählt (Einheit)",
+			"fieldtype": "Link",
+			"options": "UOM",
+			"read_only": 1,
+			"insert_after": "kt_anzahl",
+		},
 	],
 	"Stock Entry Detail": [
 		{
@@ -213,11 +229,14 @@ def after_migrate():
 
 def _einheiten():
 	"""Zähleinheiten für Fertigware (Umrechnung in kg steht am Artikel)."""
-	for uom in ("Karton", "Beutel"):
+	# Palette und Lage dürfen gebrochen sein (20 Karton = 0,48 Palette im Lieferschein)
+	for uom, ganz in (("Palette", 0), ("Lage", 0), ("Karton", 1), ("Beutel", 1)):
 		if not frappe.db.exists("UOM", uom):
-			frappe.get_doc({"doctype": "UOM", "uom_name": uom, "must_be_whole_number": 1}).insert(
+			frappe.get_doc({"doctype": "UOM", "uom_name": uom, "must_be_whole_number": ganz}).insert(
 				ignore_permissions=True
 			)
+		elif frappe.db.get_value("UOM", uom, "must_be_whole_number") != ganz:
+			frappe.db.set_value("UOM", uom, "must_be_whole_number", ganz)
 
 
 def _buchungsarten():
