@@ -26,3 +26,12 @@ def mengenbilanz(charge: str) -> dict:
 
 	frappe.has_permission("Batch", "read", charge, throw=True)
 	return _bilanz(charge)
+
+
+@frappe.whitelist()
+def silo_info(silo: str) -> dict:
+	"""Chargen im Silo (rechnerischer Bestand) und Chargen, die noch vermischt enthalten sein können."""
+	from keks_trace.silo import info
+
+	frappe.has_permission("Silo", "read", silo, throw=True)
+	return info(silo)

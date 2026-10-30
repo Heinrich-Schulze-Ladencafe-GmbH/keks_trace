@@ -21,6 +21,7 @@ import frappe
 from frappe.utils import add_days, getdate
 
 from keks_trace.install import KOMPONENTEN_STUFEN, PRODUKTIONS_STUFEN
+from keks_trace.silo import vermischung
 from keks_trace.utils import artikel_stufe, ausgangs_zeilen, eingangs_zeilen, zeilen_chargen
 
 
@@ -55,6 +56,24 @@ def on_submit(doc, method=None):
 					"stock_entry": doc.name,
 					"posting_date": doc.posting_date,
 					"quelle": "Buchung",
+				}
+			).insert(ignore_permissions=True)
+
+		# Silo/Tank: Chargen, die durch Nachfüllen noch vermischt enthalten sein können (Menge 0).
+		for in_charge, in_item, silo in vermischung(doc, eingaenge):
+			frappe.get_doc(
+				{
+					"doctype": "Chargen Genealogie",
+					"input_batch": in_charge,
+					"input_item": in_item,
+					"output_batch": out_charge,
+					"output_item": out_item,
+					"menge": 0,
+					"anteil": 0,
+					"stock_entry": doc.name,
+					"posting_date": doc.posting_date,
+					"quelle": "Silo",
+					"silo": silo,
 				}
 			).insert(ignore_permissions=True)
 

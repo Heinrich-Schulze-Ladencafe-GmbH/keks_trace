@@ -15,9 +15,25 @@ from keks_trace import demo, sperre
 from keks_trace.bilanz import mengenbilanz
 from keks_trace.trace import rueckverfolgung
 
+# Artikel -> Silo des Test-Laufs (wird in setUpClass gefüllt; jeder Lauf hat eigene Silos)
+SILO: dict[str, str] = {}
+
 
 def _hash():
 	return frappe.generate_hash(length=6).upper()
+
+
+def _roh(item, charge, menge):
+	"""Zeile für einen Rohstoff: ohne Charge aus dem Silo, mit Charge als Sackware."""
+	return (item, None, menge, SILO[item]) if charge is None else (item, charge, menge)
+
+
+def _kanten(output, **filter_):
+	return frappe.get_all(
+		"Chargen Genealogie",
+		filters={"output_batch": output, "storniert": 0, **filter_},
+		fields=["input_batch", "menge", "quelle", "silo"],
+	)
 
 
 class TestReworkKette(IntegrationTestCase):
@@ -26,12 +42,18 @@ class TestReworkKette(IntegrationTestCase):
 		super().setUpClass()
 		cls.ctx = demo.stammdaten()
 		cls.k = demo.drei_tage_kette(cls.ctx, kuerzel="T" + _hash())
+		SILO.clear()
+		SILO.update(cls.k.silo)
 
 	# ------------------------------------------------------------------ Hilfen
 
 	def _grundteig(self, datum, zeit, rework=(), gesamt=100, traeger=None, roh=None, submit=True):
-		"""Grundteig aus Mehl/Zucker/Butter (60/20/20) plus Rework."""
-		roh = roh or {"KT-MEHL": self.k.mehl, "KT-ZUCKER": self.k.zucker, "KT-BUTTER": self.k.butter}
+		"""Grundteig aus Mehl/Zucker/Butter (60/20/20) plus Rework.
+
+		roh: Charge je Rohstoff (Sackware aus dem Lager) oder None = Entnahme aus dem Silo (FIFO).
+		Standard: Mehl und Zucker aus dem Silo, Butter aus dem Lager.
+		"""
+		roh = roh or {"KT-MEHL": None, "KT-ZUCKER": None, "KT-BUTTER": self.k.butter}
 		rest = gesamt - sum(r[2] for r in rework)
 		charge = demo.neue_charge("KT-GT-MUERBE", f"XGT-{_hash()}", datum)
 		aus = ("KT-GT-MUERBE", charge, gesamt, traeger) if traeger else ("KT-GT-MUERBE", charge, gesamt)
@@ -41,9 +63,9 @@ class TestReworkKette(IntegrationTestCase):
 			datum,
 			zeit,
 			eingaenge=[
-				("KT-MEHL", roh["KT-MEHL"], rest * 0.6),
-				("KT-ZUCKER", roh["KT-ZUCKER"], rest * 0.2),
-				("KT-BUTTER", roh["KT-BUTTER"], rest * 0.2),
+				_roh("KT-MEHL", roh["KT-MEHL"], rest * 0.6),
+				_roh("KT-ZUCKER", roh["KT-ZUCKER"], rest * 0.2),
+				_roh("KT-BUTTER", roh["KT-BUTTER"], rest * 0.2),
 				*rework,
 			],
 			ausgaenge=[aus],
@@ -260,9 +282,9 @@ class TestReworkKette(IntegrationTestCase):
 		tb = demo.neuer_traeger(f"XTB-{_hash()}", "Teigbehälter")
 		charge, se = self._grundteig(self.k.tag3, "13:00:00", traeger=tb)
 		self.assertEqual(frappe.db.get_value("Produkttraeger", tb, "status"), "Belegt")
-		self.assertIn(charge, [z["charge"] for z in rueckverfolgung(self.k.mehl, "Vorwärts")["chargen"]])
+		self.assertIn(charge, [z["charge"] for z in rueckverfolgung(self.k.mehl2, "Vorwärts")["chargen"]])
 		se.cancel()
-		self.assertNotIn(charge, [z["charge"] for z in rueckverfolgung(self.k.mehl, "Vorwärts")["chargen"]])
+		self.assertNotIn(charge, [z["charge"] for z in rueckverfolgung(self.k.mehl2, "Vorwärts")["chargen"]])
 		self.assertTrue(frappe.db.exists("Chargen Genealogie", {"stock_entry": se.name, "storniert": 1}))
 		self.assertEqual(frappe.db.get_value("Produkttraeger", tb, "status"), "Frei")
 
@@ -331,7 +353,7 @@ class TestReworkKette(IntegrationTestCase):
 		demo.buchen(
 			self.ctx, "Material Receipt", self.k.tag3, "06:30:00", ausgaenge=[("KT-BUTTER", butter, 50)]
 		)
-		roh = {"KT-MEHL": self.k.mehl, "KT-ZUCKER": self.k.zucker, "KT-BUTTER": butter}
+		roh = {"KT-MEHL": None, "KT-ZUCKER": None, "KT-BUTTER": butter}
 		with self.assertRaisesRegex(frappe.ValidationError, "ist gesperrt"):
 			self._grundteig(self.k.tag3, "14:10:00", roh=roh)
 		sperre.freigeben(butter, "Temperatur 4 °C")
@@ -431,7 +453,7 @@ class TestReworkKette(IntegrationTestCase):
 				"Manufacture",
 				self.k.tag3,
 				zeit,
-				eingaenge=[("KT-MEHL", self.k.mehl, 70), ("KT-BUTTER", self.k.butter, 30)],
+				eingaenge=[_roh("KT-MEHL", None, 70), ("KT-BUTTER", self.k.butter, 30)],
 				ausgaenge=[("KT-GT-MUERBE", charge, 100)],
 			)
 
@@ -502,3 +524,113 @@ class TestReworkKette(IntegrationTestCase):
 		test.bericht = "geändert"
 		with self.assertRaises(frappe.UpdateAfterSubmitError):
 			test.save()
+
+	# ------------------------------------------------------------------ Silo und Tank
+
+	def test_t27_silo_fifo_zuteilung(self):
+		k = self.k
+		zucker = {(e.input_batch, e.menge) for e in _kanten(k.gt2, quelle="Buchung", input_item="KT-ZUCKER")}
+		self.assertEqual(
+			zucker, {(k.zucker, 10), (k.zucker2, 10)}, "Rest der alten Charge zuerst, dann die neue"
+		)
+		zeilen = frappe.get_all(
+			"Stock Entry Detail",
+			filters={
+				"parent": frappe.db.get_value("Chargen Genealogie", {"output_batch": k.gt2}, "stock_entry"),
+				"item_code": "KT-ZUCKER",
+			},
+			fields=["batch_no", "kt_silo", "transfer_qty"],
+		)
+		self.assertEqual({z.kt_silo for z in zeilen}, {k.silo["KT-ZUCKER"]})
+		self.assertEqual(len(zeilen), 2, "Entnahme wurde auf zwei Chargen aufgeteilt")
+
+	def test_t28_vermischung_beim_nachfuellen(self):
+		k = self.k
+		# GT2: Mehl rechnerisch nur aus M1, aber M2 lag schon im Silo
+		self.assertIn((k.mehl2, 0, "Silo"), {(e.input_batch, e.menge, e.quelle) for e in _kanten(k.gt2)})
+		# GT3: Zucker Z1 rechnerisch verbraucht, aber noch im Nachlauf
+		self.assertIn((k.zucker, 0, "Silo"), {(e.input_batch, e.menge, e.quelle) for e in _kanten(k.gt3)})
+		self.assertIn(k.gt3, [z["charge"] for z in rueckverfolgung(k.zucker, "Vorwärts")["chargen"]])
+		# Vermischungskanten verfälschen die Mengenbilanz nicht
+		self.assertTrue(mengenbilanz(k.zucker)["ok"])
+
+	def test_t28b_nachlauf_endet_nach_entnahme(self):
+		# Nachlauf Zucker = 50 kg: nach genug Entnahme ist Z1 sicher draußen
+		for i in range(4):
+			self._grundteig(self.k.tag3, f"18:0{i}:00")
+		charge, _se = self._grundteig(self.k.tag3, "18:10:00")
+		self.assertNotIn(self.k.zucker, {e.input_batch for e in _kanten(charge)})
+		self.assertIn(self.k.zucker2, {e.input_batch for e in _kanten(charge)})
+
+	def test_t29_leermeldung_trennt_sauber(self):
+		k = self.k
+		lm = frappe.get_doc("Silo Leermeldung", k.leermeldung_dinkel["leermeldung"])
+		self.assertEqual(lm.rest_rechnerisch, 1)
+		self.assertEqual(
+			frappe.db.get_value("Stock Entry", lm.stock_entry, "stock_entry_type"), "Silo Differenz"
+		)
+		b = mengenbilanz(k.dinkel)
+		self.assertEqual(b["summen"]["Silo-Differenz (Leermeldung)"], -1)
+		self.assertEqual(b["bestand"], 0)
+		self.assertTrue(b["ok"])
+		# Nach der Leermeldung: nur noch die neue Dinkelcharge, keine Vermischung mit der alten
+		gt, _se = self._grundteig(k.tag3, "18:20:00")
+		teig = demo.neue_charge("KT-TV-KAKAO", f"XTK-{_hash()}", k.tag3)
+		demo.buchen(
+			self.ctx,
+			"Manufacture",
+			k.tag3,
+			"18:21:00",
+			eingaenge=[
+				("KT-GT-MUERBE", gt, 85),
+				_roh("KT-DINKEL", None, 5),
+				("KT-KAKAO", k.kakao, 5),
+				_roh("KT-SIRUP", None, 5),
+			],
+			ausgaenge=[("KT-TV-KAKAO", teig, 100)],
+		)
+		dinkel = {e.input_batch for e in _kanten(teig, input_item="KT-DINKEL")}
+		self.assertEqual(dinkel, {k.dinkel2})
+
+	def test_t30_zuckersirup_aus_eigenem_zucker(self):
+		k = self.k
+		r = rueckverfolgung(k.l2, "Rückwärts")
+		gefunden = {z["charge"] for z in r["chargen"]}
+		self.assertIn(k.sirup, gefunden)
+		self.assertIn(k.zucker, gefunden, "Zucker über den Sirup bis zur Lieferantencharge")
+		self.assertIn(k.dinkel, gefunden)
+		self.assertIn(k.l2, [z["charge"] for z in rueckverfolgung(k.sirup, "Vorwärts")["chargen"]])
+		self.assertAlmostEqual(mengenbilanz(k.sirup)["ausbeute_prozent"], 166.7, places=1)
+
+	def test_t31_gesperrte_charge_im_silo_blockiert_entnahme(self):
+		sperre.sperren(self.k.zucker2, "Fremdkörperverdacht")
+		try:
+			with self.assertRaisesRegex(frappe.ValidationError, "ist gesperrt"):
+				self._grundteig(self.k.tag3, "18:30:00")
+		finally:
+			sperre.freigeben(self.k.zucker2, "Untersuchung ohne Befund")
+
+	def test_t32_zu_wenig_im_tank(self):
+		teig = demo.neue_charge("KT-TV-KAKAO", f"XTL-{_hash()}", self.k.tag3)
+		with self.assertRaisesRegex(frappe.ValidationError, "rechnerisch fehlen"):
+			demo.buchen(
+				self.ctx,
+				"Manufacture",
+				self.k.tag3,
+				"18:40:00",
+				eingaenge=[("KT-GT-MUERBE", self.k.gt3, 10), _roh("KT-SIRUP", None, 500)],
+				ausgaenge=[("KT-TV-KAKAO", teig, 510)],
+			)
+
+	def test_t33_sackmehl_neben_silomehl(self):
+		tag = self.k.tag3
+		sack = demo.neue_charge("KT-MEHL", f"XSM-{_hash()}", add_days(tag, -3), self.ctx.lieferant)
+		demo.buchen(self.ctx, "Material Receipt", tag, "06:20:00", ausgaenge=[("KT-MEHL", sack, 100)])
+		charge, _se = self._grundteig(
+			tag, "18:50:00", roh={"KT-MEHL": sack, "KT-ZUCKER": None, "KT-BUTTER": self.k.butter}
+		)
+		mehl = {(e.input_batch, e.quelle) for e in _kanten(charge, input_item="KT-MEHL")}
+		self.assertEqual(
+			mehl, {(sack, "Buchung")}, "Sackmehl: genau die gescannte Charge, keine Silo-Zuordnung"
+		)
+		self.assertIn(self.k.zucker2, {e.input_batch for e in _kanten(charge, input_item="KT-ZUCKER")})

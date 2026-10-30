@@ -19,6 +19,7 @@
   "stock_entry",
   "posting_date",
   "quelle",
+  "silo",
   "storniert"
  ],
  "fields": [
@@ -98,6 +99,13 @@
    "options": "Buchung\nSilo",
    "label": "Quelle",
    "default": "Buchung"
+  },
+  {
+   "fieldname": "silo",
+   "fieldtype": "Link",
+   "options": "Silo",
+   "label": "Silo / Tank",
+   "description": "Bei Quelle Silo: Charge war möglicherweise noch vermischt enthalten (Nachlauf)."
   },
   {
    "fieldname": "storniert",

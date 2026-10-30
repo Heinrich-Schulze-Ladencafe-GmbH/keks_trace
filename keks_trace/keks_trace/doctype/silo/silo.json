@@ -1,0 +1,127 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:silo_name",
+ "creation": "2026-10-28 22:00:00.000000",
+ "description": "Silo oder Tank für Schüttgut und Flüssiges (Mehl, Zucker, Zuckersirup).",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "silo_name",
+  "typ",
+  "warehouse",
+  "artikel",
+  "column_break_1",
+  "kapazitaet",
+  "nachlauf",
+  "aktiv"
+ ],
+ "fields": [
+  {
+   "fieldname": "silo_name",
+   "fieldtype": "Data",
+   "label": "Silo / Tank",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "typ",
+   "fieldtype": "Select",
+   "label": "Typ",
+   "options": "Silo\nTank",
+   "default": "Silo",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "warehouse",
+   "fieldtype": "Link",
+   "options": "Warehouse",
+   "label": "Lagerort",
+   "reqd": 1,
+   "unique": 1,
+   "description": "Jede Befüllung ist ein Zugang in diesen Lagerort; jede Entnahme ohne Charge wird nach FIFO zugeteilt."
+  },
+  {
+   "fieldname": "artikel",
+   "fieldtype": "Link",
+   "options": "Item",
+   "label": "Artikel",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "kapazitaet",
+   "fieldtype": "Float",
+   "label": "Kapazität (Lagereinheit)"
+  },
+  {
+   "fieldname": "nachlauf",
+   "fieldtype": "Float",
+   "label": "Nachlaufmenge (Lagereinheit)",
+   "default": "0",
+   "description": "Wie viel nach dem rechnerischen Verbrauch einer Charge noch entnommen werden kann, bevor sie sicher draußen ist. Bis dahin wird sie zusätzlich zugeordnet (Vermischung). Eine Leermeldung beendet das sofort."
+  },
+  {
+   "fieldname": "aktiv",
+   "fieldtype": "Check",
+   "label": "Aktiv",
+   "default": "1"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Silo",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "naming_rule": "By fieldname"
+}

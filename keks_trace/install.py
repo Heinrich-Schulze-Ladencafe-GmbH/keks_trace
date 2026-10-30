@@ -122,6 +122,15 @@ CUSTOM_FIELDS = {
 			"in_list_view": 0,
 			"description": "Gescannter Behälter: bei Eingang wird er entleert, bei Ausgang befüllt.",
 		},
+		{
+			"fieldname": "kt_silo",
+			"label": "Silo / Tank",
+			"fieldtype": "Link",
+			"options": "Silo",
+			"read_only": 1,
+			"insert_after": "kt_traeger",
+			"description": "Entnahme aus einem Silo: Charge wurde nach FIFO zugeteilt.",
+		},
 	],
 }
 
@@ -134,6 +143,14 @@ def after_migrate():
 	create_custom_fields(CUSTOM_FIELDS, update=True)
 	_lager_einstellungen()
 	_aenderungsprotokoll()
+	_buchungsarten()
+
+
+def _buchungsarten():
+	if not frappe.db.exists("Stock Entry Type", "Silo Differenz"):
+		frappe.get_doc(
+			{"doctype": "Stock Entry Type", "name": "Silo Differenz", "purpose": "Material Issue"}
+		).insert(ignore_permissions=True)
 
 
 def _aenderungsprotokoll():

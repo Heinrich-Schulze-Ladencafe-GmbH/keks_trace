@@ -9,7 +9,8 @@ geprüft und rückverfolgt werden kann.
 ## Abgebildeter Ablauf
 
 ```
-Grundteig        Silo + Säcke (+ Rework)                      → Charge, Teigbehälter
+Zuckersirup      Zucker aus dem Silo (+ Wasser)               → Charge, Tank
+Grundteig        Silos + Säcke (+ Rework)                     → Charge, Teigbehälter
    ↓  (ein Grundteig kann auf mehrere Veredelungen und Tage aufgeteilt werden)
 Teig veredelt    Grundteig + Zutaten (+ Rework)               → Charge, Teigbehälter
    ↓
@@ -46,6 +47,14 @@ Füllungen werden gekauft (Chargenstufe **Rohstoff**) oder selbst hergestellt (C
 - **Rückverfolgung** vorwärts (bis zum Kunden mit Lieferschein) und rückwärts (bis zur
   Lieferantencharge, inkl. Füllung und Packmittel), über beliebig viele Stufen und
   Rework-Generationen, mit Anteil je Charge. Als Bericht „Rueckverfolgung“ und per API.
+- **Silos und Tanks:** jedes Silo hat einen Artikel (z. B. Weizenmehl 550, Dinkelmehl, Zucker;
+  Tank Zuckersirup). Entnahmen ohne Charge teilt das System nach FIFO auf die Chargen im Silo auf.
+  Wird nachgefüllt, bevor das Silo leer ist, gelten alte und neue Charge als vermischt: die alte
+  wird zusätzlich zugeordnet (Kante „Silo“, Menge 0), bis die Nachlaufmenge des Silos entnommen
+  ist. Eine **Leermeldung** trennt sofort sauber und bucht einen rechnerischen Rest als
+  „Silo Differenz“ aus. Sackware desselben Artikels wird wie gewohnt mit gescannter Charge gebucht.
+  Gesperrte Chargen im Silo blockieren die Entnahme. Rückdatierte Entnahmen teilen nie mehr zu,
+  als heute noch vorhanden ist.
 - **Storno:** stornierte Buchungen bleiben sichtbar, fließen aber nicht mehr in die
   Rückverfolgung ein; Behälterinhalt wird zurückgesetzt.
 
@@ -73,17 +82,20 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | `keks_trace/traeger.py` | Behälter befüllen, entnehmen, freigeben, Storno |
 | `keks_trace/genealogie.py` | Genealogie-Kanten, Ursprung, Backtag, Komponenten-MHD, Verfall |
 | `keks_trace/trace.py` | Rekursive Rückverfolgung vorwärts/rückwärts, Kunden |
-| `keks_trace/api.py` | `rueckverfolgung`, `mengenbilanz` und `traeger_info` für Scanner und Terminals |
+| `keks_trace/api.py` | `rueckverfolgung`, `mengenbilanz`, `traeger_info` und `silo_info` für Scanner und Terminals |
 | `keks_trace/sperre.py` | Sperren, Freigeben, Rückrufsperre, Prüfung bei Buchung und Lieferung |
 | `keks_trace/schutz.py` | Unveränderbarkeit von Protokollen, Belegen und Chargendaten |
 | `keks_trace/vollstaendigkeit.py` | Fehlende Rezeptzutaten erkennen |
 | `keks_trace/bilanz.py` | Mengenbilanz je Charge |
+| `keks_trace/silo.py` | Silo/Tank: FIFO-Zuteilung, Vermischung, Leermeldung (`leermeldung`), Silo-Info |
 | DocType `Allergengruppe` | Allergene je Teig, Füllung, Rework |
 | DocType `Rework Regel` | Rework-Matrix |
 | DocType `Produkttraeger` | Behälter, Kiste oder Palette mit Code (QR) |
 | DocType `Traeger Belegung` | Historie: welche Charge wann in welchem Behälter lag |
 | DocType `Chargen Genealogie` | Kanten der Rückverfolgung (wird nur automatisch geschrieben) |
 | DocType `Chargen Sperre` | Protokoll aller Sperren und Freigaben |
+| DocType `Silo` | Silo oder Tank: Lagerort, Artikel, Nachlaufmenge |
+| DocType `Silo Leermeldung` | Protokoll: Silo leer, rechnerischer Rest und Ausbuchung |
 | DocType `Rueckverfolgungstest` | Testprotokoll mit Mengenbilanz als Audit-Nachweis |
 | DocType `Keks Trace Einstellungen` | Vollständigkeitsprüfung, Toleranz der Mengenbilanz |
 | Bericht `Rueckverfolgung` | Rückverfolgung in der Oberfläche |
@@ -96,7 +108,7 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
   Rework, Backware, Ware lose, Fertigware), **Allergengruppe**, **Freigabe vor Verwendung**;
 - an der Charge: **Chargenstufe**, **Sperrstatus**, **Sperrgrund**, **Ursprungsdatum**, **Backtag**,
   **Kürzestes Komponenten-MHD**;
-- am Buchungsposten: **Behälter / Träger**.
+- am Buchungsposten: **Behälter / Träger**, **Silo / Tank** (gesetzt bei FIFO-Zuteilung).
 
 Haltbarkeiten nutzen die ERPNext-Standardfelder „Has Expiry Date“ und „Shelf Life In Days“ am Artikel:
 Standzeit bei Teigen, Höchstalter bei Rework, maximale Lagerdauer bei loser Ware, MHD bei Fertigware
@@ -132,14 +144,19 @@ Legt Demo-Artikel (Präfix `KT-`) mit Rezepten (Stücklisten), Allergengruppen, 
 Behälter, einen Demo-Lieferanten und -Kunden an. Butter und lose Ware sind freigabepflichtig.
 Die Demo bucht:
 
-1. **Tag 1:** Wareneingang, Freigabe der Butter durch die QS; Grundteig GT1 in Behälter TB1; Nougatfüllung selbst hergestellt;
+Jeder Lauf legt eigene Silos mit seinem Kürzel an (Weizenmehl 550, Dinkelmehl 630, Zucker,
+Tank Zuckersirup), damit sich Läufe nicht vermischen.
+
+1. **Tag 1:** Wareneingang (Mehl, Zucker, Dinkel ins Silo), Freigabe der Butter durch die QS;
+   Zuckersirup aus Silozucker in den Tank; Grundteig GT1 in Behälter TB1; Nougatfüllung selbst hergestellt;
    halber GT1 wird zu Nussteig V1; Backen; Schokoboden mit gekaufter Kuvertüre → lose Ware in
    Kiste KL1; Bruch → Rework R1 in Rework-Behälter RB1.
-2. **Tag 2:** zweite Hälfte von GT1 + Rework R1 → Nussteig V2 (TB1 und RB1 werden frei); Backen,
-   Schokolieren → KL2. Grundteig GT2 → Kakaoteig V3, Teigrest → Rework R2; Backen; Füllen mit
+2. **Tag 2:** Nachfüllen von Mehl- und Zuckersilo, bevor sie leer sind (Vermischung); zweite Hälfte von GT1 + Rework R1 → Nussteig V2 (TB1 und RB1 werden frei); Backen,
+   Schokolieren → KL2. Grundteig GT2 (Zucker nach FIFO: Rest alte + neue Charge) → Kakaoteig V3
+   mit Dinkelmehl und Zuckersirup, Teigrest → Rework R2; Backen; Füllen mit
    Nougat → lose Ware in Kiste KL3.
 3. **Freigabe** der losen Ware in KL1 und KL3 (KL2 bleibt gesperrt).
-4. **Tag 3:** Grundteig GT3 mit 5 % Rework R2; Verpacken aus KL1 (Rest bleibt in der Kiste) und
+4. **Tag 3:** Leermeldung Dinkelsilo (1 kg Rest wird ausgebucht), neue Dinkellieferung; Grundteig GT3 mit 5 % Rework R2; Verpacken aus KL1 (Rest bleibt in der Kiste) und
    KL3; Lieferung beider Lose an den Demo-Kunden.
 5. **Rückverfolgungstest** für die Mehlcharge, gebucht als Protokoll.
 
@@ -175,12 +192,18 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_t23` | Fehlende Rezeptzutat: Warnung bzw. Blockade |
 | `test_t24`, `test_t25` | Mengenbilanz Rohstoff inkl. Entsorgung und Ausbeute; erkennt eine Lücke zwischen Lager und Genealogie |
 | `test_t26` | Rückverfolgungstest als unveränderbarer Nachweis |
+| `test_t27` | Silo: FIFO-Zuteilung auf alte und neue Charge |
+| `test_t28`, `test_t28b` | Vermischung beim Nachfüllen; Nachlauf endet nach genug Entnahme |
+| `test_t29` | Leermeldung bucht den Rest aus und trennt alte und neue Charge sauber |
+| `test_t30` | Zuckersirup: rückwärts bis zur Zuckercharge, Ausbeute mit Wasser |
+| `test_t31`, `test_t32` | Gesperrte Charge im Silo blockiert; zu wenig im Tank |
+| `test_t33` | Sackmehl neben Silomehl: genau die gescannte Charge |
 
 Die Tests rollen ihre Daten am Ende zurück.
 
 ## Bewusst noch nicht enthalten
 
-Silo-Zeitfenster (Mehl ist im Prototyp eine normale Charge), Scanner-Oberflächen für Terminals
+Scanner-Oberflächen für Terminals
 und Handscanner, Etikettendruck (QR) und Etikettenkontrolle an der Packlinie (IFS 4.5.3),
 Waagenanbindung, Paletten mit SSCC, Wareneingang über Bestellungen, Ausweis-Scan.
 
@@ -188,6 +211,7 @@ Waagenanbindung, Paletten mit SSCC, Wareneingang über Bestellungen, Ausweis-Sca
 
 - Rework-Höchstalter in der Demo: 7 Tage, gezählt ab dem ältesten Tag der Kette.
 - Höchstanteil in der Demo: 10 % der Einwaage.
+- Nachlaufmenge Mehlsilos 100 kg, Zuckersilo 50 kg, Sirup-Tank 20 kg (abhängig von Silogeometrie, mit der Technik festlegen).
 - Standzeit Grundteig 3 Tage, veredelter Teig 2 Tage, lose Ware 180 Tage ab Backtag.
 - Schokolierter oder gefüllter Bruch hat keine Rework-Regel (geht nicht zurück in Teig).
 - MHD Fertigware = früheres von Backtag + Haltbarkeit und kürzestem MHD der nach dem Backen

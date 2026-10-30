@@ -16,7 +16,7 @@ Jeder Lauf erzeugt neue Chargen und Behälter (eindeutiges Kürzel), Stammdaten 
 import frappe
 from frappe.utils import add_days, flt, formatdate, getdate, now_datetime, nowdate
 
-from keks_trace import sperre
+from keks_trace import silo, sperre
 
 ALLERGENGRUPPEN = {
 	"Mürbeteig": "Gluten, Milch",
@@ -29,14 +29,16 @@ ALLERGENGRUPPEN = {
 # Artikelnummer: (Bezeichnung, Stufe, Allergengruppe, Haltbarkeit in Tagen oder None)
 ARTIKEL = {
 	# gekauft
-	"KT-MEHL": ("Weizenmehl Type 550 (Silo)", "Rohstoff", None, 365),
-	"KT-ZUCKER": ("Zucker (Sack)", "Rohstoff", None, 730),
+	"KT-MEHL": ("Weizenmehl Type 550 (Silo oder Sack)", "Rohstoff", None, 365),
+	"KT-DINKEL": ("Dinkelmehl Type 630 (Silo)", "Rohstoff", None, 365),
+	"KT-ZUCKER": ("Zucker (Silo)", "Rohstoff", None, 730),
 	"KT-BUTTER": ("Butter", "Rohstoff", None, 60),
 	"KT-HASELNUSS": ("Haselnüsse gehackt", "Rohstoff", None, 270),
 	"KT-KAKAO": ("Kakaopulver", "Rohstoff", None, 540),
 	"KT-SCHOKO": ("Zartbitter-Kuvertüre (gekauft)", "Rohstoff", None, 365),
 	"KT-FOLIE": ("Verpackungsfolie", "Packmittel", None, None),
-	# selbst hergestellte Füllung
+	# selbst hergestellt: Zuckersirup (Tank) und Füllung
+	"KT-SIRUP": ("Zuckersirup (eigene Herstellung, Tank)", "Halbfabrikat", None, 14),
 	"KT-NOUGAT": ("Nougatfüllung (eigene Herstellung)", "Halbfabrikat", "Nougat", 30),
 	# Teige: Haltbarkeit = maximale Standzeit
 	"KT-GT-MUERBE": ("Grundteig Mürbe", "Grundteig", "Mürbeteig", 3),
@@ -59,6 +61,7 @@ ARTIKEL = {
 
 ROHSTOFF_PREIS = {
 	"KT-MEHL": 0.6,
+	"KT-DINKEL": 0.9,
 	"KT-ZUCKER": 0.9,
 	"KT-BUTTER": 6.5,
 	"KT-HASELNUSS": 9.0,
@@ -71,11 +74,55 @@ ROHSTOFF_PREIS = {
 FREIGABE_PFLICHT = {"KT-BUTTER", "KT-WL-NUSS-SCHOKO", "KT-WL-KAKAO-NOUGAT"}
 
 # Rezepte (Stücklisten): Ausbringung in kg, Zutaten in kg. Backverlust steckt im Verhältnis.
+# (Silo/Tank, Artikel, Nachlauf kg). Jeder Demo-Lauf legt eigene Silos mit seinem Kürzel an,
+# damit sich Läufe nicht vermischen. Im Echtbetrieb gibt es jedes Silo genau einmal.
+SILOS = [
+	("Silo Weizenmehl 550", "KT-MEHL", 100),
+	("Silo Dinkelmehl 630", "KT-DINKEL", 100),
+	("Silo Zucker", "KT-ZUCKER", 50),
+	("Tank Zuckersirup", "KT-SIRUP", 20),
+]
+
+
+def silos_anlegen(ctx, kuerzel) -> dict:
+	"""Silos und Tank für einen Demo-Lauf. Gibt {Artikel: Silo-Name} zurück."""
+	je_artikel = {}
+	for bezeichnung, artikel, nachlauf in SILOS:
+		name = f"{bezeichnung} {kuerzel}"
+		lager = f"{name} - {ctx.abbr}"
+		if not frappe.db.exists("Warehouse", lager):
+			frappe.get_doc(
+				{
+					"doctype": "Warehouse",
+					"warehouse_name": name,
+					"company": ctx.company,
+					"parent_warehouse": ctx.wurzel,
+				}
+			).insert()
+		if not frappe.db.exists("Silo", name):
+			frappe.get_doc(
+				{
+					"doctype": "Silo",
+					"silo_name": name,
+					"warehouse": lager,
+					"artikel": artikel,
+					"nachlauf": nachlauf,
+					"typ": "Tank" if bezeichnung.startswith("Tank") else "Silo",
+					"kapazitaet": 30000 if bezeichnung.startswith("Silo") else 2000,
+				}
+			).insert()
+		ctx.silo_lager[name] = lager
+		je_artikel[artikel] = name
+	return je_artikel
+
+
 REZEPTE = {
 	"KT-GT-MUERBE": (100, [("KT-MEHL", 60), ("KT-ZUCKER", 20), ("KT-BUTTER", 20)]),
 	"KT-NOUGAT": (30, [("KT-ZUCKER", 10), ("KT-HASELNUSS", 10), ("KT-KAKAO", 5), ("KT-BUTTER", 5)]),
 	"KT-TV-NUSS": (60, [("KT-GT-MUERBE", 50), ("KT-HASELNUSS", 10)]),
-	"KT-TV-KAKAO": (100, [("KT-GT-MUERBE", 95), ("KT-KAKAO", 5)]),
+	"KT-TV-KAKAO": (100, [("KT-GT-MUERBE", 85), ("KT-DINKEL", 5), ("KT-KAKAO", 5), ("KT-SIRUP", 5)]),
+	# Wasser wird nicht als Charge geführt, daher Ausbringung größer als Einsatz
+	"KT-SIRUP": (100, [("KT-ZUCKER", 60)]),
 	"KT-BW-NUSS": (85, [("KT-TV-NUSS", 100)]),
 	"KT-BW-KAKAO": (85, [("KT-TV-KAKAO", 100)]),
 	"KT-WL-NUSS-SCHOKO": (54, [("KT-BW-NUSS", 48), ("KT-SCHOKO", 6)]),
@@ -160,8 +207,17 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 		).insert()
 
 	for artikel, (menge, zutaten) in REZEPTE.items():
-		if frappe.db.exists("BOM", {"item": artikel, "is_default": 1, "docstatus": 1}):
-			continue
+		vorhanden = frappe.db.get_value("BOM", {"item": artikel, "is_default": 1, "docstatus": 1})
+		if vorhanden:
+			alt = {
+				(z.item_code, flt(z.qty))
+				for z in frappe.get_all("BOM Item", {"parent": vorhanden}, ["item_code", "qty"])
+			}
+			if (
+				alt == {(z, flt(q)) for z, q in zutaten}
+				and flt(frappe.db.get_value("BOM", vorhanden, "quantity")) == menge
+			):
+				continue
 		bom = frappe.get_doc(
 			{
 				"doctype": "BOM",
@@ -187,6 +243,10 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 					"max_anteil_prozent": anteil,
 				}
 			).insert()
+
+	wurzel = frappe.db.get_value(
+		"Warehouse", {"company": company, "is_group": 1, "parent_warehouse": ["in", ["", None]]}
+	)
 
 	lieferant = "KT Demo Mühle"
 	if not frappe.db.exists("Supplier", lieferant):
@@ -216,6 +276,9 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 		fertig=f"Finished Goods - {abbr}",
 		lieferant=lieferant,
 		kunde=kunde,
+		silo_lager={},
+		abbr=abbr,
+		wurzel=wurzel,
 	)
 
 
@@ -265,14 +328,17 @@ def _lager(ctx, item):
 def buchen(ctx, zweck: str, datum, zeit: str, eingaenge=(), ausgaenge=(), submit: bool = True):
 	"""Lagerbuchung erzeugen.
 
-	eingaenge / ausgaenge: Tupel (Artikel, Charge, Menge) oder (Artikel, Charge, Menge, Behälter).
+	eingaenge / ausgaenge: Tupel (Artikel, Charge, Menge) oder (Artikel, Charge, Menge, Behälter oder Silo).
+	Bei Entnahme aus einem Silo bleibt die Charge leer (None): das System teilt sie nach FIFO zu.
 	Für Wareneingang ("Material Receipt") nur ausgaenge.
 	"""
 	zeilen = []
 	for item, charge, menge, *traeger in eingaenge:
-		zeilen.append(_zeile(item, charge, menge, traeger, s_warehouse=_lager(ctx, item)))
+		lager, traeger = _ort(ctx, item, traeger)
+		zeilen.append(_zeile(item, charge, menge, traeger, s_warehouse=lager))
 	for i, (item, charge, menge, *traeger) in enumerate(ausgaenge):
-		z = _zeile(item, charge, menge, traeger, t_warehouse=_lager(ctx, item))
+		lager, traeger = _ort(ctx, item, traeger)
+		z = _zeile(item, charge, menge, traeger, t_warehouse=lager)
 		if zweck == "Material Receipt":
 			z["basic_rate"] = ROHSTOFF_PREIS.get(item, 1)
 		if zweck == "Manufacture" and i == 0:
@@ -295,6 +361,13 @@ def buchen(ctx, zweck: str, datum, zeit: str, eingaenge=(), ausgaenge=(), submit
 	if submit:
 		se.submit()
 	return se
+
+
+def _ort(ctx, item, traeger):
+	"""Lagerort und Behälter: ein Silo-Name als 4. Element bedeutet Lagerort des Silos, kein Behälter."""
+	if traeger and traeger[0] in (ctx.get("silo_lager") or {}):
+		return ctx.silo_lager[traeger[0]], []
+	return _lager(ctx, item), traeger
 
 
 def _zeile(item, charge, menge, traeger, s_warehouse=None, t_warehouse=None):
@@ -356,6 +429,8 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 	t1 = getdate(start) if start else getdate(add_days(nowdate(), -2))
 	t2, t3 = getdate(add_days(t1, 1)), getdate(add_days(t1, 2))
 	c = frappe._dict(kuerzel=k, tag1=t1, tag2=t2, tag3=t3)
+	c.silo = silos_anlegen(ctx, k)
+	W, Z, D, T = c.silo["KT-MEHL"], c.silo["KT-ZUCKER"], c.silo["KT-DINKEL"], c.silo["KT-SIRUP"]
 
 	# Behälter mit QR-Code
 	c.tb1 = neuer_traeger(f"TB1-{k}", "Teigbehälter")
@@ -371,6 +446,7 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 	# Wareneingang
 	c.mehl = neue_charge("KT-MEHL", f"M-{k}", add_days(t1, -10), ctx.lieferant)
 	c.zucker = neue_charge("KT-ZUCKER", f"Z-{k}", add_days(t1, -30), ctx.lieferant)
+	c.dinkel = neue_charge("KT-DINKEL", f"D-{k}", add_days(t1, -12), ctx.lieferant)
 	c.butter = neue_charge("KT-BUTTER", f"BU-{k}", add_days(t1, -3), ctx.lieferant)
 	c.nuss = neue_charge("KT-HASELNUSS", f"HN-{k}", add_days(t1, -20), ctx.lieferant)
 	c.kakao = neue_charge("KT-KAKAO", f"KA-{k}", add_days(t1, -40), ctx.lieferant)
@@ -382,8 +458,9 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 		t1,
 		"06:00:00",
 		ausgaenge=[
-			("KT-MEHL", c.mehl, 1000),
-			("KT-ZUCKER", c.zucker, 400),
+			("KT-MEHL", c.mehl, 125, W),
+			("KT-ZUCKER", c.zucker, 100, Z),
+			("KT-DINKEL", c.dinkel, 6, D),
 			("KT-BUTTER", c.butter, 400),
 			("KT-HASELNUSS", c.nuss, 200),
 			("KT-KAKAO", c.kakao, 50),
@@ -395,14 +472,28 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 	sperre.freigeben(c.butter, "Wareneingangsprüfung: Temperatur 4 °C, Verpackung unbeschädigt")
 
 	# ---- Tag 1
-	# Grundteig GT1 (100 kg) in Behälter TB1
+	# Zuckersirup aus Silozucker in den Tank (Wasser wird nicht als Charge geführt)
+	c.sirup = neue_charge("KT-SIRUP", f"SI1-{k}", t1)
+	buchen(
+		ctx,
+		"Manufacture",
+		t1,
+		"06:30:00",
+		eingaenge=[("KT-ZUCKER", None, 60, Z)],
+		ausgaenge=[("KT-SIRUP", c.sirup, 100, T)],
+	)
+	# Grundteig GT1 (100 kg) in Behälter TB1; Mehl und Zucker aus dem Silo, Charge nach FIFO
 	c.gt1 = neue_charge("KT-GT-MUERBE", f"GT1-{k}", t1)
 	buchen(
 		ctx,
 		"Manufacture",
 		t1,
 		"07:00:00",
-		eingaenge=[("KT-MEHL", c.mehl, 60), ("KT-ZUCKER", c.zucker, 20), ("KT-BUTTER", c.butter, 20)],
+		eingaenge=[
+			("KT-MEHL", None, 60, W),
+			("KT-ZUCKER", None, 20, Z),
+			("KT-BUTTER", c.butter, 20),
+		],
 		ausgaenge=[("KT-GT-MUERBE", c.gt1, 100, c.tb1)],
 	)
 	# Nougatfüllung selbst hergestellt
@@ -413,7 +504,7 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 		t1,
 		"07:30:00",
 		eingaenge=[
-			("KT-ZUCKER", c.zucker, 10),
+			("KT-ZUCKER", None, 10, Z),
 			("KT-HASELNUSS", c.nuss, 10),
 			("KT-KAKAO", c.kakao, 5),
 			("KT-BUTTER", c.butter, 5),
@@ -462,6 +553,19 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 	)
 
 	# ---- Tag 2
+	# Nachfüllen, bevor die Silos leer sind: alte und neue Charge vermischen sich
+	c.mehl2 = neue_charge("KT-MEHL", f"M2-{k}", add_days(t2, -5), ctx.lieferant)
+	c.zucker2 = neue_charge("KT-ZUCKER", f"Z2-{k}", add_days(t2, -20), ctx.lieferant)
+	buchen(
+		ctx,
+		"Material Receipt",
+		t2,
+		"06:00:00",
+		ausgaenge=[
+			("KT-MEHL", c.mehl2, 1000, W),
+			("KT-ZUCKER", c.zucker2, 1000, Z),
+		],
+	)
 	# Veredelung V2: zweite Hälfte von GT1 (TB1 wird leer) + Haselnuss + Rework R1 (RB1 wird leer)
 	c.v2 = neue_charge("KT-TV-NUSS", f"V2-{k}", t2)
 	buchen(
@@ -501,7 +605,11 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 		"Manufacture",
 		t2,
 		"09:30:00",
-		eingaenge=[("KT-MEHL", c.mehl, 60), ("KT-ZUCKER", c.zucker, 20), ("KT-BUTTER", c.butter, 20)],
+		eingaenge=[
+			("KT-MEHL", None, 60, W),
+			("KT-ZUCKER", None, 20, Z),
+			("KT-BUTTER", c.butter, 20),
+		],
 		ausgaenge=[("KT-GT-MUERBE", c.gt2, 100, c.tb3)],
 	)
 	c.v3 = neue_charge("KT-TV-KAKAO", f"V3-{k}", t2)
@@ -510,7 +618,12 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 		"Manufacture",
 		t2,
 		"10:00:00",
-		eingaenge=[("KT-GT-MUERBE", c.gt2, 95, c.tb3), ("KT-KAKAO", c.kakao, 5)],
+		eingaenge=[
+			("KT-GT-MUERBE", c.gt2, 85, c.tb3),
+			("KT-DINKEL", None, 5, D),
+			("KT-KAKAO", c.kakao, 5),
+			("KT-SIRUP", None, 5, T),
+		],
 		ausgaenge=[("KT-TV-KAKAO", c.v3, 100, c.tb4)],
 	)
 	c.r2 = neue_charge("KT-RW-MUERBE", f"R2-{k}", t2)
@@ -547,6 +660,16 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 	sperre.freigeben(c.wl3, "Sensorik, Feuchte und Bruchanteil in Ordnung")
 
 	# ---- Tag 3
+	# Dinkelsilo ist leer: Leermeldung trennt die Chargen sauber, dann neue Lieferung
+	c.leermeldung_dinkel = silo.leermeldung(D, f"{t3} 05:50:00", "Silo leergefahren")
+	c.dinkel2 = neue_charge("KT-DINKEL", f"D2-{k}", add_days(t3, -4), ctx.lieferant)
+	buchen(
+		ctx,
+		"Material Receipt",
+		t3,
+		"06:00:00",
+		ausgaenge=[("KT-DINKEL", c.dinkel2, 500, D)],
+	)
 	# Neuer Grundteig GT3 mit 5 % Rework R2 (Teigrest vom Vortag)
 	c.gt3 = neue_charge("KT-GT-MUERBE", f"GT3-{k}", t3)
 	buchen(
@@ -555,8 +678,8 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 		t3,
 		"07:00:00",
 		eingaenge=[
-			("KT-MEHL", c.mehl, 57),
-			("KT-ZUCKER", c.zucker, 19),
+			("KT-MEHL", None, 57, W),
+			("KT-ZUCKER", None, 19, Z),
 			("KT-BUTTER", c.butter, 19),
 			("KT-RW-MUERBE", c.r2, 5, c.rb2),
 		],
@@ -609,6 +732,15 @@ def _ausgabe(c):
 				f"  -> Kunde {kd.kundenname}: Lieferschein {kd.lieferschein} am {formatdate(kd.lieferdatum)}, "
 				f"{flt(kd.menge)} kg {kd.charge}"
 			)
+
+	print("\n== Silos und Tank (Bestand rechnerisch / möglicherweise noch enthalten)")
+	for name in c.silo.values():
+		i = silo.info(name)
+		print(
+			f"  {name:<22} "
+			+ ", ".join(f"{b['charge']} {flt(b['menge']):g}" for b in i["bestand"])
+			+ f"  | {', '.join(i['moeglich_enthalten'])}"
+		)
 
 	print("\n== Behälter")
 	for code in (c.tb1, c.tb2, c.tb3, c.tb4, c.rb1, c.rb2, c.kl1, c.kl2, c.kl3):

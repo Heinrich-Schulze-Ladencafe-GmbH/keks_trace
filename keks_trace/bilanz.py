@@ -24,6 +24,7 @@ KATEGORIEN = {
 	"Zu Rework umgefüllt": "abgang",
 	"Ausgeliefert": "abgang",
 	"Ausgebucht / entsorgt": "abgang",
+	"Silo-Differenz (Leermeldung)": "abgang",
 	"Inventur": "inventur",
 	"Umlagerung": "umlagerung",
 	"Sonstiges": "sonstig",
@@ -114,7 +115,7 @@ def _bewegungen(charge):
 	zeilen = frappe.db.sql(
 		"""
 		select sbe.qty, sbe.warehouse, sbb.voucher_type, sbb.voucher_no, sbb.posting_datetime,
-			se.purpose, dn.is_return as dn_return
+			se.purpose, se.stock_entry_type, dn.is_return as dn_return
 		from `tabSerial and Batch Entry` sbe
 		join `tabSerial and Batch Bundle` sbb on sbb.name = sbe.parent
 		left join `tabStock Entry` se on sbb.voucher_type = 'Stock Entry' and se.name = sbb.voucher_no
@@ -175,5 +176,9 @@ def _kategorie(z, menge, rework_ziele):
 	if vt in ("Delivery Note", "Sales Invoice"):
 		return "Ausgeliefert"
 	if zweck == "Material Issue":
-		return "Ausgebucht / entsorgt"
+		return (
+			"Silo-Differenz (Leermeldung)"
+			if z.stock_entry_type == "Silo Differenz"
+			else "Ausgebucht / entsorgt"
+		)
 	return "Sonstiges"

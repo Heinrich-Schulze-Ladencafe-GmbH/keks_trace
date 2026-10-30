@@ -1,0 +1,107 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-10-28 22:00:00.000000",
+ "description": "Protokoll: Silo oder Tank ist physisch leer. Trennt die Chargen sauber. Nicht änderbar.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "silo",
+  "zeitpunkt",
+  "nutzer",
+  "column_break_1",
+  "rest_rechnerisch",
+  "stock_entry",
+  "bemerkung"
+ ],
+ "fields": [
+  {
+   "fieldname": "silo",
+   "fieldtype": "Link",
+   "options": "Silo",
+   "label": "Silo / Tank",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "zeitpunkt",
+   "fieldtype": "Datetime",
+   "label": "Leer gemeldet am",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "nutzer",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Durch"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rest_rechnerisch",
+   "fieldtype": "Float",
+   "label": "Rechnerischer Rest",
+   "in_list_view": 1,
+   "description": "Was laut Buchungen noch im Silo hätte sein müssen. Wird als Silo-Differenz ausgebucht."
+  },
+  {
+   "fieldname": "stock_entry",
+   "fieldtype": "Link",
+   "options": "Stock Entry",
+   "label": "Ausbuchung der Differenz"
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Silo Leermeldung",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "naming_rule": "Random",
+ "in_create": 1
+}
