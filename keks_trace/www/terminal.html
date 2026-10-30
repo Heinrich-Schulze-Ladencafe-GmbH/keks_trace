@@ -64,7 +64,7 @@
 {% endblock %}
 
 {% block content %}
-<div id="kt"><p style="padding:24px">Lädt …</p></div>
+<div id="kt" data-csrf="{{ kt_csrf }}"><p style="padding:24px">Lädt …</p></div>
 {% endblock %}
 
 {% block script %}
@@ -110,7 +110,7 @@
 			headers: {
 				"Content-Type": "application/json",
 				Accept: "application/json",
-				"X-Frappe-CSRF-Token": (window.frappe && frappe.csrf_token) || "",
+				"X-Frappe-CSRF-Token": app.dataset.csrf || (window.frappe && frappe.csrf_token) || "",
 			},
 			body: JSON.stringify(args || {}),
 		});
@@ -124,9 +124,14 @@
 					.join(" ");
 			} catch (e) { /* ignorieren */ }
 			if (!text && daten.exception) text = String(daten.exception).split(":").slice(1).join(":").trim();
+			if (daten.exc_type === "CSRFTokenError") {
+				if (!laden("kt_neu")) { speichern("kt_neu", "1"); setTimeout(() => location.reload(), 1500); text = "Sitzung abgelaufen. Seite wird neu geladen …"; }
+				else text = "Sitzung ungültig. Bitte neu anmelden.";
+			}
 			if (r.status === 403) text = text || "Nicht angemeldet oder keine Berechtigung.";
 			throw new Error(text || "Fehler beim Buchen (" + r.status + ").");
 		}
+		speichern("kt_neu", "");
 		return daten.message;
 	}
 	function speichern(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* privat */ } }

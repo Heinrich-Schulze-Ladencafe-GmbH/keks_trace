@@ -1,4 +1,5 @@
 import frappe
+from frappe.sessions import get_csrf_token
 
 no_cache = 1
 
@@ -9,3 +10,4 @@ def get_context(context):
 		raise frappe.Redirect
 	context.title = "Keks Trace Terminal"
 	context.nutzer = frappe.session.user
+	context.kt_csrf = get_csrf_token()
