@@ -112,6 +112,26 @@ CUSTOM_FIELDS = {
 			"insert_after": "kt_status",
 		},
 	],
+	"Stock Entry": [
+		{
+			"fieldname": "kt_station",
+			"label": "Station (Terminal)",
+			"fieldtype": "Link",
+			"options": "Terminal Station",
+			"read_only": 1,
+			"insert_after": "stock_entry_type",
+		},
+	],
+	"Delivery Note": [
+		{
+			"fieldname": "kt_station",
+			"label": "Station (Terminal)",
+			"fieldtype": "Link",
+			"options": "Terminal Station",
+			"read_only": 1,
+			"insert_after": "customer",
+		},
+	],
 	"Stock Entry Detail": [
 		{
 			"fieldname": "kt_traeger",

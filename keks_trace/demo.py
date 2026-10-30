@@ -269,6 +269,20 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 			}
 		).insert()
 
+	for station in ("Backstube", "Verpackung", "Lager", "Versand"):
+		if not frappe.db.exists("Terminal Station", station):
+			frappe.get_doc(
+				{
+					"doctype": "Terminal Station",
+					"station_name": station,
+					"typ": station,
+					"company": company,
+					"rohstofflager": f"Stores - {abbr}",
+					"produktionslager": f"Work In Progress - {abbr}",
+					"fertiglager": f"Finished Goods - {abbr}",
+				}
+			).insert()
+
 	return frappe._dict(
 		company=company,
 		lager=f"Stores - {abbr}",

@@ -221,7 +221,9 @@ def vermischung(doc, eingaenge):
 
 
 @frappe.whitelist()
-def leermeldung(silo: str, zeitpunkt: str | None = None, bemerkung: str | None = None) -> dict:
+def leermeldung(
+	silo: str, zeitpunkt: str | None = None, bemerkung: str | None = None, nutzer: str | None = None
+) -> dict:
 	"""Silo bzw. Tank ist physisch leer. Rechnerischen Rest als Silo-Differenz ausbuchen und protokollieren."""
 	frappe.has_permission("Stock Entry", "create", throw=True)
 	s = frappe.get_doc("Silo", silo)
@@ -269,7 +271,7 @@ def leermeldung(silo: str, zeitpunkt: str | None = None, bemerkung: str | None =
 			"doctype": "Silo Leermeldung",
 			"silo": silo,
 			"zeitpunkt": zeit,
-			"nutzer": frappe.session.user,
+			"nutzer": nutzer or frappe.session.user,
 			"rest_rechnerisch": flt(menge, 3),
 			"stock_entry": se_name,
 			"bemerkung": bemerkung,

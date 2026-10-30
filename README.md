@@ -134,6 +134,25 @@ cd ~/frappe-bench/apps/keks_trace && git pull
 cd ~/frappe-bench && bench --site keks.localhost migrate
 ```
 
+## Terminals
+
+Die Scanner-Oberfläche läuft im Browser unter **`/terminal`** (z. B. `http://localhost:8000/terminal`).
+Keine Mitarbeiter-Anmeldung: jedes Terminal meldet sich einmal mit einem Stations-Benutzer an und
+wählt beim ersten Start seine Station. Jede Buchung trägt die Station (Feld „Station (Terminal)“
+an Lagerbuchung und Lieferschein).
+
+| Station | Knöpfe |
+|---|---|
+| Backstube | Herstellen (Grundteig, Veredelung, Backen, Füllen, Sirup), Rework/Bruch, Silo leer, Info-Scan |
+| Verpackung | Verpacken (lose Ware + Folie → Los mit MHD), Packbruch, Info-Scan |
+| Lager | Wareneingang (Lieferantencharge, MHD, ins Silo oder als Sackware), Silo leer, Info-Scan |
+| Versand | Lieferung (Kunde wählen, Lose scannen → Lieferschein), Info-Scan |
+
+Gescannt werden Behälter-Codes, Silo-Namen oder Chargennummern. Jede Zeile wird beim Scannen
+geprüft (Rezept, Sperre, Verfall, Rework-Regel, Allergene, Bestand im Behälter/Silo). Stationen
+werden unter **Terminal Station** gepflegt (Typ und Lagerorte); `keks_trace.demo.stammdaten`
+legt die vier Demo-Stationen an.
+
 ## Demo: drei Produktionstage
 
 ```bash

@@ -1,0 +1,575 @@
+{% extends "templates/base.html" %}
+
+{% block title %}Keks Trace Terminal{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+
+{% block style %}
+<style>
+	:root {
+		--bg: #15171a;
+		--panel: #1f2328;
+		--panel2: #2a2f36;
+		--text: #f2f4f7;
+		--muted: #a9b1bb;
+		--gruen: #1f9d55;
+		--rot: #d64545;
+		--orange: #e08a1e;
+		--blau: #2f6fd6;
+	}
+	html, body { background: var(--bg) !important; color: var(--text); margin: 0; }
+	body { font: 20px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+	#kt { position: fixed; inset: 0; overflow-y: auto; background: var(--bg); color: var(--text); padding: 12px max(16px, calc((100vw - 1100px) / 2)) 120px; box-sizing: border-box; z-index: 10; }
+	#kt h1, #kt p { color: inherit; }
+	#kt .fehlt, #kt label, #kt .klein { color: var(--muted); }
+	#kt .ok { color: #5fd38d; }
+	.kopf { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0 14px; border-bottom: 1px solid var(--panel2); margin-bottom: 16px; }
+	.kopf h1 { font-size: 26px; margin: 0; }
+	.kopf .klein { color: var(--muted); font-size: 16px; }
+	.link { background: none; border: none; color: var(--muted); text-decoration: underline; font-size: 16px; cursor: pointer; padding: 6px; }
+	.raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+	.knopf { display: block; width: 100%; min-height: 84px; border: none; border-radius: 12px; background: var(--panel2); color: var(--text); font-size: 22px; font-weight: 600; padding: 14px; cursor: pointer; text-align: center; }
+	.knopf small { display: block; font-size: 15px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+	.knopf:active { transform: scale(0.98); }
+	.knopf.gruen { background: var(--gruen); }
+	.knopf.blau { background: var(--blau); }
+	.knopf.rot { background: var(--rot); }
+	.knopf.klein { min-height: 52px; font-size: 18px; width: auto; display: inline-block; padding: 10px 18px; }
+	.feld { width: 100%; box-sizing: border-box; font-size: 26px; padding: 14px 16px; border-radius: 10px; border: 2px solid var(--blau); background: #0e1013; color: var(--text); }
+	.feld:focus { outline: none; border-color: #6ea0ff; }
+	label { display: block; color: var(--muted); font-size: 17px; margin: 14px 0 6px; }
+	.panel { background: var(--panel); border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
+	.zeile { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--panel2); }
+	.zeile:last-child { border-bottom: none; }
+	.zeile .rechts { text-align: right; white-space: nowrap; }
+	.ok { color: #5fd38d; }
+	.fehlt { color: var(--muted); }
+	.meldung { border-radius: 12px; padding: 16px 18px; margin: 14px 0; font-size: 22px; font-weight: 600; }
+	.meldung.rot { background: var(--rot); }
+	.meldung.gruen { background: var(--gruen); }
+	.meldung.orange { background: var(--orange); color: #111; }
+	.meldung small { display: block; font-weight: 400; font-size: 17px; margin-top: 6px; }
+	.gross { font-size: 34px; font-weight: 700; letter-spacing: 0.5px; word-break: break-all; }
+	.reihe { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+	.reihe > * { flex: 1 1 220px; }
+	.x { background: none; border: none; color: var(--muted); font-size: 26px; cursor: pointer; padding: 0 8px; }
+	.dialog { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; padding: 16px; }
+	.dialog .panel { max-width: 520px; width: 100%; }
+	@media (max-width: 600px) {
+		body { font-size: 18px; }
+		.knopf { min-height: 72px; font-size: 20px; }
+		.gross { font-size: 26px; }
+	}
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="kt"><p style="padding:24px">Lädt …</p></div>
+{% endblock %}
+
+{% block script %}
+<script>
+{% raw %}
+(function () {
+	"use strict";
+	const API = "/api/method/keks_trace.terminal.";
+	const app = document.getElementById("kt");
+	const zustand = { station: null, typ: null, ansicht: "start" };
+
+	// ------------------------------------------------------------------ Hilfen
+	function esc(t) {
+		return String(t == null ? "" : t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+	}
+	function zahl(t) {
+		const n = parseFloat(String(t || "").replace(",", "."));
+		return isNaN(n) ? 0 : n;
+	}
+	function kg(n) {
+		return (Math.round(n * 1000) / 1000).toLocaleString("de-DE") + " kg";
+	}
+	function textAus(html) {
+		const d = document.createElement("div");
+		d.innerHTML = html;
+		return d.textContent || d.innerText || "";
+	}
+	let audio;
+	function ton(ok) {
+		try {
+			audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+			const o = audio.createOscillator(), g = audio.createGain();
+			o.frequency.value = ok ? 880 : 220;
+			o.connect(g); g.connect(audio.destination);
+			g.gain.value = 0.15;
+			o.start(); o.stop(audio.currentTime + (ok ? 0.12 : 0.5));
+		} catch (e) { /* kein Ton */ }
+		if (navigator.vibrate) navigator.vibrate(ok ? 60 : [200, 80, 200]);
+	}
+	async function api(methode, args) {
+		const r = await fetch(API + methode, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Accept: "application/json",
+				"X-Frappe-CSRF-Token": (window.frappe && frappe.csrf_token) || "",
+			},
+			body: JSON.stringify(args || {}),
+		});
+		let daten = {};
+		try { daten = await r.json(); } catch (e) { /* leer */ }
+		if (!r.ok || daten.exc_type || daten.exception) {
+			let text = "";
+			try {
+				text = JSON.parse(daten._server_messages || "[]")
+					.map((m) => textAus(JSON.parse(m).message || m))
+					.join(" ");
+			} catch (e) { /* ignorieren */ }
+			if (!text && daten.exception) text = String(daten.exception).split(":").slice(1).join(":").trim();
+			if (r.status === 403) text = text || "Nicht angemeldet oder keine Berechtigung.";
+			throw new Error(text || "Fehler beim Buchen (" + r.status + ").");
+		}
+		return daten.message;
+	}
+	function speichern(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* privat */ } }
+	function laden(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+	let meldungTimer;
+	function meldung(art, text, klein) {
+		const el = document.getElementById("meldung");
+		if (!el) return;
+		el.innerHTML = `<div class="meldung ${art}">${esc(text)}${klein ? `<small>${esc(klein)}</small>` : ""}</div>`;
+		ton(art !== "rot");
+		clearTimeout(meldungTimer);
+		if (art !== "rot") meldungTimer = setTimeout(() => { el.innerHTML = ""; }, 6000);
+	}
+	function fokus(id) {
+		setTimeout(() => { const f = document.getElementById(id || "scan"); if (f) f.focus(); }, 30);
+	}
+	document.addEventListener("click", (e) => {
+		if (["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(e.target.tagName)) return;
+		const f = document.getElementById("scan");
+		if (f) f.focus();
+	});
+
+	function kopf(titel, zurueck) {
+		return `<div class="kopf">
+			<div><h1>${esc(titel)}</h1><div class="klein">Station ${esc(zustand.station || "-")}</div></div>
+			<div>${zurueck ? `<button class="link" data-a="zurueck">← Zurück</button>` : `<button class="link" data-a="station-wechseln">Station wechseln</button>`}</div>
+		</div><div id="meldung"></div>`;
+	}
+	function aktionen(handler) {
+		app.querySelectorAll("[data-a]").forEach((b) => b.addEventListener("click", () => handler(b.dataset.a, b.dataset)));
+	}
+	function enter(id, fn) {
+		const f = document.getElementById(id);
+		if (f) f.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); fn(f.value.trim(), f); } });
+	}
+	function beiAllgemein(a) {
+		if (a === "zurueck") return startseite();
+		if (a === "station-wechseln") { speichern("kt_station", ""); zustand.station = null; return stationWaehlen(); }
+	}
+
+	// ------------------------------------------------------------------ Station
+	async function stationWaehlen() {
+		app.innerHTML = `<div class="kopf"><h1>Keks Trace Terminal</h1></div><div id="meldung"></div>
+			<p>An welcher Station steht dieses Terminal?</p><div class="raster" id="liste">Lädt …</div>`;
+		try {
+			const liste = await api("stationen");
+			if (!liste.length) {
+				document.getElementById("liste").innerHTML = "Es ist noch keine Station eingerichtet (Terminal Station in ERPNext anlegen).";
+				return;
+			}
+			document.getElementById("liste").innerHTML = liste
+				.map((s) => `<button class="knopf" data-a="station" data-name="${esc(s.name)}">${esc(s.name)}${s.typ !== s.name ? `<small>${esc(s.typ)}</small>` : ""}</button>`)
+				.join("");
+			aktionen((a, d) => { if (a === "station") { speichern("kt_station", d.name); init(); } });
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	const MENUE = {
+		Backstube: [
+			["herstellen", "Herstellen", "Grundteig, Veredelung, Backen, Füllen, Sirup"],
+			["rework", "Rework / Bruch", "Teigreste und Bruch in Rework-Behälter"],
+			["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"],
+			["info", "Info-Scan", "Was ist in diesem Behälter?"],
+		],
+		Verpackung: [
+			["herstellen", "Verpacken", "Lose Ware + Folie → Los mit MHD"],
+			["rework", "Packbruch", "Bruch in Rework-Behälter"],
+			["info", "Info-Scan", "Was ist in dieser Kiste?"],
+		],
+		Lager: [
+			["wareneingang", "Wareneingang", "Anlieferung buchen, auch ins Silo"],
+			["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"],
+			["info", "Info-Scan", "Charge, Behälter oder Silo prüfen"],
+		],
+		Versand: [
+			["lieferung", "Lieferung", "Lose an einen Kunden"],
+			["info", "Info-Scan", "Los prüfen"],
+		],
+	};
+
+	function startseite() {
+		zustand.ansicht = "start";
+		const menue = MENUE[zustand.typ] || [];
+		app.innerHTML = kopf(zustand.station) + `<div class="raster">${menue
+			.map(([a, t, u]) => `<button class="knopf ${a === "info" ? "" : "blau"}" data-a="${a}">${esc(t)}<small>${esc(u)}</small></button>`)
+			.join("")}</div>`;
+		aktionen((a) => {
+			if (a === "herstellen") return herstellenStart();
+			if (a === "rework") return reworkStart();
+			if (a === "silo") return siloLeer();
+			if (a === "info") return infoScan();
+			if (a === "wareneingang") return wareneingangStart();
+			if (a === "lieferung") return lieferungStart();
+			beiAllgemein(a);
+		});
+	}
+
+	function ergebnis(titel, zeilen, hinweise, art) {
+		app.innerHTML = kopf(titel, true) + `
+			<div class="meldung ${art || "gruen"}">Gebucht<small>${zeilen.map(esc).join("<br>")}</small></div>
+			${(hinweise || []).map((h) => `<div class="meldung orange">${esc(h)}</div>`).join("")}
+			<div class="reihe"><button class="knopf blau" data-a="zurueck">Fertig</button></div>`;
+		ton(true);
+		aktionen(beiAllgemein);
+	}
+
+	// ------------------------------------------------------------------ Herstellen / Verpacken
+	let ansatz;
+	async function herstellenStart() {
+		app.innerHTML = kopf(zustand.typ === "Verpackung" ? "Verpacken" : "Herstellen", true) + `<p>Was wird hergestellt?</p><div class="raster" id="liste">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		try {
+			const liste = await api("rezepte", { station: zustand.station });
+			document.getElementById("liste").innerHTML = liste.length
+				? liste.map((r) => `<button class="knopf" data-a="rezept" data-artikel="${esc(r.artikel)}">${esc(r.name)}<small>${esc(r.stufe)} · ${esc(r.artikel)}</small></button>`).join("")
+				: "Keine Rezepte für diese Station.";
+			aktionen((a, d) => (a === "rezept" ? rezeptMenge(d.artikel) : beiAllgemein(a)));
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	async function rezeptMenge(artikel) {
+		try {
+			const r = await api("rezept", { artikel });
+			app.innerHTML = kopf(r.name, true) + `
+				<label>Sollmenge (kg) – laut Rezept ${esc(kg(r.sollmenge))}</label>
+				<input id="soll" class="feld" inputmode="decimal" value="${esc(r.sollmenge)}">
+				<div class="reihe"><button class="knopf blau" data-a="weiter">Weiter</button></div>`;
+			aktionen((a) => (a === "weiter" ? ansatzStarten(artikel, zahl(document.getElementById("soll").value)) : beiAllgemein(a)));
+			enter("soll", (v) => ansatzStarten(artikel, zahl(v)));
+			fokus("soll");
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	async function ansatzStarten(artikel, soll) {
+		if (soll <= 0) return meldung("rot", "Bitte eine Sollmenge eingeben.");
+		try {
+			ansatz = { rezept: await api("rezept", { artikel, menge: soll }), zeilen: [], offen: null };
+			ansatzZeigen();
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	function gescannt(artikelCode) {
+		return ansatz.zeilen.filter((z) => z.artikel === artikelCode).reduce((s, z) => s + z.menge, 0);
+	}
+
+	function ansatzZeigen() {
+		const r = ansatz.rezept;
+		const zutaten = r.zutaten.map((z) => {
+			const ist = gescannt(z.artikel);
+			const fertig = ist >= z.menge * 0.98;
+			return `<div class="zeile"><div><span class="${fertig ? "ok" : ""}">${fertig ? "✔" : "○"} ${esc(z.name)}</span>
+				${z.silo ? ` <button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>` : ""}</div>
+				<div class="rechts ${fertig ? "ok" : "fehlt"}">${esc(kg(ist))} / ${esc(kg(z.menge))}</div></div>`;
+		}).join("");
+		const extra = ansatz.zeilen.filter((z) => z.rework).map((z) => `<div class="zeile"><div class="ok">✔ Rework: ${esc(z.name)}</div><div class="rechts">${esc(kg(z.menge))}</div></div>`).join("");
+		const liste = ansatz.zeilen.map((z, i) => `<div class="zeile"><div>${esc(z.name)}<br><span class="fehlt" style="font-size:16px">${esc(z.silo || z.behaelter || z.charge)}</span></div>
+			<div class="rechts">${esc(kg(z.menge))} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("");
+		app.innerHTML = kopf(r.name + " · " + kg(r.sollmenge), true) + `
+			<div class="panel">${zutaten}${extra}</div>
+			<label id="scanlabel">${ansatz.offen ? "Menge (kg) für " + esc(ansatz.offen.anzeige) : "Gebinde, Behälter oder Silo scannen" + (r.rework_moeglich ? " – auch Rework-Behälter" : "")}</label>
+			<input id="scan" class="feld" autocomplete="off" ${ansatz.offen ? 'inputmode="decimal"' : ""} value="${ansatz.offen ? esc(ansatz.offen.vorschlag) : ""}">
+			${ansatz.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Gescannt</div>${liste}</div>
+			<div class="reihe"><button class="knopf gruen" data-a="abschluss">Weiter zum Buchen</button></div>` : ""}`;
+		aktionen((a, d) => {
+			if (a === "silo-zutat") return codeGescannt(d.silo);
+			if (a === "weg") { ansatz.zeilen.splice(+d.i, 1); return ansatzZeigen(); }
+			if (a === "abschluss") return ansatzAbschluss();
+			beiAllgemein(a);
+		});
+		enter("scan", (v, f) => (ansatz.offen ? mengeEingegeben(v) : codeGescannt(v, f)));
+		fokus("scan");
+		if (ansatz.offen) document.getElementById("scan").select();
+	}
+
+	function codeGescannt(code) {
+		if (!code) return;
+		const r = ansatz.rezept;
+		const passende = r.zutaten.find((z) => z.silo === code);
+		const ziel = passende ? passende.menge - gescannt(passende.artikel) : null;
+		ansatz.offen = { code, anzeige: code, vorschlag: ziel && ziel > 0 ? Math.round(ziel * 1000) / 1000 : "" };
+		ansatzZeigen();
+	}
+
+	async function mengeEingegeben(wert) {
+		const menge = zahl(wert);
+		const code = ansatz.offen.code;
+		if (menge <= 0) return meldung("rot", "Bitte eine Menge eingeben.");
+		try {
+			const z = await api("pruefe_zeile", { station: zustand.station, ziel: ansatz.rezept.artikel, code, menge });
+			ansatz.zeilen.push(z);
+			ansatz.offen = null;
+			ansatzZeigen();
+			meldung("gruen", "OK: " + z.name + " " + kg(z.menge), z.charge ? "Charge " + z.charge : z.silo ? "aus " + z.silo + " (Charge wird nach FIFO zugeteilt)" : "");
+		} catch (e) {
+			ansatz.offen = null;
+			ansatzZeigen();
+			meldung("rot", e.message);
+		}
+	}
+
+	function ansatzAbschluss() {
+		const r = ansatz.rezept;
+		const summe = ansatz.zeilen.reduce((s, z) => s + z.menge, 0);
+		const vorschlag = Math.round(summe * r.ausbeute * 1000) / 1000;
+		app.innerHTML = kopf(r.name, true) + `
+			<div class="panel"><div class="zeile"><div>Eingewogen</div><div class="rechts">${esc(kg(summe))}</div></div></div>
+			<label>Ausbringung (kg)${r.ausbeute < 0.999 || r.ausbeute > 1.001 ? " – Vorschlag laut Rezept" : ""}</label>
+			<input id="aus" class="feld" inputmode="decimal" value="${esc(vorschlag)}">
+			${r.ausgabe_silo ? `<p class="fehlt">Geht in ${esc(r.ausgabe_silo)}.</p>` : `<label>Zielbehälter / Kiste scannen (optional)</label><input id="scan" class="feld" autocomplete="off">`}
+			<div class="reihe"><button class="knopf" data-a="zurueck-ansatz">← Zutaten</button><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
+		aktionen((a) => {
+			if (a === "zurueck-ansatz") return ansatzZeigen();
+			if (a === "buchen") return ansatzBuchen();
+			beiAllgemein(a);
+		});
+		enter("scan", () => ansatzBuchen());
+		fokus(r.ausgabe_silo ? "aus" : "scan");
+	}
+
+	async function ansatzBuchen() {
+		const knopf = app.querySelector('[data-a="buchen"]');
+		if (knopf) { knopf.disabled = true; knopf.textContent = "Bucht …"; }
+		const behaelter = document.getElementById("scan");
+		try {
+			const e = await api("herstellen", {
+				station: zustand.station,
+				ziel: ansatz.rezept.artikel,
+				zeilen: ansatz.zeilen.map((z) => ({ code: z.code, menge: z.menge })),
+				ausbringung: zahl(document.getElementById("aus").value),
+				ziel_behaelter: behaelter ? behaelter.value.trim() || null : null,
+			});
+			ergebnis(e.name, [
+				"Neue Charge: " + e.charge,
+				"Menge: " + kg(e.menge),
+				e.behaelter ? "Behälter: " + e.behaelter : "",
+				e.mhd ? "Verwendbar bis / MHD: " + e.mhd : "",
+				e.gesperrt ? "Gesperrt bis zur Freigabe durch die QS" : "",
+			].filter(Boolean), e.hinweise);
+		} catch (err) {
+			if (knopf) { knopf.disabled = false; knopf.textContent = "Buchen"; }
+			meldung("rot", err.message);
+		}
+	}
+
+	// ------------------------------------------------------------------ Rework / Bruch
+	async function reworkStart() {
+		app.innerHTML = kopf(zustand.typ === "Verpackung" ? "Packbruch" : "Rework / Bruch", true) + `<p>In welchen Rework-Behälter?</p><div class="raster" id="liste">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		try {
+			const liste = await api("rework_artikel");
+			document.getElementById("liste").innerHTML = liste.map((r) => `<button class="knopf" data-a="rw" data-artikel="${esc(r.artikel)}" data-name="${esc(r.name)}">${esc(r.name)}<small>${esc(r.allergengruppe || "")}</small></button>`).join("") || "Keine Rework-Artikel angelegt.";
+			aktionen((a, d) => (a === "rw" ? reworkErfassen(d.artikel, d.name) : beiAllgemein(a)));
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	function reworkErfassen(artikel, name) {
+		app.innerHTML = kopf(name, true) + `
+			<label>Herkunft scannen: Teigbehälter, Kiste oder Charge</label><input id="scan" class="feld" autocomplete="off">
+			<label>Menge (kg)</label><input id="menge" class="feld" inputmode="decimal">
+			<label>Rework-Behälter scannen (optional)</label><input id="ziel" class="feld" autocomplete="off">
+			<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
+		aktionen(async (a) => {
+			if (a !== "buchen") return beiAllgemein(a);
+			try {
+				const e = await api("rework_erfassen", {
+					station: zustand.station,
+					quelle: document.getElementById("scan").value.trim(),
+					menge: zahl(document.getElementById("menge").value),
+					rework_artikel: artikel,
+					ziel_behaelter: document.getElementById("ziel").value.trim() || null,
+				});
+				ergebnis(e.name, ["Neue Rework-Charge: " + e.charge, "Menge: " + kg(e.menge), e.behaelter ? "Behälter: " + e.behaelter : "", e.mhd ? "Verwendbar bis: " + e.mhd : ""].filter(Boolean), e.hinweise);
+			} catch (err) { meldung("rot", err.message); }
+		});
+		enter("scan", () => fokus("menge"));
+		enter("menge", () => fokus("ziel"));
+		fokus("scan");
+	}
+
+	// ------------------------------------------------------------------ Wareneingang
+	let artikelListe = [];
+	async function wareneingangStart() {
+		app.innerHTML = kopf("Wareneingang", true) + `<p>Welcher Artikel?</p><div class="raster" id="liste">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		try {
+			artikelListe = await api("wareneingang_artikel");
+			document.getElementById("liste").innerHTML = artikelListe.map((r, i) => `<button class="knopf" data-a="art" data-i="${i}">${esc(r.name)}<small>${esc(r.artikel)}${r.kt_freigabe_pflicht ? " · Freigabe durch QS" : ""}</small></button>`).join("");
+			aktionen((a, d) => (a === "art" ? wareneingangErfassen(artikelListe[+d.i]) : beiAllgemein(a)));
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	function wareneingangErfassen(art) {
+		app.innerHTML = kopf(art.name, true) + `
+			<label>Charge des Lieferanten (scannen oder eingeben)</label><input id="scan" class="feld" autocomplete="off">
+			<label>Menge (kg)</label><input id="menge" class="feld" inputmode="decimal">
+			${art.has_expiry_date ? `<label>MHD</label><input id="mhd" class="feld" type="date">` : ""}
+			${art.silo ? `<label>Wohin?</label><select id="ziel" class="feld"><option value="${esc(art.silo)}">ins ${esc(art.silo)}</option><option value="">als Sackware ins Lager</option></select>` : ""}
+			<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
+		aktionen(async (a) => {
+			if (a !== "buchen") return beiAllgemein(a);
+			try {
+				const ziel = document.getElementById("ziel");
+				const mhd = document.getElementById("mhd");
+				const e = await api("wareneingang", {
+					station: zustand.station,
+					artikel: art.artikel,
+					lieferantencharge: document.getElementById("scan").value.trim(),
+					menge: zahl(document.getElementById("menge").value),
+					mhd: mhd ? mhd.value || null : null,
+					silo: ziel ? ziel.value || null : null,
+				});
+				ergebnis(e.name, ["Charge: " + e.charge, "Menge: " + kg(e.menge), "Ort: " + e.lager, e.mhd ? "MHD: " + e.mhd : ""].filter(Boolean),
+					(e.gesperrt ? ["Gesperrt bis zur Freigabe durch die QS (" + (e.sperrgrund || "") + ")"] : []).concat(e.hinweise || []));
+			} catch (err) { meldung("rot", err.message); }
+		});
+		enter("scan", () => fokus("menge"));
+		fokus("scan");
+	}
+
+	// ------------------------------------------------------------------ Lieferung
+	let lieferung;
+	async function lieferungStart() {
+		app.innerHTML = kopf("Lieferung", true) + `<p>An welchen Kunden?</p><div class="raster" id="liste">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		try {
+			const liste = await api("kunden");
+			document.getElementById("liste").innerHTML = liste.map((k) => `<button class="knopf" data-a="kunde" data-name="${esc(k.name)}" data-titel="${esc(k.customer_name)}">${esc(k.customer_name)}</button>`).join("") || "Keine Kunden angelegt.";
+			aktionen((a, d) => {
+				if (a !== "kunde") return beiAllgemein(a);
+				lieferung = { kunde: d.name, titel: d.titel, zeilen: [], offen: null };
+				lieferungZeigen();
+			});
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	function lieferungZeigen() {
+		const liste = lieferung.zeilen.map((z, i) => `<div class="zeile"><div>${esc(z.name)}<br><span class="fehlt" style="font-size:16px">Los ${esc(z.charge)}</span></div>
+			<div class="rechts">${esc(kg(z.menge))} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("");
+		app.innerHTML = kopf("Lieferung an " + lieferung.titel, true) + `
+			<label>${lieferung.offen ? "Menge (kg) für Los " + esc(lieferung.offen) : "Los scannen"}</label>
+			<input id="scan" class="feld" autocomplete="off" ${lieferung.offen ? 'inputmode="decimal"' : ""}>
+			${lieferung.zeilen.length ? `<div class="panel">${liste}</div><div class="reihe"><button class="knopf gruen" data-a="buchen">Lieferschein buchen</button></div>` : ""}`;
+		aktionen(async (a, d) => {
+			if (a === "weg") { lieferung.zeilen.splice(+d.i, 1); return lieferungZeigen(); }
+			if (a !== "buchen") return beiAllgemein(a);
+			try {
+				const e = await api("lieferung", { station: zustand.station, kunde: lieferung.kunde, zeilen: lieferung.zeilen.map((z) => ({ code: z.code, menge: z.menge })) });
+				ergebnis("Lieferung", ["Lieferschein: " + e.lieferschein, "Kunde: " + e.kunde, e.positionen + " Position(en), " + kg(e.menge)], e.hinweise);
+			} catch (err) { meldung("rot", err.message); }
+		});
+		enter("scan", async (v) => {
+			if (!v) return;
+			if (!lieferung.offen) { lieferung.offen = v; return lieferungZeigen(); }
+			try {
+				const z = await api("pruefe_lieferzeile", { station: zustand.station, code: lieferung.offen, menge: zahl(v) });
+				lieferung.zeilen.push(z);
+				lieferung.offen = null;
+				lieferungZeigen();
+				meldung("gruen", "OK: " + z.name + " " + kg(z.menge));
+			} catch (err) {
+				lieferung.offen = null;
+				lieferungZeigen();
+				meldung("rot", err.message);
+			}
+		});
+		fokus("scan");
+	}
+
+	// ------------------------------------------------------------------ Silo leer
+	async function siloLeer() {
+		app.innerHTML = kopf("Silo leer melden", true) + `<p>Welches Silo oder welcher Tank ist leer?</p><div class="raster" id="liste">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		try {
+			const liste = await api("silos");
+			document.getElementById("liste").innerHTML = liste.map((s) => `<button class="knopf" data-a="silo" data-name="${esc(s.silo)}">${esc(s.silo)}<small>rechnerisch ${esc(kg(s.bestand))}</small></button>`).join("") || "Keine Silos angelegt.";
+			aktionen((a, d) => (a === "silo" ? siloBestaetigen(d.name) : beiAllgemein(a)));
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	function siloBestaetigen(silo) {
+		const box = document.createElement("div");
+		box.className = "dialog";
+		box.innerHTML = `<div class="panel"><p class="gross" style="font-size:26px">${esc(silo)} ist wirklich leer?</p>
+			<p class="fehlt">Ein rechnerischer Rest wird als Silo-Differenz ausgebucht.</p>
+			<div class="reihe"><button class="knopf" id="nein">Nein</button><button class="knopf rot" id="ja">Ja, ist leer</button></div></div>`;
+		document.body.appendChild(box);
+		box.querySelector("#nein").onclick = () => box.remove();
+		box.querySelector("#ja").onclick = async () => {
+			box.remove();
+			try {
+				const e = await api("silo_leer", { station: zustand.station, silo });
+				ergebnis("Silo leer", [silo + " ist leer gemeldet.", "Rechnerischer Rest ausgebucht: " + kg(e.rest)], e.hinweise);
+			} catch (err) { meldung("rot", err.message); }
+		};
+	}
+
+	// ------------------------------------------------------------------ Info
+	function infoScan() {
+		app.innerHTML = kopf("Info-Scan", true) + `<label>Charge, Behälter oder Silo scannen</label><input id="scan" class="feld" autocomplete="off"><div id="info"></div>`;
+		aktionen(beiAllgemein);
+		enter("scan", async (v, f) => {
+			if (!v) return;
+			f.value = "";
+			try {
+				const r = await api("info", { code: v });
+				const zeilen = [];
+				if (r.typ === "behaelter") zeilen.push(["Behälter", r.behaelter + " (" + r.behaelter_typ + ")"], ["Status", r.status]);
+				if (r.typ === "silo") zeilen.push(["Silo/Tank", r.silo]);
+				if (r.artikelname) zeilen.push(["Artikel", r.artikelname]);
+				if (r.charge) zeilen.push(["Charge", r.charge]);
+				if (r.stufe) zeilen.push(["Stufe", r.stufe]);
+				if (r.inhalt != null) zeilen.push(["Menge", kg(r.inhalt)]);
+				if (r.backtag) zeilen.push(["Backtag", r.backtag]);
+				if (r.mhd) zeilen.push(["Verwendbar bis / MHD", r.mhd + (r.abgelaufen ? " – ABGELAUFEN" : "")]);
+				if (r.bestand) r.bestand.forEach((b) => zeilen.push(["Im Silo", b.charge + ": " + kg(b.menge)]));
+				if (r.moeglich_enthalten && r.moeglich_enthalten.length) zeilen.push(["Möglicherweise enthalten", r.moeglich_enthalten.join(", ")]);
+				const gesperrt = r.sperrstatus === "Gesperrt";
+				document.getElementById("info").innerHTML =
+					(gesperrt ? `<div class="meldung rot">GESPERRT<small>${esc(r.sperrgrund || "")}</small></div>` : r.abgelaufen ? `<div class="meldung rot">ABGELAUFEN</div>` : `<div class="meldung gruen">${esc(v)}</div>`) +
+					`<div class="panel">${zeilen.map(([k, w]) => `<div class="zeile"><div class="fehlt">${esc(k)}</div><div class="rechts">${esc(w)}</div></div>`).join("")}</div>`;
+				ton(!gesperrt && !r.abgelaufen);
+			} catch (e) { meldung("rot", e.message); }
+		});
+		fokus("scan");
+	}
+
+	// ------------------------------------------------------------------ Start
+	async function init() {
+		const station = laden("kt_station");
+		if (!station) return stationWaehlen();
+		try {
+			const s = await api("start", { station });
+			zustand.station = s.station;
+			zustand.typ = s.typ;
+			startseite();
+		} catch (e) {
+			speichern("kt_station", "");
+			stationWaehlen();
+		}
+	}
+	init();
+})();
+{% endraw %}
+</script>
+{% endblock %}

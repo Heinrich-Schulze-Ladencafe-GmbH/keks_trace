@@ -1,0 +1,267 @@
+{
+ "app": "keks_trace",
+ "charts": [],
+ "content": "[{\"id\": \"kt_h1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Keks Trace</b></span>\", \"col\": 12}}, {\"id\": \"kt_s0\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Terminal\", \"col\": 4}}, {\"id\": \"kt_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Mengenbilanz\", \"col\": 4}}, {\"id\": \"kt_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgungstest\", \"col\": 4}}, {\"id\": \"kt_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen\", \"col\": 4}}, {\"id\": \"kt_s5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen Sperre\", \"col\": 4}}, {\"id\": \"kt_sp\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"kt_c0\", \"type\": \"card\", \"data\": {\"card_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Chargen und Sperren\", \"col\": 4}}, {\"id\": \"kt_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Silos und Behälter\", \"col\": 4}}, {\"id\": \"kt_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Einstellungen\", \"col\": 4}}]",
+ "creation": "2026-10-30 21:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "package",
+ "idx": 0,
+ "is_hidden": 0,
+ "label": "Keks Trace",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Rückverfolgung",
+   "link_count": 4,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Rueckverfolgung",
+   "link_count": 0,
+   "link_to": "Rueckverfolgung",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Mengenbilanz",
+   "link_count": 0,
+   "link_to": "Mengenbilanz",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Rueckverfolgungstest",
+   "link_count": 0,
+   "link_to": "Rueckverfolgungstest",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Chargen Genealogie",
+   "link_count": 0,
+   "link_to": "Chargen Genealogie",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Chargen und Sperren",
+   "link_count": 4,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Batch",
+   "link_count": 0,
+   "link_to": "Batch",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Chargen Sperre",
+   "link_count": 0,
+   "link_to": "Chargen Sperre",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Rework Regel",
+   "link_count": 0,
+   "link_to": "Rework Regel",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Allergengruppe",
+   "link_count": 0,
+   "link_to": "Allergengruppe",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Silos und Behälter",
+   "link_count": 4,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Silo",
+   "link_count": 0,
+   "link_to": "Silo",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Silo Leermeldung",
+   "link_count": 0,
+   "link_to": "Silo Leermeldung",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Produkttraeger",
+   "link_count": 0,
+   "link_to": "Produkttraeger",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Traeger Belegung",
+   "link_count": 0,
+   "link_to": "Traeger Belegung",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Einstellungen",
+   "link_count": 4,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Terminal Station",
+   "link_count": 0,
+   "link_to": "Terminal Station",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Keks Trace Einstellungen",
+   "link_count": 0,
+   "link_to": "Keks Trace Einstellungen",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "BOM",
+   "link_count": 0,
+   "link_to": "BOM",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Item",
+   "link_count": 0,
+   "link_to": "Item",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-10-30 21:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Keks Trace",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "roles": [],
+ "sequence_id": 1.0,
+ "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "label": "Terminal",
+   "type": "URL",
+   "url": "/terminal"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "label": "Rückverfolgung",
+   "type": "Report",
+   "link_to": "Rueckverfolgung"
+  },
+  {
+   "color": "Green",
+   "doc_view": "",
+   "label": "Mengenbilanz",
+   "type": "Report",
+   "link_to": "Mengenbilanz"
+  },
+  {
+   "color": "Orange",
+   "doc_view": "",
+   "label": "Rückverfolgungstest",
+   "type": "DocType",
+   "link_to": "Rueckverfolgungstest"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "",
+   "label": "Chargen",
+   "type": "DocType",
+   "link_to": "Batch"
+  },
+  {
+   "color": "Red",
+   "doc_view": "",
+   "label": "Chargen Sperre",
+   "type": "DocType",
+   "link_to": "Chargen Sperre"
+  }
+ ],
+ "standard": 1,
+ "title": "Keks Trace",
+ "type": "Workspace"
+}
