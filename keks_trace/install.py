@@ -132,6 +132,16 @@ CUSTOM_FIELDS = {
 			"insert_after": "customer",
 		},
 	],
+	"Delivery Note Item": [
+		{
+			"fieldname": "kt_palette",
+			"label": "Palette (NVE)",
+			"fieldtype": "Link",
+			"options": "Palette",
+			"insert_after": "batch_no",
+			"description": "Ware kommt von dieser Palette. Leer = lose Kartons ohne Palette.",
+		},
+	],
 	"Stock Entry Detail": [
 		{
 			"fieldname": "kt_traeger",
@@ -164,6 +174,16 @@ def after_migrate():
 	_lager_einstellungen()
 	_aenderungsprotokoll()
 	_buchungsarten()
+	_einheiten()
+
+
+def _einheiten():
+	"""Zähleinheiten für Fertigware (Umrechnung in kg steht am Artikel)."""
+	for uom in ("Karton", "Beutel"):
+		if not frappe.db.exists("UOM", uom):
+			frappe.get_doc({"doctype": "UOM", "uom_name": uom, "must_be_whole_number": 1}).insert(
+				ignore_permissions=True
+			)
 
 
 def _buchungsarten():

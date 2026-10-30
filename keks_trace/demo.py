@@ -70,6 +70,12 @@ ROHSTOFF_PREIS = {
 	"KT-FOLIE": 4.0,
 }
 
+# Fertigware: Beutel à 200 g, Karton à 12 Beutel. GTIN aus dem Nummernkreis 20 bis 29 (nur intern, Demo).
+VERPACKUNG = {
+	"KT-FW-NUSS-SCHOKO": {"Beutel": (0.2, "2000000000015"), "Karton": (2.4, "2000000000022")},
+	"KT-FW-KAKAO-NOUGAT": {"Beutel": (0.2, "2000000000039"), "Karton": (2.4, "2000000000046")},
+}
+
 # Neue Chargen dieser Artikel sind gesperrt, bis die QS sie freigibt.
 FREIGABE_PFLICHT = {"KT-BUTTER", "KT-WL-NUSS-SCHOKO", "KT-WL-KAKAO-NOUGAT"}
 
@@ -205,6 +211,24 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 				"kt_freigabe_pflicht": 1 if code in FREIGABE_PFLICHT else 0,
 			}
 		).insert()
+
+	for code, einheiten in VERPACKUNG.items():
+		item = frappe.get_doc("Item", code)
+		geaendert = False
+		for uom, (kg, gtin) in einheiten.items():
+			if not any(u.uom == uom for u in item.uoms):
+				item.append("uoms", {"uom": uom, "conversion_factor": kg})
+				geaendert = True
+			if not any(b.barcode == gtin for b in item.barcodes) and not frappe.db.exists(
+				"Item Barcode", {"barcode": gtin}
+			):
+				item.append("barcodes", {"barcode": gtin, "barcode_type": "EAN", "uom": uom})
+				geaendert = True
+		if not item.sales_uom:
+			item.sales_uom = "Karton"
+			geaendert = True
+		if geaendert:
+			item.save()
 
 	for artikel, (menge, zutaten) in REZEPTE.items():
 		vorhanden = frappe.db.get_value("BOM", {"item": artikel, "is_default": 1, "docstatus": 1})
@@ -418,6 +442,8 @@ def liefern(ctx, datum, positionen, rate=8.0):
 				{
 					"item_code": item,
 					"qty": menge,
+					"uom": "Kg",
+					"conversion_factor": 1,
 					"rate": rate,
 					"warehouse": ctx.fertig,
 					"use_serial_batch_fields": 1,

@@ -148,10 +148,33 @@ an Lagerbuchung und Lieferschein).
 | Lager | Wareneingang (Lieferantencharge, MHD, ins Silo oder als Sackware), Silo leer, Info-Scan |
 | Versand | Lieferung (Kunde wählen, Lose scannen → Lieferschein), Info-Scan |
 
-Gescannt werden Behälter-Codes, Silo-Namen oder Chargennummern. Jede Zeile wird beim Scannen
+Mengen gibt man über einen großen Ziffernblock ein, Text (z. B. eine unlesbare Lieferantencharge)
+über die Bildschirmtastatur hinter „⌨ Tastatur“. Scanner und echte Tastatur funktionieren immer.
+
+Gescannt werden Behälter-Codes, Silo-Namen, Paletten (NVE) oder Chargennummern. Jede Zeile wird beim Scannen
 geprüft (Rezept, Sperre, Verfall, Rework-Regel, Allergene, Bestand im Behälter/Silo). Stationen
 werden unter **Terminal Station** gepflegt (Typ und Lagerorte); `keks_trace.demo.stammdaten`
 legt die vier Demo-Stationen an.
+
+## Paletten (NVE / SSCC)
+
+- **Verpacken** zählt in Karton oder Beutel (Umrechnung in kg steht am Artikel unter „Einheiten“).
+  Fertigware bekommt eine kurze Los-Nummer (`L261030-01`). Beim Buchen eine Palette scannen
+  oder „Neue Palette“ tippen: NVE wird vergeben, das GS1-Etikett (A6) öffnet sich zum Drucken.
+- Paletten dürfen **gemischt** sein. Der Inhalt ergibt sich nur aus den unveränderbaren
+  **Paletten-Bewegungen** (Zugang/Abgang je Los, Einheit, Station, Beleg).
+- **Anbrechen/Kommissionieren:** Palette scannen, Position antippen, Anzahl, Zielpalette scannen
+  oder neue Versandpalette anlegen.
+- **Lieferung:** ganze Palette, einzelne Kartons von einer Palette oder lose Kartons. Ein
+  Lieferschein kann nichts liefern, was auf einer Palette steht, ohne diese Palette anzugeben.
+  Storno des Lieferscheins stellt die Paletten wieder her; eine Fertigung, deren Los auf einer
+  Palette steht, kann nicht storniert werden.
+- Rückverfolgung, Rückverfolgungstest und Rückrufsperre zeigen die betroffenen NVEs.
+- Etikett: `/nve_etikett?nve=…`. NVE = Reserveziffer + **GS1-Basisnummer** + laufende Nummer +
+  Prüfziffer. Basisnummer unter **Keks Trace Einstellungen** eintragen; ohne sie werden
+  Test-NVEs (Nummernkreis 02) mit Aufdruck „TEST-NVE“ erzeugt, die nicht an Kunden gehen dürfen.
+  Sortenreine Paletten bekommen einen zweiten Strichcode mit GTIN, MHD, Anzahl und Los,
+  wenn am Artikel ein Barcode (EAN) je Einheit hinterlegt ist.
 
 ## Demo: drei Produktionstage
 

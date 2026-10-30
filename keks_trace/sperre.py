@@ -104,7 +104,14 @@ def rueckruf_sperre(charge: str, grund: str) -> dict:
 				"bestand": frappe.db.get_value("Batch", c, "batch_qty"),
 			}
 		)
-	return {"vorgang": vorgang, "chargen": gesperrt, "kunden": kunden(betroffen)}
+	from keks_trace.palette import paletten_fuer
+
+	return {
+		"vorgang": vorgang,
+		"chargen": gesperrt,
+		"kunden": kunden(betroffen),
+		"paletten": [p for p in paletten_fuer(betroffen) if p.status in ("Offen", "Geschlossen")],
+	}
 
 
 def _pruefe_rolle():

@@ -55,10 +55,34 @@
 	.x { background: none; border: none; color: var(--muted); font-size: 26px; cursor: pointer; padding: 0 8px; }
 	.dialog { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; padding: 16px; }
 	.dialog .panel { max-width: 520px; width: 100%; }
+	.ziffern { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; max-width: 560px; }
+	.ziffern button, .tasten button { min-height: 66px; border: none; border-radius: 10px; background: var(--panel2); color: var(--text); font-size: 28px; font-weight: 600; cursor: pointer; touch-action: manipulation; }
+	.ziffern button:active, .tasten button:active { background: #3a414a; }
+	#kt .ziffern .ok { background: var(--gruen); color: #fff; grid-row: span 2; }
+	#kt .tasten .ok { color: #fff; }
+	.ziffern .weg { background: #3a2a2a; }
+	.tasten { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; margin: 10px 0; }
+	.tasten button { min-height: 56px; font-size: 22px; padding: 0; }
+	.tasten .breit { grid-column: span 2; }
+	.tasten .ok { background: var(--gruen); color: #fff; }
+	.einheiten { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+	.einheiten button { flex: 1 1 120px; min-height: 56px; border: 2px solid var(--panel2); border-radius: 10px; background: var(--panel); color: var(--text); font-size: 20px; cursor: pointer; }
+	.einheiten button.an { border-color: #6ea0ff; background: var(--blau); }
+	.mitknopf { display: flex; gap: 10px; }
+	.mitknopf .feld { flex: 1; }
+	.mitknopf .knopf { width: auto; min-height: 0; flex: 0 0 auto; font-size: 18px; padding: 0 18px; }
+	.nve { font-size: 30px; font-weight: 700; letter-spacing: 1px; }
+	.nve small { font-size: 18px; color: var(--muted); font-weight: 400; }
+	.pos { display: flex; justify-content: space-between; gap: 10px; width: 100%; text-align: left; background: var(--panel2); border: none; color: var(--text); border-radius: 10px; padding: 12px 14px; margin: 8px 0; font-size: 19px; cursor: pointer; }
+	.pos small { display: block; color: var(--muted); font-size: 15px; }
+	.marke { display: inline-block; font-size: 15px; padding: 2px 10px; border-radius: 20px; background: var(--panel2); margin-left: 8px; vertical-align: middle; }
+	.marke.gruen { background: var(--gruen); } .marke.orange { background: var(--orange); color: #111; } .marke.rot { background: var(--rot); }
 	@media (max-width: 600px) {
 		body { font-size: 18px; }
 		.knopf { min-height: 72px; font-size: 20px; }
 		.gross { font-size: 26px; }
+		.ziffern button { min-height: 58px; }
+		.tasten button { min-height: 46px; font-size: 18px; }
 	}
 </style>
 {% endblock %}
@@ -74,7 +98,7 @@
 	"use strict";
 	const API = "/api/method/keks_trace.terminal.";
 	const app = document.getElementById("kt");
-	const zustand = { station: null, typ: null, ansicht: "start" };
+	const zustand = { station: null, typ: null };
 
 	// ------------------------------------------------------------------ Hilfen
 	function esc(t) {
@@ -84,9 +108,9 @@
 		const n = parseFloat(String(t || "").replace(",", "."));
 		return isNaN(n) ? 0 : n;
 	}
-	function kg(n) {
-		return (Math.round(n * 1000) / 1000).toLocaleString("de-DE") + " kg";
-	}
+	function rund(n, s) { const f = Math.pow(10, s == null ? 3 : s); return Math.round(n * f) / f; }
+	function kg(n) { return rund(n).toLocaleString("de-DE") + " kg"; }
+	function stk(n, e) { return rund(n).toLocaleString("de-DE") + " " + (e || ""); }
 	function textAus(html) {
 		const d = document.createElement("div");
 		d.innerHTML = html;
@@ -104,6 +128,9 @@
 		} catch (e) { /* kein Ton */ }
 		if (navigator.vibrate) navigator.vibrate(ok ? 60 : [200, 80, 200]);
 	}
+	function speichern(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* privat */ } }
+	function laden(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
 	async function api(methode, args) {
 		const r = await fetch(API + methode, {
 			method: "POST",
@@ -119,9 +146,7 @@
 		if (!r.ok || daten.exc_type || daten.exception) {
 			let text = "";
 			try {
-				text = JSON.parse(daten._server_messages || "[]")
-					.map((m) => textAus(JSON.parse(m).message || m))
-					.join(" ");
+				text = JSON.parse(daten._server_messages || "[]").map((m) => textAus(JSON.parse(m).message || m)).join(" ");
 			} catch (e) { /* ignorieren */ }
 			if (!text && daten.exception) text = String(daten.exception).split(":").slice(1).join(":").trim();
 			if (daten.exc_type === "CSRFTokenError") {
@@ -134,8 +159,6 @@
 		speichern("kt_neu", "");
 		return daten.message;
 	}
-	function speichern(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* privat */ } }
-	function laden(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
 	let meldungTimer;
 	function meldung(art, text, klein) {
@@ -150,11 +173,72 @@
 		setTimeout(() => { const f = document.getElementById(id || "scan"); if (f) f.focus(); }, 30);
 	}
 	document.addEventListener("click", (e) => {
-		if (["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(e.target.tagName)) return;
+		if (e.target.closest("input, select, textarea, button, .dialog")) return;
 		const f = document.getElementById("scan");
 		if (f) f.focus();
 	});
 
+	// ------------------------------------------------------------------ Ziffernblock und Tastatur
+	// Felder bekommen inputmode="none": Scanner und echte Tastatur gehen, die kleine Systemtastatur nicht.
+	function zahlFeld(id, label, wert) {
+		return `<label>${label}</label><input id="${id}" class="feld" inputmode="none" autocomplete="off" value="${esc(wert == null ? "" : String(wert).replace(".", ","))}">
+			<div class="ziffern" data-feld="${id}">
+				${["7", "8", "9", "⌫", "4", "5", "6", "C", "1", "2", "3", "OK", "0", ","].map((z) =>
+					`<button type="button" data-z="${z}" class="${z === "OK" ? "ok" : z === "⌫" || z === "C" ? "weg" : ""}" ${z === "0" ? 'style="grid-column: span 2"' : ""}>${z}</button>`).join("")}
+			</div>`;
+	}
+	function textFeld(id, label, wert) {
+		return `<label>${label}</label>
+			<div class="mitknopf"><input id="${id}" class="feld" inputmode="none" autocomplete="off" value="${esc(wert || "")}">
+			<button type="button" class="knopf" data-tastatur="${id}">⌨ Tastatur</button></div>
+			<div class="tasten" id="tasten-${id}" data-feld="${id}" style="display:none"></div>`;
+	}
+	const TASTEN = ["1234567890", "QWERTZUIOP", "ASDFGHJKL-", "YXCVBNM./"];
+	function tastaturZeigen(id) {
+		const box = document.getElementById("tasten-" + id);
+		if (!box) return;
+		if (box.style.display !== "none") { box.style.display = "none"; return; }
+		box.innerHTML = TASTEN.map((r) => r.split("").map((z) => `<button type="button" data-z="${z}">${z}</button>`).join("")).join("") +
+			`<button type="button" data-z="⌫" class="breit">⌫</button><button type="button" data-z="C" class="breit">C</button>` +
+			`<button type="button" data-z="OK" class="ok breit" style="grid-column: span 6">OK</button>`;
+		box.style.display = "grid";
+		fokus(id);
+	}
+	app.addEventListener("click", (e) => {
+		const t = e.target.closest("[data-tastatur]");
+		if (t) return tastaturZeigen(t.dataset.tastatur);
+		const b = e.target.closest("[data-z]");
+		if (!b) return;
+		const box = b.closest("[data-feld]");
+		const f = box && document.getElementById(box.dataset.feld);
+		if (!f) return;
+		const z = b.dataset.z;
+		if (z === "OK") {
+			if (box.classList.contains("tasten")) box.style.display = "none";
+			f.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+			return;
+		}
+		if (z === "⌫") f.value = f.value.slice(0, -1);
+		else if (z === "C") f.value = "";
+		else if (z === "," && f.value.includes(",")) return;
+		else f.value += z;
+		f.focus();
+	});
+
+	function einheitWahl(einheiten, aktiv) {
+		if (!einheiten || einheiten.length < 2) return "";
+		return `<div class="einheiten">${einheiten.map((e) =>
+			`<button type="button" data-a="einheit" data-e="${esc(e.einheit)}" class="${e.einheit === aktiv ? "an" : ""}">${esc(e.einheit)}${e.faktor !== 1 ? ` <small>(${esc(String(rund(e.faktor)).replace(".", ","))} kg)</small>` : ""}</button>`).join("")}</div>`;
+	}
+	function einheitSetzen(einheit) {
+		app.querySelectorAll('[data-a="einheit"]').forEach((b) => b.classList.toggle("an", b.dataset.e === einheit));
+	}
+	function faktorVon(einheiten, einheit) {
+		const e = (einheiten || []).find((x) => x.einheit === einheit);
+		return e ? e.faktor : 1;
+	}
+
+	// ------------------------------------------------------------------ Rahmen
 	function kopf(titel, zurueck) {
 		return `<div class="kopf">
 			<div><h1>${esc(titel)}</h1><div class="klein">Station ${esc(zustand.station || "-")}</div></div>
@@ -171,6 +255,9 @@
 	function beiAllgemein(a) {
 		if (a === "zurueck") return startseite();
 		if (a === "station-wechseln") { speichern("kt_station", ""); zustand.station = null; return stationWaehlen(); }
+	}
+	function etikettDrucken(nve) {
+		window.open("/nve_etikett?nve=" + encodeURIComponent(nve) + "&druck=1", "_blank");
 	}
 
 	// ------------------------------------------------------------------ Station
@@ -198,23 +285,25 @@
 			["info", "Info-Scan", "Was ist in diesem Behälter?"],
 		],
 		Verpackung: [
-			["herstellen", "Verpacken", "Lose Ware + Folie → Los mit MHD"],
+			["herstellen", "Verpacken", "Lose Ware + Folie → Los mit MHD, auf Palette"],
+			["paletten", "Paletten", "Neue Palette, Etikett, laden, schließen"],
 			["rework", "Packbruch", "Bruch in Rework-Behälter"],
-			["info", "Info-Scan", "Was ist in dieser Kiste?"],
+			["info", "Info-Scan", "Kiste, Los oder Palette prüfen"],
 		],
 		Lager: [
 			["wareneingang", "Wareneingang", "Anlieferung buchen, auch ins Silo"],
+			["paletten", "Paletten", "Anbrechen, umpacken, Etikett"],
 			["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"],
-			["info", "Info-Scan", "Charge, Behälter oder Silo prüfen"],
+			["info", "Info-Scan", "Charge, Behälter, Silo oder Palette"],
 		],
 		Versand: [
-			["lieferung", "Lieferung", "Lose an einen Kunden"],
-			["info", "Info-Scan", "Los prüfen"],
+			["lieferung", "Lieferung", "Paletten und Kartons an einen Kunden"],
+			["paletten", "Paletten", "Kommissionieren auf Versandpalette"],
+			["info", "Info-Scan", "Los oder Palette prüfen"],
 		],
 	};
 
 	function startseite() {
-		zustand.ansicht = "start";
 		const menue = MENUE[zustand.typ] || [];
 		app.innerHTML = kopf(zustand.station) + `<div class="raster">${menue
 			.map(([a, t, u]) => `<button class="knopf ${a === "info" ? "" : "blau"}" data-a="${a}">${esc(t)}<small>${esc(u)}</small></button>`)
@@ -226,17 +315,18 @@
 			if (a === "info") return infoScan();
 			if (a === "wareneingang") return wareneingangStart();
 			if (a === "lieferung") return lieferungStart();
+			if (a === "paletten") return palettenStart();
 			beiAllgemein(a);
 		});
 	}
 
-	function ergebnis(titel, zeilen, hinweise, art) {
+	function ergebnis(titel, zeilen, hinweise, extra) {
 		app.innerHTML = kopf(titel, true) + `
-			<div class="meldung ${art || "gruen"}">Gebucht<small>${zeilen.map(esc).join("<br>")}</small></div>
+			<div class="meldung gruen">Gebucht<small>${zeilen.map(esc).join("<br>")}</small></div>
 			${(hinweise || []).map((h) => `<div class="meldung orange">${esc(h)}</div>`).join("")}
-			<div class="reihe"><button class="knopf blau" data-a="zurueck">Fertig</button></div>`;
+			<div class="reihe">${extra || ""}<button class="knopf blau" data-a="zurueck">Fertig</button></div>`;
 		ton(true);
-		aktionen(beiAllgemein);
+		return aktionen;
 	}
 
 	// ------------------------------------------------------------------ Herstellen / Verpacken
@@ -256,20 +346,29 @@
 	async function rezeptMenge(artikel) {
 		try {
 			const r = await api("rezept", { artikel });
-			app.innerHTML = kopf(r.name, true) + `
-				<label>Sollmenge (kg) – laut Rezept ${esc(kg(r.sollmenge))}</label>
-				<input id="soll" class="feld" inputmode="decimal" value="${esc(r.sollmenge)}">
-				<div class="reihe"><button class="knopf blau" data-a="weiter">Weiter</button></div>`;
-			aktionen((a) => (a === "weiter" ? ansatzStarten(artikel, zahl(document.getElementById("soll").value)) : beiAllgemein(a)));
-			enter("soll", (v) => ansatzStarten(artikel, zahl(v)));
+			const zaehlen = r.einheiten && r.einheiten.length > 1;
+			let einheit = zaehlen ? r.einheiten[0].einheit : null;
+			const vorschlag = zaehlen ? Math.round(r.sollmenge / r.einheiten[0].faktor) : r.sollmenge;
+			app.innerHTML = kopf(r.name, true) +
+				(zaehlen ? einheitWahl(r.einheiten, einheit) : "") +
+				zahlFeld("soll", zaehlen ? `Soll – wie viele <span id="einheit-text">${esc(einheit)}</span>?` : `Sollmenge (kg) – laut Rezept ${esc(kg(r.sollmenge))}`, vorschlag);
+			const weiter = () => {
+				const n = zahl(document.getElementById("soll").value);
+				ansatzStarten(artikel, zaehlen ? n * faktorVon(r.einheiten, einheit) : n, einheit);
+			};
+			aktionen((a, d) => {
+				if (a === "einheit") { einheit = d.e; einheitSetzen(einheit); document.getElementById("einheit-text").textContent = einheit; return fokus("soll"); }
+				beiAllgemein(a);
+			});
+			enter("soll", weiter);
 			fokus("soll");
 		} catch (e) { meldung("rot", e.message); }
 	}
 
-	async function ansatzStarten(artikel, soll) {
+	async function ansatzStarten(artikel, soll, einheit) {
 		if (soll <= 0) return meldung("rot", "Bitte eine Sollmenge eingeben.");
 		try {
-			ansatz = { rezept: await api("rezept", { artikel, menge: soll }), zeilen: [], offen: null };
+			ansatz = { rezept: await api("rezept", { artikel, menge: soll }), zeilen: [], offen: null, einheit };
 			ansatzZeigen();
 		} catch (e) { meldung("rot", e.message); }
 	}
@@ -292,19 +391,21 @@
 			<div class="rechts">${esc(kg(z.menge))} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("");
 		app.innerHTML = kopf(r.name + " · " + kg(r.sollmenge), true) + `
 			<div class="panel">${zutaten}${extra}</div>
-			<label id="scanlabel">${ansatz.offen ? "Menge (kg) für " + esc(ansatz.offen.anzeige) : "Gebinde, Behälter oder Silo scannen" + (r.rework_moeglich ? " – auch Rework-Behälter" : "")}</label>
-			<input id="scan" class="feld" autocomplete="off" ${ansatz.offen ? 'inputmode="decimal"' : ""} value="${ansatz.offen ? esc(ansatz.offen.vorschlag) : ""}">
+			${ansatz.offen
+				? zahlFeld("scan", "Menge (kg) für " + esc(ansatz.offen.anzeige), ansatz.offen.vorschlag) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
+				: textFeld("scan", "Gebinde, Behälter oder Silo scannen" + (r.rework_moeglich ? " – auch Rework-Behälter" : ""))}
 			${ansatz.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Gescannt</div>${liste}</div>
 			<div class="reihe"><button class="knopf gruen" data-a="abschluss">Weiter zum Buchen</button></div>` : ""}`;
 		aktionen((a, d) => {
 			if (a === "silo-zutat") return codeGescannt(d.silo);
 			if (a === "weg") { ansatz.zeilen.splice(+d.i, 1); return ansatzZeigen(); }
+			if (a === "abbrechen") { ansatz.offen = null; return ansatzZeigen(); }
 			if (a === "abschluss") return ansatzAbschluss();
 			beiAllgemein(a);
 		});
-		enter("scan", (v, f) => (ansatz.offen ? mengeEingegeben(v) : codeGescannt(v, f)));
+		enter("scan", (v) => (ansatz.offen ? mengeEingegeben(v) : codeGescannt(v)));
 		fokus("scan");
-		if (ansatz.offen) document.getElementById("scan").select();
+		if (ansatz.offen) setTimeout(() => document.getElementById("scan").select(), 40);
 	}
 
 	function codeGescannt(code) {
@@ -312,7 +413,7 @@
 		const r = ansatz.rezept;
 		const passende = r.zutaten.find((z) => z.silo === code);
 		const ziel = passende ? passende.menge - gescannt(passende.artikel) : null;
-		ansatz.offen = { code, anzeige: code, vorschlag: ziel && ziel > 0 ? Math.round(ziel * 1000) / 1000 : "" };
+		ansatz.offen = { code, anzeige: code, vorschlag: ziel && ziel > 0 ? rund(ziel) : "" };
 		ansatzZeigen();
 	}
 
@@ -336,41 +437,69 @@
 	function ansatzAbschluss() {
 		const r = ansatz.rezept;
 		const summe = ansatz.zeilen.reduce((s, z) => s + z.menge, 0);
-		const vorschlag = Math.round(summe * r.ausbeute * 1000) / 1000;
+		const zaehlen = r.einheiten && r.einheiten.length > 1;
+		let einheit = ansatz.einheit || (zaehlen ? r.einheiten[0].einheit : null);
+		const kgVorschlag = rund(summe * r.ausbeute);
+		const vorschlag = zaehlen ? Math.floor(kgVorschlag / faktorVon(r.einheiten, einheit) + 1e-6) : kgVorschlag;
+		const fertigware = r.stufe === "Fertigware";
 		app.innerHTML = kopf(r.name, true) + `
 			<div class="panel"><div class="zeile"><div>Eingewogen</div><div class="rechts">${esc(kg(summe))}</div></div></div>
-			<label>Ausbringung (kg)${r.ausbeute < 0.999 || r.ausbeute > 1.001 ? " – Vorschlag laut Rezept" : ""}</label>
-			<input id="aus" class="feld" inputmode="decimal" value="${esc(vorschlag)}">
-			${r.ausgabe_silo ? `<p class="fehlt">Geht in ${esc(r.ausgabe_silo)}.</p>` : `<label>Zielbehälter / Kiste scannen (optional)</label><input id="scan" class="feld" autocomplete="off">`}
+			${zaehlen ? einheitWahl(r.einheiten, einheit) : ""}
+			${zahlFeld("aus", zaehlen ? `Ausbringung – wie viele <span id="einheit-text">${esc(einheit)}</span>?` : "Ausbringung (kg)" + (r.ausbeute < 0.999 || r.ausbeute > 1.001 ? " – Vorschlag laut Rezept" : ""), vorschlag)}
+			${r.ausgabe_silo ? `<p class="fehlt">Geht in ${esc(r.ausgabe_silo)}.</p>`
+				: fertigware ? textFeld("scan", "Palette scannen (optional)") + `<div class="reihe"><button class="knopf" data-a="neue-palette">+ Neue Palette (Etikett drucken)</button></div>`
+				: textFeld("scan", "Zielbehälter / Kiste scannen (optional)")}
 			<div class="reihe"><button class="knopf" data-a="zurueck-ansatz">← Zutaten</button><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
-		aktionen((a) => {
+		aktionen(async (a, d) => {
+			if (a === "einheit") { einheit = d.e; einheitSetzen(einheit); document.getElementById("einheit-text").textContent = einheit; return fokus("aus"); }
 			if (a === "zurueck-ansatz") return ansatzZeigen();
-			if (a === "buchen") return ansatzBuchen();
+			if (a === "buchen") return ansatzBuchen(zaehlen ? einheit : null);
+			if (a === "neue-palette") {
+				try {
+					const p = await api("palette_neu", { station: zustand.station, typ: "Lagerpalette" });
+					document.getElementById("scan").value = p.nve;
+					etikettDrucken(p.nve);
+					meldung("gruen", "Neue Palette " + p.nve, "Etikett wird gedruckt.");
+				} catch (e) { meldung("rot", e.message); }
+				return;
+			}
 			beiAllgemein(a);
 		});
-		enter("scan", () => ansatzBuchen());
-		fokus(r.ausgabe_silo ? "aus" : "scan");
+		enter("aus", () => fokus(document.getElementById("scan") ? "scan" : "aus"));
+		enter("scan", () => {});
+		fokus("aus");
+		setTimeout(() => { const f = document.getElementById("aus"); if (f) f.select(); }, 40);
 	}
 
-	async function ansatzBuchen() {
+	async function ansatzBuchen(einheit) {
 		const knopf = app.querySelector('[data-a="buchen"]');
 		if (knopf) { knopf.disabled = true; knopf.textContent = "Bucht …"; }
-		const behaelter = document.getElementById("scan");
+		const ziel = document.getElementById("scan");
+		const wert = zahl(document.getElementById("aus").value);
 		try {
 			const e = await api("herstellen", {
 				station: zustand.station,
 				ziel: ansatz.rezept.artikel,
 				zeilen: ansatz.zeilen.map((z) => ({ code: z.code, menge: z.menge })),
-				ausbringung: zahl(document.getElementById("aus").value),
-				ziel_behaelter: behaelter ? behaelter.value.trim() || null : null,
+				ausbringung: einheit ? null : wert,
+				anzahl: einheit ? wert : null,
+				einheit,
+				ziel_behaelter: ziel ? ziel.value.trim() || null : null,
 			});
-			ergebnis(e.name, [
-				"Neue Charge: " + e.charge,
-				"Menge: " + kg(e.menge),
+			const zeilen = [
+				(e.palette || e.anzahl ? "Neues Los: " : "Neue Charge: ") + e.charge,
+				e.anzahl ? "Menge: " + stk(e.anzahl, e.einheit) + " (" + kg(e.menge) + ")" : "Menge: " + kg(e.menge),
 				e.behaelter ? "Behälter: " + e.behaelter : "",
+				e.palette ? "Auf Palette: " + e.palette : "",
 				e.mhd ? "Verwendbar bis / MHD: " + e.mhd : "",
 				e.gesperrt ? "Gesperrt bis zur Freigabe durch die QS" : "",
-			].filter(Boolean), e.hinweise);
+			].filter(Boolean);
+			const extra = e.palette ? `<button class="knopf" data-a="etikett">Paletten-Etikett drucken</button><button class="knopf" data-a="palette">Palette anzeigen</button>` : "";
+			ergebnis(e.name, zeilen, e.hinweise, extra)((a) => {
+				if (a === "etikett") return etikettDrucken(e.palette);
+				if (a === "palette") return paletteLaden(e.palette);
+				beiAllgemein(a);
+			});
 		} catch (err) {
 			if (knopf) { knopf.disabled = false; knopf.textContent = "Buchen"; }
 			meldung("rot", err.message);
@@ -389,11 +518,11 @@
 	}
 
 	function reworkErfassen(artikel, name) {
-		app.innerHTML = kopf(name, true) + `
-			<label>Herkunft scannen: Teigbehälter, Kiste oder Charge</label><input id="scan" class="feld" autocomplete="off">
-			<label>Menge (kg)</label><input id="menge" class="feld" inputmode="decimal">
-			<label>Rework-Behälter scannen (optional)</label><input id="ziel" class="feld" autocomplete="off">
-			<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
+		app.innerHTML = kopf(name, true) +
+			textFeld("scan", "Herkunft scannen: Teigbehälter, Kiste oder Charge") +
+			zahlFeld("menge", "Menge (kg)") +
+			textFeld("ziel", "Rework-Behälter scannen (optional)") +
+			`<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
 		aktionen(async (a) => {
 			if (a !== "buchen") return beiAllgemein(a);
 			try {
@@ -404,7 +533,7 @@
 					rework_artikel: artikel,
 					ziel_behaelter: document.getElementById("ziel").value.trim() || null,
 				});
-				ergebnis(e.name, ["Neue Rework-Charge: " + e.charge, "Menge: " + kg(e.menge), e.behaelter ? "Behälter: " + e.behaelter : "", e.mhd ? "Verwendbar bis: " + e.mhd : ""].filter(Boolean), e.hinweise);
+				ergebnis(e.name, ["Neue Rework-Charge: " + e.charge, "Menge: " + kg(e.menge), e.behaelter ? "Behälter: " + e.behaelter : "", e.mhd ? "Verwendbar bis: " + e.mhd : ""].filter(Boolean), e.hinweise)(beiAllgemein);
 			} catch (err) { meldung("rot", err.message); }
 		});
 		enter("scan", () => fokus("menge"));
@@ -425,10 +554,10 @@
 	}
 
 	function wareneingangErfassen(art) {
-		app.innerHTML = kopf(art.name, true) + `
-			<label>Charge des Lieferanten (scannen oder eingeben)</label><input id="scan" class="feld" autocomplete="off">
-			<label>Menge (kg)</label><input id="menge" class="feld" inputmode="decimal">
-			${art.has_expiry_date ? `<label>MHD</label><input id="mhd" class="feld" type="date">` : ""}
+		app.innerHTML = kopf(art.name, true) +
+			textFeld("scan", "Charge des Lieferanten (scannen oder eingeben)") +
+			zahlFeld("menge", "Menge (kg)") +
+			`${art.has_expiry_date ? `<label>MHD</label><input id="mhd" class="feld" type="date">` : ""}
 			${art.silo ? `<label>Wohin?</label><select id="ziel" class="feld"><option value="${esc(art.silo)}">ins ${esc(art.silo)}</option><option value="">als Sackware ins Lager</option></select>` : ""}
 			<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
 		aktionen(async (a) => {
@@ -445,11 +574,146 @@
 					silo: ziel ? ziel.value || null : null,
 				});
 				ergebnis(e.name, ["Charge: " + e.charge, "Menge: " + kg(e.menge), "Ort: " + e.lager, e.mhd ? "MHD: " + e.mhd : ""].filter(Boolean),
-					(e.gesperrt ? ["Gesperrt bis zur Freigabe durch die QS (" + (e.sperrgrund || "") + ")"] : []).concat(e.hinweise || []));
+					(e.gesperrt ? ["Gesperrt bis zur Freigabe durch die QS (" + (e.sperrgrund || "") + ")"] : []).concat(e.hinweise || []))(beiAllgemein);
 			} catch (err) { meldung("rot", err.message); }
 		});
 		enter("scan", () => fokus("menge"));
+		enter("menge", () => { const m = document.getElementById("mhd"); if (m) m.focus(); });
 		fokus("scan");
+	}
+
+	// ------------------------------------------------------------------ Anzahl-Dialog (Kartons/Beutel)
+	// Zeigt Anzahl mit Ziffernblock und Einheiten-Wahl. fertig(anzahl, einheit) beim OK.
+	function anzahlAbfragen(titel, unterzeile, einheiten, start, fertig, zurueck) {
+		let einheit = start && start.einheit ? start.einheit : einheiten[0].einheit;
+		app.innerHTML = kopf(titel, true) + (unterzeile ? `<div class="panel">${unterzeile}</div>` : "") +
+			einheitWahl(einheiten, einheit) +
+			zahlFeld("anzahl", `Wie viele <span id="einheit-text">${esc(einheit)}</span>?`, start && start.anzahl != null ? rund(start.anzahl) : "");
+		aktionen((a, d) => {
+			if (a === "einheit") { einheit = d.e; einheitSetzen(einheit); document.getElementById("einheit-text").textContent = einheit; return fokus("anzahl"); }
+			if (a === "zurueck" && zurueck) return zurueck();
+			beiAllgemein(a);
+		});
+		enter("anzahl", (v) => {
+			const n = zahl(v);
+			if (n <= 0) return meldung("rot", "Bitte eine Anzahl eingeben.");
+			fertig(n, einheit);
+		});
+		fokus("anzahl");
+		setTimeout(() => { const f = document.getElementById("anzahl"); if (f) f.select(); }, 40);
+	}
+
+	// ------------------------------------------------------------------ Paletten
+	function palettenStart() {
+		app.innerHTML = kopf("Paletten", true) + textFeld("scan", "Palette scannen (NVE)") + `
+			<div class="raster" style="margin-top:16px">
+				<button class="knopf blau" data-a="neu" data-typ="Lagerpalette">+ Neue Lagerpalette<small>für die Verpackung</small></button>
+				<button class="knopf blau" data-a="neu" data-typ="Versandpalette">+ Neue Versandpalette<small>zum Kommissionieren</small></button>
+			</div>`;
+		aktionen(async (a, d) => {
+			if (a === "neu") {
+				try {
+					const p = await api("palette_neu", { station: zustand.station, typ: d.typ });
+					etikettDrucken(p.nve);
+					paletteZeigen(p, "Neue " + p.art + " angelegt, Etikett wird gedruckt.");
+				} catch (e) { meldung("rot", e.message); }
+				return;
+			}
+			beiAllgemein(a);
+		});
+		enter("scan", (v) => v && paletteLaden(v));
+		fokus("scan");
+	}
+
+	async function paletteLaden(code, hinweis) {
+		try { paletteZeigen(await api("palette_info", { code }), hinweis); } catch (e) { meldung("rot", e.message); }
+	}
+
+	function statusMarke(s) {
+		const farbe = { Offen: "gruen", Geschlossen: "", Versendet: "orange", Leer: "" }[s] || "";
+		return `<span class="marke ${farbe}">${esc(s)}</span>`;
+	}
+
+	function positionenHtml(p, aktion) {
+		if (!p.positionen.length) return `<p class="fehlt">Palette ist leer.</p>`;
+		return p.positionen.map((x, i) => `<button class="pos" ${aktion ? `data-a="${aktion}" data-i="${i}"` : "disabled"}>
+			<span>${esc(x.name)}<small>Los ${esc(x.charge)}${x.mhd ? " · MHD " + esc(x.mhd) : ""}${x.gesperrt ? " · GESPERRT" : ""}</small></span>
+			<span class="rechts">${esc(stk(x.anzahl, x.einheit))}<small>${esc(kg(x.menge))}</small></span></button>`).join("");
+	}
+
+	function paletteZeigen(p, hinweis) {
+		const aktiv = p.status === "Offen" || p.status === "Geschlossen" || p.status === "Leer";
+		app.innerHTML = kopf("Palette", true) + `
+			<div class="panel"><div class="nve">${esc(p.nve.slice(0, -6))}<span style="color:#6ea0ff">${esc(p.nve.slice(-6))}</span> ${statusMarke(p.status)}
+				<br><small>${esc(p.art)}${p.kartons ? " · " + esc(p.kartons) : ""}${p.menge ? " · " + esc(kg(p.menge)) : ""}${p.lieferschein ? " · Lieferschein " + esc(p.lieferschein) : ""}</small></div>
+				${p.test ? `<div class="meldung orange">Test-NVE: Etikett nicht an Kunden geben (GS1-Basisnummer fehlt in den Einstellungen).</div>` : ""}
+			</div>
+			${aktiv && p.positionen.length ? `<p class="fehlt">Position antippen, um Kartons auf eine andere Palette umzupacken.</p>` : ""}
+			${positionenHtml(p, aktiv ? "pos" : null)}
+			<div class="reihe">
+				${aktiv ? `<button class="knopf blau" data-a="laden">+ Lose Kartons laden<small>Los scannen</small></button>` : ""}
+				<button class="knopf" data-a="etikett">Etikett drucken</button>
+				${p.status === "Offen" ? `<button class="knopf" data-a="schliessen">Palette schließen</button>` : ""}
+				${p.status === "Geschlossen" ? `<button class="knopf" data-a="oeffnen">Wieder öffnen</button>` : ""}
+			</div>`;
+		if (hinweis) meldung("gruen", hinweis);
+		aktionen(async (a, d) => {
+			try {
+				if (a === "etikett") return etikettDrucken(p.nve);
+				if (a === "schliessen") return paletteZeigen(await api("palette_schliessen", { station: zustand.station, palette: p.nve }), "Palette geschlossen.");
+				if (a === "oeffnen") return paletteZeigen(await api("palette_oeffnen", { station: zustand.station, palette: p.nve }), "Palette geöffnet.");
+				if (a === "laden") return kartonsLaden(p);
+				if (a === "pos") return umpacken(p, p.positionen[+d.i]);
+			} catch (e) { return meldung("rot", e.message); }
+			if (a === "zurueck") return palettenStart();
+			beiAllgemein(a);
+		});
+	}
+
+	function kartonsLaden(p) {
+		app.innerHTML = kopf("Auf Palette …" + p.nve.slice(-6), true) + textFeld("scan", "Los scannen (Etikett am Karton)");
+		aktionen((a) => (a === "zurueck" ? paletteZeigen(p) : beiAllgemein(a)));
+		enter("scan", async (v) => {
+			if (!v) return;
+			try {
+				const i = await api("info", { code: v });
+				if (i.typ !== "charge") throw new Error("Bitte das Los scannen, nicht " + (i.typ === "palette" ? "eine Palette" : "einen Behälter") + ".");
+				const einheiten = await api("einheiten", { artikel: i.artikel });
+				anzahlAbfragen("Los " + i.charge, esc(i.artikelname) + (i.mhd ? " · MHD " + esc(i.mhd) : ""), einheiten, null, async (n, e) => {
+					try {
+						paletteZeigen(await api("palette_beladen", { station: zustand.station, palette: p.nve, code: i.charge, anzahl: n, einheit: e }), stk(n, e) + " geladen.");
+					} catch (err) { meldung("rot", err.message); }
+				}, () => paletteZeigen(p));
+			} catch (e) { meldung("rot", e.message); }
+		});
+		fokus("scan");
+	}
+
+	function umpacken(p, pos) {
+		anzahlAbfragen("Umpacken", `${esc(pos.name)} · Los ${esc(pos.charge)}<br><span class="fehlt">Auf der Palette: ${esc(stk(pos.anzahl, pos.einheit))}</span>`,
+			[{ einheit: pos.einheit, faktor: 1 }], { einheit: pos.einheit, anzahl: pos.anzahl }, (n) => {
+				app.innerHTML = kopf("Umpacken: " + stk(n, pos.einheit), true) + textFeld("scan", "Zielpalette scannen") +
+					`<div class="reihe"><button class="knopf blau" data-a="neu">+ Neue Versandpalette</button></div>`;
+				const los = async (nach) => {
+					try {
+						const ziel = await api("palette_umpacken", { station: zustand.station, von: p.nve, nach, charge: pos.charge, anzahl: n, einheit: pos.einheit });
+						paletteZeigen(ziel, stk(n, pos.einheit) + " umgepackt.");
+					} catch (e) { meldung("rot", e.message); }
+				};
+				aktionen(async (a) => {
+					if (a === "neu") {
+						try {
+							const neu = await api("palette_neu", { station: zustand.station, typ: "Versandpalette" });
+							etikettDrucken(neu.nve);
+							return los(neu.nve);
+						} catch (e) { return meldung("rot", e.message); }
+					}
+					if (a === "zurueck") return paletteZeigen(p);
+					beiAllgemein(a);
+				});
+				enter("scan", (v) => v && los(v));
+				fokus("scan");
+			}, () => paletteZeigen(p));
 	}
 
 	// ------------------------------------------------------------------ Lieferung
@@ -462,43 +726,81 @@
 			document.getElementById("liste").innerHTML = liste.map((k) => `<button class="knopf" data-a="kunde" data-name="${esc(k.name)}" data-titel="${esc(k.customer_name)}">${esc(k.customer_name)}</button>`).join("") || "Keine Kunden angelegt.";
 			aktionen((a, d) => {
 				if (a !== "kunde") return beiAllgemein(a);
-				lieferung = { kunde: d.name, titel: d.titel, zeilen: [], offen: null };
+				lieferung = { kunde: d.name, titel: d.titel, zeilen: [] };
 				lieferungZeigen();
 			});
 		} catch (e) { meldung("rot", e.message); }
 	}
 
+	function lieferungZeilePlus(anfrage, positionen) {
+		lieferung.zeilen.push({ anfrage, positionen });
+		lieferungZeigen();
+		const n = positionen.reduce((s, x) => s + x.anzahl, 0);
+		meldung("gruen", "OK: " + (anfrage.ganz ? "ganze Palette " + anfrage.palette.slice(-6) : positionen[0].name) + " · " + stk(n, positionen[0].einheit));
+	}
+
 	function lieferungZeigen() {
-		const liste = lieferung.zeilen.map((z, i) => `<div class="zeile"><div>${esc(z.name)}<br><span class="fehlt" style="font-size:16px">Los ${esc(z.charge)}</span></div>
-			<div class="rechts">${esc(kg(z.menge))} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("");
-		app.innerHTML = kopf("Lieferung an " + lieferung.titel, true) + `
-			<label>${lieferung.offen ? "Menge (kg) für Los " + esc(lieferung.offen) : "Los scannen"}</label>
-			<input id="scan" class="feld" autocomplete="off" ${lieferung.offen ? 'inputmode="decimal"' : ""}>
-			${lieferung.zeilen.length ? `<div class="panel">${liste}</div><div class="reihe"><button class="knopf gruen" data-a="buchen">Lieferschein buchen</button></div>` : ""}`;
+		const liste = lieferung.zeilen.map((z, i) => z.positionen.map((x, j) => `<div class="zeile"><div>${esc(x.name)}<br><span class="fehlt" style="font-size:16px">Los ${esc(x.charge)}${x.palette ? " · Palette …" + esc(x.palette.slice(-6)) : " · lose"}</span></div>
+			<div class="rechts">${esc(stk(x.anzahl, x.einheit))} ${j === 0 ? `<button class="x" data-a="weg" data-i="${i}">✕</button>` : ""}</div></div>`).join("")).join("");
+		app.innerHTML = kopf("Lieferung an " + lieferung.titel, true) +
+			textFeld("scan", "Palette oder Los scannen") +
+			(lieferung.zeilen.length ? `<div class="panel">${liste}</div><div class="reihe"><button class="knopf gruen" data-a="buchen">Lieferschein buchen</button></div>` : "");
 		aktionen(async (a, d) => {
 			if (a === "weg") { lieferung.zeilen.splice(+d.i, 1); return lieferungZeigen(); }
 			if (a !== "buchen") return beiAllgemein(a);
+			const knopf = app.querySelector('[data-a="buchen"]');
+			if (knopf) { knopf.disabled = true; knopf.textContent = "Bucht …"; }
 			try {
-				const e = await api("lieferung", { station: zustand.station, kunde: lieferung.kunde, zeilen: lieferung.zeilen.map((z) => ({ code: z.code, menge: z.menge })) });
-				ergebnis("Lieferung", ["Lieferschein: " + e.lieferschein, "Kunde: " + e.kunde, e.positionen + " Position(en), " + kg(e.menge)], e.hinweise);
-			} catch (err) { meldung("rot", err.message); }
-		});
-		enter("scan", async (v) => {
-			if (!v) return;
-			if (!lieferung.offen) { lieferung.offen = v; return lieferungZeigen(); }
-			try {
-				const z = await api("pruefe_lieferzeile", { station: zustand.station, code: lieferung.offen, menge: zahl(v) });
-				lieferung.zeilen.push(z);
-				lieferung.offen = null;
-				lieferungZeigen();
-				meldung("gruen", "OK: " + z.name + " " + kg(z.menge));
+				const e = await api("lieferung", { station: zustand.station, kunde: lieferung.kunde, zeilen: lieferung.zeilen.map((z) => z.anfrage) });
+				ergebnis("Lieferung", ["Lieferschein: " + e.lieferschein, "Kunde: " + e.kunde, e.positionen + " Position(en), " + kg(e.menge),
+					e.paletten.length ? "Paletten: " + e.paletten.join(", ") : ""].filter(Boolean), e.hinweise)(beiAllgemein);
 			} catch (err) {
-				lieferung.offen = null;
-				lieferungZeigen();
+				if (knopf) { knopf.disabled = false; knopf.textContent = "Lieferschein buchen"; }
 				meldung("rot", err.message);
 			}
 		});
+		enter("scan", async (v) => {
+			if (!v) return;
+			try {
+				const i = await api("info", { code: v });
+				if (i.typ === "palette") return lieferPalette(i);
+				if (i.typ !== "charge") throw new Error("Bitte eine Palette oder ein Los scannen.");
+				const einheiten = await api("einheiten", { artikel: i.artikel });
+				anzahlAbfragen("Lose Kartons: Los " + i.charge, esc(i.artikelname) + (i.mhd ? " · MHD " + esc(i.mhd) : ""), einheiten, null, async (n, e) => {
+					const anfrage = { code: i.charge, anzahl: n, einheit: e };
+					try { lieferungZeilePlus(anfrage, await api("pruefe_lieferzeile", { station: zustand.station, ...anfrage })); }
+					catch (err) { lieferungZeigen(); meldung("rot", err.message); }
+				}, lieferungZeigen);
+			} catch (e) { meldung("rot", e.message); }
+		});
 		fokus("scan");
+	}
+
+	function lieferPalette(p) {
+		const aktiv = p.status === "Offen" || p.status === "Geschlossen";
+		app.innerHTML = kopf("Palette …" + p.nve.slice(-6), true) +
+			`<div class="panel"><div class="nve">${esc(p.nve)} ${statusMarke(p.status)}<br><small>${esc(p.kartons || "")} · ${esc(kg(p.menge || 0))}</small></div></div>` +
+			(aktiv && p.positionen.length ? `<div class="reihe"><button class="knopf gruen" data-a="ganz">Ganze Palette liefern</button></div>
+				<p class="fehlt">Oder Position antippen, um nur einzelne Kartons zu nehmen (Palette wird angebrochen).</p>` : "") +
+			positionenHtml(p, aktiv ? "pos" : null);
+		aktionen(async (a, d) => {
+			if (a === "zurueck") return lieferungZeigen();
+			if (a === "ganz") {
+				const anfrage = { palette: p.nve, ganz: 1 };
+				try { return lieferungZeilePlus(anfrage, await api("pruefe_lieferzeile", { station: zustand.station, ...anfrage })); }
+				catch (e) { return meldung("rot", e.message); }
+			}
+			if (a === "pos") {
+				const pos = p.positionen[+d.i];
+				return anzahlAbfragen("Von Palette …" + p.nve.slice(-6), `${esc(pos.name)} · Los ${esc(pos.charge)}<br><span class="fehlt">Auf der Palette: ${esc(stk(pos.anzahl, pos.einheit))}</span>`,
+					[{ einheit: pos.einheit, faktor: 1 }], { einheit: pos.einheit }, async (n) => {
+						const anfrage = { palette: p.nve, charge: pos.charge, anzahl: n, einheit: pos.einheit };
+						try { lieferungZeilePlus(anfrage, await api("pruefe_lieferzeile", { station: zustand.station, ...anfrage })); }
+						catch (e) { lieferungZeigen(); meldung("rot", e.message); }
+					}, () => lieferPalette(p));
+			}
+			beiAllgemein(a);
+		});
 	}
 
 	// ------------------------------------------------------------------ Silo leer
@@ -524,20 +826,29 @@
 			box.remove();
 			try {
 				const e = await api("silo_leer", { station: zustand.station, silo });
-				ergebnis("Silo leer", [silo + " ist leer gemeldet.", "Rechnerischer Rest ausgebucht: " + kg(e.rest)], e.hinweise);
+				ergebnis("Silo leer", [silo + " ist leer gemeldet.", "Rechnerischer Rest ausgebucht: " + kg(e.rest)], e.hinweise)(beiAllgemein);
 			} catch (err) { meldung("rot", err.message); }
 		};
 	}
 
 	// ------------------------------------------------------------------ Info
 	function infoScan() {
-		app.innerHTML = kopf("Info-Scan", true) + `<label>Charge, Behälter oder Silo scannen</label><input id="scan" class="feld" autocomplete="off"><div id="info"></div>`;
+		app.innerHTML = kopf("Info-Scan", true) + textFeld("scan", "Charge, Behälter, Silo oder Palette scannen") + `<div id="info"></div>`;
 		aktionen(beiAllgemein);
 		enter("scan", async (v, f) => {
 			if (!v) return;
 			f.value = "";
 			try {
 				const r = await api("info", { code: v });
+				if (r.typ === "palette") {
+					document.getElementById("info").innerHTML = `<div class="meldung gruen">Palette ${esc(r.nve)}</div>
+						<div class="panel"><div class="zeile"><div class="fehlt">Art / Status</div><div class="rechts">${esc(r.art)} · ${esc(r.status)}</div></div>
+						<div class="zeile"><div class="fehlt">Inhalt</div><div class="rechts">${esc(r.kartons || "leer")}</div></div>
+						${r.lieferschein ? `<div class="zeile"><div class="fehlt">Lieferschein</div><div class="rechts">${esc(r.lieferschein)} · ${esc(r.kunde || "")}</div></div>` : ""}</div>` +
+						positionenHtml(r, null);
+					ton(true);
+					return;
+				}
 				const zeilen = [];
 				if (r.typ === "behaelter") zeilen.push(["Behälter", r.behaelter + " (" + r.behaelter_typ + ")"], ["Status", r.status]);
 				if (r.typ === "silo") zeilen.push(["Silo/Tank", r.silo]);

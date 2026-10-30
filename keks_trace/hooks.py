@@ -20,11 +20,16 @@ doc_events = {
 		"before_validate": "keks_trace.pruefungen.pruefe_stock_entry",
 		# Genealogie-Kanten, Ursprungs-/Backtag-/MHD-Daten und Behälterinhalt.
 		"on_submit": ["keks_trace.genealogie.on_submit", "keks_trace.traeger.on_submit"],
+		"before_cancel": "keks_trace.palette.se_before_cancel",
 		"on_cancel": ["keks_trace.genealogie.on_cancel", "keks_trace.traeger.on_cancel"],
 		"on_trash": "keks_trace.schutz.beleg_on_trash",
 	},
 	"Delivery Note": {
 		"before_validate": "keks_trace.sperre.pruefe_lieferung",
+		# Paletten: Inhalt prüfen, beim Buchen abbuchen, beim Storno zurück
+		"validate": "keks_trace.palette.pruefe_lieferung",
+		"on_submit": "keks_trace.palette.lieferung_on_submit",
+		"on_cancel": "keks_trace.palette.lieferung_on_cancel",
 		"on_trash": "keks_trace.schutz.beleg_on_trash",
 	},
 	"Purchase Receipt": {"on_trash": "keks_trace.schutz.beleg_on_trash"},

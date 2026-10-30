@@ -8,7 +8,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, nowdate
 
-from keks_trace import demo, sperre, terminal
+from keks_trace import demo, palette, sperre, terminal
 from keks_trace.terminal import TerminalFehler
 
 
@@ -160,3 +160,119 @@ class TestTerminal(IntegrationTestCase):
 		i = terminal.info(self.butter["charge"])
 		self.assertEqual(i["typ"], "charge")
 		self.assertEqual(i["artikel"], "KT-BUTTER")
+
+	# ------------------------------------------------------------------ Paletten
+	def _verpacken(self, kartons=20, palette=None):
+		wl = demo.neue_charge("KT-WL-KAKAO-NOUGAT", f"WLP{_hash()}", nowdate())
+		demo.buchen(
+			self.ctx, "Material Receipt", nowdate(), "05:00:00", ausgaenge=[("KT-WL-KAKAO-NOUGAT", wl, 60)]
+		)
+		sperre.freigeben(wl, "Test")
+		fol = demo.neue_charge("KT-FOLIE", f"FOLP{_hash()}")
+		demo.buchen(self.ctx, "Material Receipt", nowdate(), "05:00:00", ausgaenge=[("KT-FOLIE", fol, 5)])
+		return terminal.herstellen(
+			"Verpackung",
+			"KT-FW-KAKAO-NOUGAT",
+			[{"code": wl, "menge": 48}, {"code": fol, "menge": 1}],
+			anzahl=kartons,
+			einheit="Karton",
+			ziel_behaelter=palette,
+		)
+
+	def test_10_nve(self):
+		nve, _test = palette.nve_neu()
+		self.assertEqual(len(nve), 18)
+		self.assertTrue(nve.isdigit())
+		self.assertEqual(int(nve[-1]), palette.pruefziffer(nve[:-1]))
+		self.assertEqual(palette.pruefziffer("37610425002123456"), 9)  # Beispiel aus der GS1-Spezifikation
+		self.assertEqual(palette.nve_aus_scan("]C100" + nve), nve)
+		self.assertEqual(palette.nve_aus_scan("(00)" + nve), nve)
+
+	def test_11_verpacken_auf_palette_umpacken_liefern(self):
+		lp = terminal.palette_neu("Verpackung")["nve"]
+		e = self._verpacken(20, lp)
+		self.assertEqual(e["palette"], lp)
+		self.assertAlmostEqual(e["menge"], 48)
+		self.assertTrue(e["charge"].startswith("L"))
+		i = terminal.palette_info(lp)
+		self.assertEqual(
+			[(p["charge"], p["anzahl"], p["einheit"]) for p in i["positionen"]], [(e["charge"], 20, "Karton")]
+		)
+		bewegung = frappe.db.get_value(
+			"Paletten Bewegung", {"palette": lp}, ["art", "beleg", "station"], as_dict=True
+		)
+		self.assertEqual(
+			(bewegung.art, bewegung.beleg, bewegung.station), ("Verpackung", e["buchung"], "Verpackung")
+		)
+
+		# Alles steht auf der Palette: ohne Palette kann nichts geliefert werden
+		with self.assertRaises(TerminalFehler):
+			terminal.lieferung(
+				"Versand", self.ctx.kunde, [{"code": e["charge"], "anzahl": 1, "einheit": "Karton"}]
+			)
+		# Fertigung kann nicht storniert werden, solange das Los auf der Palette steht
+		with self.assertRaisesRegex(frappe.ValidationError, "steht auf Palette"):
+			frappe.get_doc("Stock Entry", e["buchung"]).cancel()
+
+		# Kommissionieren: 5 Kartons auf eine Versandpalette
+		vp = terminal.palette_neu("Versand", "Versandpalette")["nve"]
+		terminal.palette_umpacken("Versand", lp, vp, e["charge"], 5, "Karton")
+		self.assertEqual(terminal.palette_info(lp)["positionen"][0]["anzahl"], 15)
+		with self.assertRaises(palette.PalettenFehler):
+			terminal.palette_umpacken("Versand", lp, vp, e["charge"], 99, "Karton")
+
+		# Liefern: ganze Versandpalette und 3 Kartons von der Lagerpalette (Anbruch), per GS1-Scan
+		ls = terminal.lieferung(
+			"Versand",
+			self.ctx.kunde,
+			[
+				{"palette": "]C100" + vp, "ganz": 1},
+				{"palette": lp, "charge": e["charge"], "anzahl": 3, "einheit": "Karton"},
+			],
+		)
+		dn = frappe.get_doc("Delivery Note", ls["lieferschein"])
+		self.assertEqual(
+			sorted((r.kt_palette, r.qty, r.uom) for r in dn.items),
+			sorted([(vp, 5, "Karton"), (lp, 3, "Karton")]),
+		)
+		self.assertAlmostEqual(sum(r.stock_qty for r in dn.items), 8 * 2.4)
+		self.assertEqual(
+			frappe.db.get_value("Palette", vp, ["status", "lieferschein"]), ("Versendet", dn.name)
+		)
+		self.assertEqual(terminal.palette_info(lp)["positionen"][0]["anzahl"], 12)
+		with self.assertRaises(TerminalFehler):
+			terminal.lieferung("Versand", self.ctx.kunde, [{"palette": vp, "ganz": 1}])
+
+		# Rückverfolgung zeigt die Paletten des Loses
+		pal = {p.palette for p in palette.paletten_fuer([e["charge"]])}
+		self.assertEqual(pal, {lp, vp})
+
+		# Storno des Lieferscheins: Kartons sind wieder auf den Paletten
+		dn.cancel()
+		self.assertEqual(frappe.db.get_value("Palette", vp, "status"), "Geschlossen")
+		self.assertEqual(terminal.palette_info(vp)["positionen"][0]["anzahl"], 5)
+		self.assertEqual(terminal.palette_info(lp)["positionen"][0]["anzahl"], 15)
+
+	def test_12_lose_kartons_und_palette_geschlossen(self):
+		e = self._verpacken(20)  # ohne Palette: 20 lose Kartons
+		lp = terminal.palette_neu("Verpackung")["nve"]
+		terminal.palette_beladen("Verpackung", lp, e["charge"], 12, "Karton")
+		with self.assertRaisesRegex(palette.PalettenFehler, "lose"):
+			terminal.palette_beladen("Verpackung", lp, e["charge"], 9, "Karton")
+		terminal.palette_schliessen("Verpackung", lp)
+		with self.assertRaisesRegex(palette.PalettenFehler, "geschlossen"):
+			terminal.palette_beladen("Verpackung", lp, e["charge"], 1, "Karton")
+		# 8 Kartons sind noch lose und dürfen ohne Palette raus, 9 nicht
+		with self.assertRaises(TerminalFehler):
+			terminal.lieferung(
+				"Versand", self.ctx.kunde, [{"code": e["charge"], "anzahl": 9, "einheit": "Karton"}]
+			)
+		ls = terminal.lieferung(
+			"Versand", self.ctx.kunde, [{"code": e["charge"], "anzahl": 16, "einheit": "Beutel"}]
+		)
+		self.assertTrue(ls["lieferschein"])
+		# Bewegungen sind unveränderbar
+		b = frappe.get_last_doc("Paletten Bewegung", filters={"palette": lp})
+		b.anzahl = 1
+		with self.assertRaises(frappe.ValidationError):
+			b.save()

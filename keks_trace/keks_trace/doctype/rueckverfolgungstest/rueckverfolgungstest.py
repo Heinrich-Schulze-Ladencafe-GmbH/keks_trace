@@ -59,6 +59,7 @@ class Rueckverfolgungstest(Document):
 				"vorwaerts": vor["chargen"],
 				"rueckwaerts": rueck["chargen"],
 				"kunden": vor.get("kunden", []),
+				"paletten": vor.get("paletten", []),
 				"bilanzen": bilanzen,
 			},
 			default=str,
@@ -87,6 +88,12 @@ def _bericht(test, vor, rueck, bilanzen):
 		f"  {k.kundenname or k.kunde}  {k.lieferschein}  {formatdate(k.lieferdatum)}  {k.charge}  {flt(k.menge, 3)}"
 		for k in vor.get("kunden", [])
 	] or ["  -"]
+	if vor.get("paletten"):
+		z += ["", _("Paletten (NVE):")]
+		z += [
+			f"  {p.palette}  {p.charge}  {p.status}  noch {flt(p.anzahl_jetzt, 3):g} {p.einheit}  {p.lieferschein or ''}"
+			for p in vor["paletten"]
+		]
 	z += ["", _("Rückwärts ({0} Chargen):").format(len(rueck["chargen"]))]
 	z += [
 		f"  Gen {c['generation']}  {c['charge']}  {c.get('stufe') or ''}  {c.get('lieferant') or ''}"

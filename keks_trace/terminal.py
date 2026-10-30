@@ -12,8 +12,9 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import flt, formatdate, getdate, now_datetime, nowdate
+from frappe.utils import cint, flt, formatdate, getdate, now_datetime, nowdate
 
+from keks_trace import palette as paletten
 from keks_trace.install import REWORK_ZIELE
 from keks_trace.utils import allergene, artikel_stufe
 
@@ -123,6 +124,7 @@ def rezept(artikel: str, menge: float | None = None) -> dict:
 		"zutaten": zutaten,
 		"rework_moeglich": artikel_stufe(artikel) in REWORK_ZIELE,
 		"ausgabe_silo": silos.get(artikel),
+		"einheiten": paletten.einheiten(artikel) if artikel_stufe(artikel) == "Fertigware" else [],
 	}
 
 
@@ -208,6 +210,10 @@ def aufloesen(code: str) -> dict:
 	if not code:
 		_fehler(_("Leerer Scan."))
 
+	nve = paletten.finde(code)
+	if nve:
+		return {"typ": "palette", "code": nve, "palette": nve}
+
 	if frappe.db.exists("Produkttraeger", code):
 		t = frappe.db.get_value(
 			"Produkttraeger", code, ["name", "typ", "status", "charge", "artikel", "menge"], as_dict=True
@@ -247,7 +253,7 @@ def aufloesen(code: str) -> dict:
 			"inhalt": flt(sum(lager.values()), 3),
 		}
 
-	_fehler(_("Code {0} ist unbekannt (kein Behälter, Silo oder Charge).").format(frappe.bold(code)))
+	_fehler(_("Code {0} ist unbekannt (kein Behälter, Silo, Palette oder Charge).").format(frappe.bold(code)))
 
 
 @frappe.whitelist()
@@ -256,6 +262,9 @@ def info(code: str) -> dict:
 	from keks_trace import silo as silo_modul
 
 	r = aufloesen(code)
+	if r["typ"] == "palette":
+		r.update(paletten.info(r["palette"]))
+		return r
 	if r["typ"] == "silo":
 		i = silo_modul.info(r["silo"])
 		r.update({"bestand": i["bestand"], "moeglich_enthalten": i["moeglich_enthalten"]})
@@ -330,6 +339,8 @@ def _zeile(code, menge, ziel=None, erlaubt=None):
 	if menge <= EPS:
 		_fehler(_("Bitte eine Menge größer 0 eingeben."))
 	r = aufloesen(code)
+	if r["typ"] == "palette":
+		_fehler(_("{0} ist eine Palette. Bitte das Los oder die Kiste scannen.").format(r["code"]))
 	artikel = r.get("artikel")
 	if not artikel:
 		_fehler(_("Behälter {0} ist leer.").format(r["code"]))
@@ -397,7 +408,9 @@ def pruefe_zeile(station: str, ziel: str, code: str, menge: float) -> dict:
 
 def _neue_charge(artikel, herstelldatum=None, charge_id=None, lieferant=None, verfall=None):
 	if not charge_id:
-		praefix = f"{artikel}-{now_datetime().strftime('%y%m%d')}-"
+		# Fertigware bekommt eine kurze Los-Nummer (passt auf Beutel und ins GS1-Etikett)
+		kurz = artikel_stufe(artikel) == "Fertigware"
+		praefix = ("L" if kurz else f"{artikel}-") + f"{now_datetime().strftime('%y%m%d')}-"
 		n = frappe.db.count("Batch", {"name": ["like", praefix + "%"]}) + 1
 		while frappe.db.exists("Batch", f"{praefix}{n:02d}"):
 			n += 1
@@ -473,9 +486,18 @@ def _meldungen():
 
 @frappe.whitelist()
 def herstellen(
-	station: str, ziel: str, zeilen, ausbringung: float | None = None, ziel_behaelter: str | None = None
+	station: str,
+	ziel: str,
+	zeilen,
+	ausbringung: float | None = None,
+	ziel_behaelter: str | None = None,
+	anzahl: float | None = None,
+	einheit: str | None = None,
 ) -> dict:
-	"""Fertigung buchen: Zutaten (gescannt) -> neue Charge des Ziels, optional in einen Behälter."""
+	"""Fertigung buchen: Zutaten (gescannt) -> neue Charge des Ziels, optional in einen Behälter.
+
+	Fertigware: Ausbringung als Anzahl + Einheit (Karton/Beutel); ziel_behaelter darf eine Palette sein.
+	"""
 	s = _station(station)
 	r = rezept(ziel)
 	if r["stufe"] not in STATION_ZIELE.get(s.typ, []):
@@ -486,8 +508,17 @@ def herstellen(
 		_fehler(_("Keine Zutaten gescannt."))
 
 	summe = sum(z["menge"] for z in eingaenge)
+	if flt(anzahl) > EPS and einheit:
+		ausbringung = flt(flt(anzahl) * paletten.faktor(ziel, einheit), 6)
+	else:
+		anzahl, einheit = None, None
 	ausbringung = flt(ausbringung) or flt(summe * r["ausbeute"], 3)
-	behaelter = _ziel_behaelter(ziel_behaelter)
+	palette = paletten.finde(ziel_behaelter) if ziel_behaelter else None
+	if palette and r["stufe"] != "Fertigware":
+		_fehler(_("Auf eine Palette kommt nur Fertigware."))
+	behaelter = None if palette else _ziel_behaelter(ziel_behaelter)
+	if palette:
+		paletten._offen(palette)
 
 	charge = _neue_charge(ziel, getdate(nowdate()))
 	jetzt = now_datetime()
@@ -511,6 +542,11 @@ def herstellen(
 	)
 	se.insert()
 	se.submit()
+	if palette:
+		paletten.beladen(
+			palette, charge, anzahl or ausbringung, einheit or frappe.get_cached_value("Item", ziel, "stock_uom"),
+			s.name, "Verpackung", "Stock Entry", se.name,
+		)  # fmt: skip
 
 	hinweise = list(se.flags.kt_fifo_warnungen or [])
 	if se.flags.kt_fehlende_zutaten:
@@ -521,7 +557,10 @@ def herstellen(
 		"artikel": ziel,
 		"name": r["name"],
 		"menge": ausbringung,
+		"anzahl": anzahl,
+		"einheit": einheit,
 		"behaelter": behaelter,
+		"palette": palette,
 		"mhd": formatdate(b.expiry_date) if b.expiry_date else None,
 		"gesperrt": b.kt_status == "Gesperrt",
 		"buchung": se.name,
@@ -668,24 +707,104 @@ def wareneingang(
 	}
 
 
+def _lieferpositionen(z):
+	"""Eine Lieferzeile vom Terminal in Positionen auflösen.
+
+	{"palette": NVE, "ganz": 1}                          ganze Palette
+	{"palette": NVE, "charge": Los, "anzahl", "einheit"}   einzelne Kartons von einer Palette
+	{"code": Los, "anzahl", "einheit"}                     lose Kartons (auf keiner Palette)
+	"""
+	if z.get("palette") and z.get("ganz"):
+		nve = paletten.finde(z["palette"])
+		if not nve:
+			_fehler(_("Palette {0} gibt es nicht.").format(z["palette"]))
+		status = frappe.db.get_value("Palette", nve, "status")
+		if status not in paletten.AKTIV:
+			_fehler(_("Palette {0} ist {1}.").format(nve, status.lower()))
+		pos = paletten.inhalt(nve)
+		if not pos:
+			_fehler(_("Palette {0} ist leer.").format(nve))
+		return [_lieferposition(p["charge"], p["anzahl"], p["einheit"], nve) for p in pos]
+	if z.get("palette"):
+		nve = paletten.finde(z["palette"])
+		pos = paletten._position(nve, z.get("charge"), z.get("einheit")) if nve else None
+		if not pos or flt(z.get("anzahl")) > pos["anzahl"] + EPS:
+			_fehler(
+				_("Auf Palette {0} sind von Los {1} nur {2} {3}.").format(
+					z["palette"], z.get("charge"), flt(pos["anzahl"]) if pos else 0, z.get("einheit")
+				)
+			)
+		return [_lieferposition(z["charge"], z["anzahl"], z["einheit"], nve)]
+	r = aufloesen(z.get("code"))
+	if r["typ"] == "palette":
+		return _lieferpositionen({"palette": r["palette"], "ganz": 1})
+	if r["typ"] != "charge":
+		_fehler(_("Bitte ein Los oder eine Palette scannen."))
+	anzahl = flt(z.get("anzahl") if z.get("anzahl") is not None else z.get("menge"))
+	einheit = z.get("einheit") or frappe.get_cached_value("Item", r["artikel"], "stock_uom")
+	menge = anzahl * paletten.faktor(r["artikel"], einheit)
+	frei = paletten.lose(r["charge"])
+	if menge > frei + 1e-4:
+		_fehler(
+			_(
+				"Von Los {0} sind nur {1} {2} lose. Der Rest steht auf Paletten: bitte die Palette scannen."
+			).format(r["charge"], paletten._anzahl_text(r["artikel"], frei, einheit), einheit)
+		)
+	return [_lieferposition(r["charge"], anzahl, einheit, None)]
+
+
+def _lieferposition(charge, anzahl, einheit, palette):
+	artikel = frappe.db.get_value("Batch", charge, "item")
+	if artikel_stufe(artikel) != "Fertigware":
+		_fehler(_("{0} ist keine Fertigware.").format(frappe.get_cached_value("Item", artikel, "item_name")))
+	if flt(anzahl) <= EPS:
+		_fehler(_("Bitte eine Anzahl größer 0 eingeben."))
+	_pruefe_charge(charge, artikel)
+	lager = charge_lager(charge)
+	if not lager:
+		_fehler(_("Los {0} hat keinen Bestand.").format(charge))
+	f = paletten.faktor(artikel, einheit)
+	return {
+		"artikel": artikel,
+		"name": frappe.get_cached_value("Item", artikel, "item_name"),
+		"charge": charge,
+		"anzahl": flt(anzahl, 3),
+		"einheit": einheit,
+		"faktor": f,
+		"menge": flt(flt(anzahl) * f, 3),
+		"palette": palette,
+		"lager": max(lager, key=lager.get),
+	}
+
+
 @frappe.whitelist()
-def pruefe_lieferzeile(station: str, code: str, menge: float) -> dict:
+def pruefe_lieferzeile(
+	station: str,
+	code: str | None = None,
+	menge: float | None = None,
+	anzahl: float | None = None,
+	einheit: str | None = None,
+	palette: str | None = None,
+	charge: str | None = None,
+	ganz: int = 0,
+) -> list[dict]:
+	"""Sofortprüfung am Versand. Gibt die Positionen zurück (ganze Palette = mehrere)."""
 	_station(station)
-	z = _zeile(code, menge)
-	if artikel_stufe(z["artikel"]) != "Fertigware":
-		_fehler(_("{0} ist keine Fertigware.").format(z["name"]))
-	return z
+	return _lieferpositionen(
+		{"code": code, "menge": menge, "anzahl": anzahl, "einheit": einheit, "palette": palette,
+		 "charge": charge, "ganz": cint(ganz)}
+	)  # fmt: skip
 
 
 @frappe.whitelist()
 def lieferung(station: str, kunde: str, zeilen) -> dict:
-	"""Lieferschein an einen Kunden mit den gescannten Losen."""
+	"""Lieferschein an einen Kunden mit gescannten Paletten und Losen."""
 	s = _station(station)
 	if not frappe.db.exists("Customer", kunde):
 		_fehler(_("Kunde {0} unbekannt.").format(kunde))
-	positionen = [pruefe_lieferzeile(station, z["code"], z["menge"]) for z in _liste(zeilen)]
+	positionen = [p for z in _liste(zeilen) for p in _lieferpositionen(z)]
 	if not positionen:
-		_fehler(_("Keine Lose gescannt."))
+		_fehler(_("Nichts gescannt."))
 	jetzt = now_datetime()
 	dn = frappe.get_doc(
 		{
@@ -699,11 +818,14 @@ def lieferung(station: str, kunde: str, zeilen) -> dict:
 			"items": [
 				{
 					"item_code": p["artikel"],
-					"qty": p["menge"],
-					"rate": flt(frappe.get_cached_value("Item", p["artikel"], "standard_rate")),
+					"qty": p["anzahl"],
+					"uom": p["einheit"],
+					"conversion_factor": p["faktor"],
+					"rate": flt(frappe.get_cached_value("Item", p["artikel"], "standard_rate")) * p["faktor"],
 					"warehouse": p["lager"],
 					"use_serial_batch_fields": 1,
 					"batch_no": p["charge"],
+					"kt_palette": p["palette"],
 				}
 				for p in positionen
 			],
@@ -716,8 +838,66 @@ def lieferung(station: str, kunde: str, zeilen) -> dict:
 		"kunde": dn.customer_name,
 		"positionen": len(positionen),
 		"menge": flt(sum(p["menge"] for p in positionen), 3),
+		"paletten": sorted({p["palette"] for p in positionen if p["palette"]}),
 		"hinweise": _meldungen(),
 	}
+
+
+# ---------------------------------------------------------------------------
+# Paletten
+# ---------------------------------------------------------------------------
+
+
+def _palette(code):
+	nve = paletten.finde(code)
+	if not nve:
+		_fehler(_("{0} ist keine Palette.").format(code))
+	return nve
+
+
+@frappe.whitelist()
+def einheiten(artikel: str) -> list[dict]:
+	return paletten.einheiten(artikel)
+
+
+@frappe.whitelist()
+def palette_neu(station: str, typ: str = "Lagerpalette", kunde: str | None = None) -> dict:
+	s = _station(station)
+	nve = paletten.anlegen(typ, s.name, kunde)
+	return paletten.info(nve)
+
+
+@frappe.whitelist()
+def palette_info(code: str) -> dict:
+	return paletten.info(_palette(code))
+
+
+@frappe.whitelist()
+def palette_beladen(station: str, palette: str, code: str, anzahl: float, einheit: str) -> dict:
+	"""Lose Kartons eines Loses auf die Palette (Los-Etikett scannen)."""
+	s = _station(station)
+	r = aufloesen(code)
+	if r["typ"] != "charge":
+		_fehler(_("Bitte das Los scannen."))
+	return paletten.beladen(_palette(palette), r["charge"], anzahl, einheit, s.name)
+
+
+@frappe.whitelist()
+def palette_umpacken(station: str, von: str, nach: str, charge: str, anzahl: float, einheit: str) -> dict:
+	s = _station(station)
+	return paletten.umpacken(_palette(von), _palette(nach), charge, anzahl, einheit, s.name)
+
+
+@frappe.whitelist()
+def palette_schliessen(station: str, palette: str) -> dict:
+	_station(station)
+	return paletten.schliessen(_palette(palette))
+
+
+@frappe.whitelist()
+def palette_oeffnen(station: str, palette: str) -> dict:
+	_station(station)
+	return paletten.oeffnen(_palette(palette))
 
 
 @frappe.whitelist()

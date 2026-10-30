@@ -35,7 +35,7 @@
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "options": "Teigbehälter\nRework-Behälter\nKiste lose Ware\nPalette\nSonstiges"
+   "options": "Teigbehälter\nRework-Behälter\nKiste lose Ware\nSonstiges"
   },
   {
    "fieldname": "status",

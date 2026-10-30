@@ -99,12 +99,16 @@ def rueckverfolgung(charge: str, richtung: str = "Vorwärts") -> dict:
 			"lieferanten": [c for c in chargen if c.get("lieferant")],
 		}
 
+	from keks_trace.palette import paletten_fuer
+
 	chargen = vorwaerts(charge)
+	alle = [charge] + [c["charge"] for c in chargen]
 	return {
 		"start": _details([charge])[0],
 		"richtung": "Vorwärts",
 		"chargen": chargen,
-		"kunden": kunden([charge] + [c["charge"] for c in chargen]),
+		"kunden": kunden(alle),
+		"paletten": paletten_fuer(alle),
 	}
 
 

@@ -54,8 +54,9 @@ def _nachricht(ergebnis):
 	if ergebnis["richtung"] == "Rückwärts":
 		return None
 	kunden = ergebnis.get("kunden") or []
+	paletten = _paletten(ergebnis.get("paletten") or [])
 	if not kunden:
-		return "<p>" + _("Keine Lieferungen an Kunden gefunden.") + "</p>"
+		return "<p>" + _("Keine Lieferungen an Kunden gefunden.") + "</p>" + paletten
 	zeilen = "".join(
 		f"<tr><td>{frappe.utils.escape_html(k.kundenname or k.kunde)}</td><td>{k.lieferschein}</td>"
 		f"<td>{formatdate(k.lieferdatum)}</td><td>{k.charge}</td><td>{flt(k.menge, 2)}</td></tr>"
@@ -66,4 +67,21 @@ def _nachricht(ergebnis):
 		"<table class='table table-bordered'><thead><tr>"
 		f"<th>{_('Kunde')}</th><th>{_('Lieferschein')}</th><th>{_('Datum')}</th>"
 		f"<th>{_('Charge')}</th><th>{_('Menge')}</th></tr></thead><tbody>{zeilen}</tbody></table>"
+	) + paletten
+
+
+def _paletten(paletten):
+	if not paletten:
+		return ""
+	zeilen = "".join(
+		f"<tr><td>{p.palette}</td><td>{p.charge}</td><td>{p.status}</td>"
+		f"<td>{flt(p.anzahl_jetzt, 3):g} {p.einheit}</td><td>{p.lieferschein or ''}</td>"
+		f"<td>{frappe.utils.escape_html(p.kunde or '')}</td></tr>"
+		for p in paletten
+	)
+	return (
+		"<h5>" + _("Paletten (NVE)") + "</h5>"
+		"<table class='table table-bordered'><thead><tr>"
+		f"<th>{_('NVE')}</th><th>{_('Los')}</th><th>{_('Status')}</th><th>{_('Noch drauf')}</th>"
+		f"<th>{_('Lieferschein')}</th><th>{_('Kunde')}</th></tr></thead><tbody>{zeilen}</tbody></table>"
 	)

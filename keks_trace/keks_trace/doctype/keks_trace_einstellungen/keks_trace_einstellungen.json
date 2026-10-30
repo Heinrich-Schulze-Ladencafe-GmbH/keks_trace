@@ -8,7 +8,11 @@
  "engine": "InnoDB",
  "field_order": [
   "vollstaendigkeit",
-  "bilanz_toleranz_prozent"
+  "bilanz_toleranz_prozent",
+  "section_nve",
+  "gs1_basisnummer",
+  "nve_reserveziffer",
+  "absender"
  ],
  "fields": [
   {
@@ -25,6 +29,30 @@
    "label": "Toleranz Mengenbilanz (%)",
    "default": "0.5",
    "description": "Abweichung zwischen Lagerbuchungen und Genealogie, ab der eine Charge als Abweichung gilt."
+  },
+  {
+   "fieldname": "section_nve",
+   "fieldtype": "Section Break",
+   "label": "Paletten (NVE / SSCC)"
+  },
+  {
+   "fieldname": "gs1_basisnummer",
+   "fieldtype": "Data",
+   "label": "GS1-Basisnummer (GLN-Präfix)",
+   "description": "Aus dem GS1-Vertrag, 7 bis 10 Ziffern. Leer = Test-NVE (nicht an Kunden geben)."
+  },
+  {
+   "fieldname": "nve_reserveziffer",
+   "fieldtype": "Int",
+   "label": "Reserveziffer (Extension Digit)",
+   "default": "3",
+   "description": "Erste Ziffer der NVE, 0 bis 9."
+  },
+  {
+   "fieldname": "absender",
+   "fieldtype": "Data",
+   "label": "Absender auf dem Etikett",
+   "description": "Leer = Firmenname."
   }
  ],
  "index_web_pages_for_search": 0,

@@ -1,0 +1,140 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-30 21:30:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "nve",
+  "typ",
+  "status",
+  "column_break_1",
+  "station",
+  "kunde",
+  "lieferschein",
+  "test_nve",
+  "section_break_1",
+  "bemerkung"
+ ],
+ "fields": [
+  {
+   "fieldname": "nve",
+   "fieldtype": "Data",
+   "label": "NVE (SSCC)",
+   "reqd": 1,
+   "unique": 1,
+   "read_only": 1,
+   "in_list_view": 1,
+   "bold": 1,
+   "length": 18
+  },
+  {
+   "fieldname": "typ",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Lagerpalette\nVersandpalette",
+   "default": "Lagerpalette",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Offen\nGeschlossen\nVersendet\nLeer",
+   "default": "Offen",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "station",
+   "fieldtype": "Link",
+   "label": "Angelegt an Station",
+   "options": "Terminal Station",
+   "read_only": 1
+  },
+  {
+   "fieldname": "kunde",
+   "fieldtype": "Link",
+   "label": "Kunde",
+   "options": "Customer"
+  },
+  {
+   "fieldname": "lieferschein",
+   "fieldtype": "Link",
+   "label": "Lieferschein",
+   "options": "Delivery Note",
+   "read_only": 1
+  },
+  {
+   "fieldname": "test_nve",
+   "fieldtype": "Check",
+   "label": "Test-NVE (nicht an Kunden)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-30 21:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Palette",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "field:nve",
+ "naming_rule": "By fieldname",
+ "description": "Palette mit NVE/SSCC. Inhalt ergibt sich aus den Paletten-Bewegungen.",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ]
+}
