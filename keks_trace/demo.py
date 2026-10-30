@@ -16,6 +16,8 @@ Jeder Lauf erzeugt neue Chargen und Behälter (eindeutiges Kürzel), Stammdaten 
 import frappe
 from frappe.utils import add_days, flt, formatdate, getdate, now_datetime, nowdate
 
+from keks_trace import sperre
+
 ALLERGENGRUPPEN = {
 	"Mürbeteig": "Gluten, Milch",
 	"Mürbeteig Nuss": "Gluten, Milch, Haselnuss",
@@ -65,6 +67,23 @@ ROHSTOFF_PREIS = {
 	"KT-FOLIE": 4.0,
 }
 
+# Neue Chargen dieser Artikel sind gesperrt, bis die QS sie freigibt.
+FREIGABE_PFLICHT = {"KT-BUTTER", "KT-WL-NUSS-SCHOKO", "KT-WL-KAKAO-NOUGAT"}
+
+# Rezepte (Stücklisten): Ausbringung in kg, Zutaten in kg. Backverlust steckt im Verhältnis.
+REZEPTE = {
+	"KT-GT-MUERBE": (100, [("KT-MEHL", 60), ("KT-ZUCKER", 20), ("KT-BUTTER", 20)]),
+	"KT-NOUGAT": (30, [("KT-ZUCKER", 10), ("KT-HASELNUSS", 10), ("KT-KAKAO", 5), ("KT-BUTTER", 5)]),
+	"KT-TV-NUSS": (60, [("KT-GT-MUERBE", 50), ("KT-HASELNUSS", 10)]),
+	"KT-TV-KAKAO": (100, [("KT-GT-MUERBE", 95), ("KT-KAKAO", 5)]),
+	"KT-BW-NUSS": (85, [("KT-TV-NUSS", 100)]),
+	"KT-BW-KAKAO": (85, [("KT-TV-KAKAO", 100)]),
+	"KT-WL-NUSS-SCHOKO": (54, [("KT-BW-NUSS", 48), ("KT-SCHOKO", 6)]),
+	"KT-WL-KAKAO-NOUGAT": (100, [("KT-BW-KAKAO", 80), ("KT-NOUGAT", 20)]),
+	"KT-FW-NUSS-SCHOKO": (40, [("KT-WL-NUSS-SCHOKO", 40), ("KT-FOLIE", 1)]),
+	"KT-FW-KAKAO-NOUGAT": (50, [("KT-WL-KAKAO-NOUGAT", 50), ("KT-FOLIE", 1)]),
+}
+
 # (Rework-Artikel, Ziel-Teig, max. Anteil %). Schokolierter Bruch hat bewusst keine Regel.
 REWORK_REGELN = [
 	("KT-RW-MUERBE", "KT-GT-MUERBE", 10),
@@ -77,8 +96,16 @@ REWORK_REGELN = [
 def run(company: str | None = None, kuerzel: str | None = None):
 	ctx = stammdaten(company)
 	kette = drei_tage_kette(ctx, kuerzel)
+	test = frappe.get_doc(
+		{"doctype": "Rueckverfolgungstest", "charge": kette.mehl, "anlass": "Jährlicher Test"}
+	)
+	test.insert()
+	test.submit()
+	kette.rueckverfolgungstest = test.name
 	frappe.db.commit()
 	_ausgabe(kette)
+	print(f"\n== Rückverfolgungstest {test.name}: {test.ergebnis} in {test.dauer_sekunden} s\n")
+	print(test.bericht)
 	return kette
 
 
@@ -109,6 +136,7 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 					"kt_allergengruppe": gruppe,
 					"has_expiry_date": 1 if haltbarkeit else 0,
 					"shelf_life_in_days": haltbarkeit or 0,
+					"kt_freigabe_pflicht": 1 if code in FREIGABE_PFLICHT else 0,
 				},
 			)
 			continue
@@ -127,8 +155,27 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 				"valuation_rate": ROHSTOFF_PREIS.get(code, 0),
 				"kt_chargen_stufe": stufe,
 				"kt_allergengruppe": gruppe,
+				"kt_freigabe_pflicht": 1 if code in FREIGABE_PFLICHT else 0,
 			}
 		).insert()
+
+	for artikel, (menge, zutaten) in REZEPTE.items():
+		if frappe.db.exists("BOM", {"item": artikel, "is_default": 1, "docstatus": 1}):
+			continue
+		bom = frappe.get_doc(
+			{
+				"doctype": "BOM",
+				"item": artikel,
+				"quantity": menge,
+				"company": company,
+				"is_active": 1,
+				"is_default": 1,
+				"rm_cost_as_per": "Valuation Rate",
+				"items": [{"item_code": z, "qty": q, "uom": "Kg"} for z, q in zutaten],
+			}
+		)
+		bom.insert()
+		bom.submit()
 
 	for rework, ziel, anteil in REWORK_REGELN:
 		if not frappe.db.exists("Rework Regel", {"rework_artikel": rework, "ziel_artikel": ziel}):
@@ -344,6 +391,8 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 			("KT-FOLIE", c.folie, 20),
 		],
 	)
+	# Kühlware: Wareneingangsprüfung durch die QS
+	sperre.freigeben(c.butter, "Wareneingangsprüfung: Temperatur 4 °C, Verpackung unbeschädigt")
 
 	# ---- Tag 1
 	# Grundteig GT1 (100 kg) in Behälter TB1
@@ -492,6 +541,10 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 		eingaenge=[("KT-BW-KAKAO", c.bw3, 80), ("KT-NOUGAT", c.nougat, 20)],
 		ausgaenge=[("KT-WL-KAKAO-NOUGAT", c.wl3, 100, c.kl3)],
 	)
+
+	# ---- Freigabe loser Ware durch die QS (KL2 wartet noch auf die Freigabe)
+	sperre.freigeben(c.wl1, "Sensorik, Feuchte und Bruchanteil in Ordnung")
+	sperre.freigeben(c.wl3, "Sensorik, Feuchte und Bruchanteil in Ordnung")
 
 	# ---- Tag 3
 	# Neuer Grundteig GT3 mit 5 % Rework R2 (Teigrest vom Vortag)

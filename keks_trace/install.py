@@ -49,6 +49,13 @@ CUSTOM_FIELDS = {
 			"options": "Allergengruppe",
 			"insert_after": "kt_chargen_stufe",
 		},
+		{
+			"fieldname": "kt_freigabe_pflicht",
+			"label": "Freigabe vor Verwendung",
+			"fieldtype": "Check",
+			"insert_after": "kt_allergengruppe",
+			"description": "Neue Chargen sind gesperrt, bis die QS sie freigibt (z. B. Wareneingangsprüfung, Freigabe loser Ware).",
+		},
 	],
 	"Batch": [
 		{
@@ -84,6 +91,26 @@ CUSTOM_FIELDS = {
 			"insert_after": "kt_backtag",
 			"description": "Frühestes MHD der nach dem Backen aufgebrachten Füllungen, Glasuren, Schokolade.",
 		},
+		{
+			"fieldname": "kt_status",
+			"label": "Sperrstatus",
+			"fieldtype": "Select",
+			"options": "Freigegeben\nGesperrt",
+			"default": "Freigegeben",
+			"read_only": 1,
+			"in_list_view": 1,
+			"in_standard_filter": 1,
+			"insert_after": "kt_chargen_stufe",
+			"description": "Wird nur über Sperren/Freigeben geändert (Protokoll: Chargen Sperre).",
+		},
+		{
+			"fieldname": "kt_sperrgrund",
+			"label": "Sperrgrund",
+			"fieldtype": "Small Text",
+			"read_only": 1,
+			"depends_on": "eval:doc.kt_status=='Gesperrt'",
+			"insert_after": "kt_status",
+		},
 	],
 	"Stock Entry Detail": [
 		{
@@ -100,13 +127,23 @@ CUSTOM_FIELDS = {
 
 
 def after_install():
-	create_custom_fields(CUSTOM_FIELDS, update=True)
-	_lager_einstellungen()
+	after_migrate()
 
 
 def after_migrate():
 	create_custom_fields(CUSTOM_FIELDS, update=True)
 	_lager_einstellungen()
+	_aenderungsprotokoll()
+
+
+def _aenderungsprotokoll():
+	"""Jede Änderung an Chargen und Artikeln wird mit Vorher/Nachher protokolliert (IFS 2.1.2.1)."""
+	from frappe.custom.doctype.property_setter.property_setter import make_property_setter
+
+	for doctype in ("Batch", "Item"):  # eigene DocTypes haben track_changes bereits
+		make_property_setter(
+			doctype, None, "track_changes", 1, "Check", for_doctype=True, validate_fields_for_doctype=False
+		)
 
 
 def _lager_einstellungen():

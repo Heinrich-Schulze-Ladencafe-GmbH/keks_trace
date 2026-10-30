@@ -1,0 +1,62 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "",
+ "creation": "2026-10-28 22:00:00.000000",
+ "description": "Einstellungen für Keks Trace.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "vollstaendigkeit",
+  "bilanz_toleranz_prozent"
+ ],
+ "fields": [
+  {
+   "fieldname": "vollstaendigkeit",
+   "fieldtype": "Select",
+   "label": "Fehlende Rezeptzutat beim Buchen",
+   "options": "Warnen\nBlockieren\nAus",
+   "default": "Warnen",
+   "description": "Was passiert, wenn bei einer Fertigung eine Zutat laut Stückliste nicht gescannt wurde."
+  },
+  {
+   "fieldname": "bilanz_toleranz_prozent",
+   "fieldtype": "Percent",
+   "label": "Toleranz Mengenbilanz (%)",
+   "default": "0.5",
+   "description": "Abweichung zwischen Lagerbuchungen und Genealogie, ab der eine Charge als Abweichung gilt."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Keks Trace Einstellungen",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "issingle": 1
+}

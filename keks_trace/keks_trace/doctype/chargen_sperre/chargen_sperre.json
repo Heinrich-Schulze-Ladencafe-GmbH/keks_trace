@@ -1,0 +1,122 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-10-28 22:00:00.000000",
+ "description": "Protokoll aller Sperren und Freigaben von Chargen. Nicht änderbar.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "charge",
+  "artikel",
+  "aktion",
+  "column_break_1",
+  "zeitpunkt",
+  "nutzer",
+  "vorgang",
+  "section_break_1",
+  "grund"
+ ],
+ "fields": [
+  {
+   "fieldname": "charge",
+   "fieldtype": "Link",
+   "options": "Batch",
+   "label": "Charge",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "artikel",
+   "fieldtype": "Link",
+   "options": "Item",
+   "label": "Artikel"
+  },
+  {
+   "fieldname": "aktion",
+   "fieldtype": "Select",
+   "options": "Sperren\nFreigeben",
+   "label": "Aktion",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "zeitpunkt",
+   "fieldtype": "Datetime",
+   "label": "Zeitpunkt",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "nutzer",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Durch"
+  },
+  {
+   "fieldname": "vorgang",
+   "fieldtype": "Data",
+   "label": "Vorgang (z. B. Rückruf)",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "grund",
+   "fieldtype": "Small Text",
+   "label": "Grund / Bemerkung",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Chargen Sperre",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "naming_rule": "Random",
+ "in_create": 1
+}

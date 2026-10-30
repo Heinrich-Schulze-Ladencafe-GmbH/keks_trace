@@ -11,7 +11,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, getdate
 
-from keks_trace import demo
+from keks_trace import demo, sperre
+from keks_trace.bilanz import mengenbilanz
 from keks_trace.trace import rueckverfolgung
 
 
@@ -82,18 +83,24 @@ class TestReworkKette(IntegrationTestCase):
 		)
 		return charge
 
+	def _rohstoffe(self, datum, menge=100):
+		"""Eigene Rohstoffchargen (Mehl, Zucker, Butter) eingehen lassen; Butter wird von der QS freigegeben."""
+		h = _hash()
+		roh = {
+			"KT-MEHL": demo.neue_charge("KT-MEHL", f"XRM-{h}", add_days(datum, -2), self.ctx.lieferant),
+			"KT-ZUCKER": demo.neue_charge("KT-ZUCKER", f"XRZ-{h}", add_days(datum, -2), self.ctx.lieferant),
+			"KT-BUTTER": demo.neue_charge("KT-BUTTER", f"XRB-{h}", add_days(datum, -2), self.ctx.lieferant),
+		}
+		demo.buchen(
+			self.ctx, "Material Receipt", datum, "06:00:00", ausgaenge=[(i, c, menge) for i, c in roh.items()]
+		)
+		sperre.freigeben(roh["KT-BUTTER"], "Wareneingangsprüfung in Ordnung")
+		return roh
+
 	def _alte_kette(self):
 		"""Grundteig und Teigrest-Rework, 15 Tage vor Tag 1 (für Ablauftests)."""
 		alt = getdate(add_days(self.k.tag1, -15))
-		h = _hash()
-		roh = {
-			"KT-MEHL": demo.neue_charge("KT-MEHL", f"XAM-{h}", add_days(alt, -2), self.ctx.lieferant),
-			"KT-ZUCKER": demo.neue_charge("KT-ZUCKER", f"XAZ-{h}", add_days(alt, -2), self.ctx.lieferant),
-			"KT-BUTTER": demo.neue_charge("KT-BUTTER", f"XAB-{h}", add_days(alt, -2), self.ctx.lieferant),
-		}
-		demo.buchen(
-			self.ctx, "Material Receipt", alt, "06:00:00", ausgaenge=[(i, c, 100) for i, c in roh.items()]
-		)
+		roh = self._rohstoffe(alt)
 		gt, _se = self._grundteig(alt, "07:00:00", roh=roh)
 		rw = self._rework(("KT-GT-MUERBE", gt), "KT-RW-MUERBE", alt, "08:00:00", 5)
 		return alt, gt, rw
@@ -300,3 +307,198 @@ class TestReworkKette(IntegrationTestCase):
 		t.save()
 		with self.assertRaisesRegex(frappe.ValidationError, "nicht befüllt werden"):
 			self._grundteig(self.k.tag3, "13:40:00", traeger=tb)
+
+	# ------------------------------------------------------------------ Sperren und Freigabe (IFS 5.11)
+
+	def test_t12_nicht_freigegebene_lose_ware_blockiert(self):
+		k = self.k
+		self.assertEqual(frappe.db.get_value("Batch", k.wl2, "kt_status"), "Gesperrt")
+		los = demo.neue_charge("KT-FW-NUSS-SCHOKO", f"XL-{_hash()}", k.tag3)
+		packen = dict(
+			eingaenge=[("KT-WL-NUSS-SCHOKO", k.wl2, 20, k.kl2), ("KT-FOLIE", k.folie, 0.5)],
+			ausgaenge=[("KT-FW-NUSS-SCHOKO", los, 20)],
+		)
+		with self.assertRaisesRegex(frappe.ValidationError, "ist gesperrt"):
+			demo.buchen(self.ctx, "Manufacture", k.tag3, "14:00:00", **packen)
+		sperre.freigeben(k.wl2, "Sensorik in Ordnung")
+		se = demo.buchen(self.ctx, "Manufacture", k.tag3, "14:01:00", **packen)
+		self.assertEqual(se.docstatus, 1)
+
+	def test_t17_wareneingang_gesperrt_bis_freigabe(self):
+		butter = demo.neue_charge("KT-BUTTER", f"XBU-{_hash()}", self.k.tag3, self.ctx.lieferant)
+		self.assertEqual(frappe.db.get_value("Batch", butter, "kt_status"), "Gesperrt")
+		self.assertTrue(frappe.db.exists("Chargen Sperre", {"charge": butter, "aktion": "Sperren"}))
+		demo.buchen(
+			self.ctx, "Material Receipt", self.k.tag3, "06:30:00", ausgaenge=[("KT-BUTTER", butter, 50)]
+		)
+		roh = {"KT-MEHL": self.k.mehl, "KT-ZUCKER": self.k.zucker, "KT-BUTTER": butter}
+		with self.assertRaisesRegex(frappe.ValidationError, "ist gesperrt"):
+			self._grundteig(self.k.tag3, "14:10:00", roh=roh)
+		sperre.freigeben(butter, "Temperatur 4 °C")
+		_c, se = self._grundteig(self.k.tag3, "14:11:00", roh=roh)
+		self.assertEqual(se.docstatus, 1)
+		self.assertTrue(frappe.db.exists("Chargen Sperre", {"charge": butter, "aktion": "Freigeben"}))
+
+	def test_t18_rueckrufsperre_sperrt_alle_betroffenen_chargen(self):
+		tag = self.k.tag3
+		roh = self._rohstoffe(tag)
+		gt, _se = self._grundteig(tag, "15:00:00", roh=roh)
+		tv, _se = self._nussteig(tag, "15:01:00", gt, 50)
+		rw = self._rework(("KT-GT-MUERBE", gt), "KT-RW-MUERBE", tag, "15:02:00", 5)
+
+		r = sperre.rueckruf_sperre(roh["KT-MEHL"], "Fremdkörper beim Lieferanten gemeldet")
+		gesperrt = {c["charge"] for c in r["chargen"]}
+		self.assertEqual(gesperrt, {roh["KT-MEHL"], gt, tv, rw})
+		for c in gesperrt:
+			self.assertEqual(frappe.db.get_value("Batch", c, "kt_status"), "Gesperrt")
+			self.assertTrue(frappe.db.exists("Chargen Sperre", {"charge": c, "vorgang": r["vorgang"]}))
+		self.assertTrue(frappe.db.exists("Chargen Sperre", {"charge": roh["KT-ZUCKER"]}) is None)
+		with self.assertRaisesRegex(frappe.ValidationError, "ist gesperrt"):
+			self._nussteig(tag, "15:05:00", gt, 20)
+
+	def test_t18b_gesperrtes_los_kann_nicht_ausgeliefert_werden(self):
+		k = self.k
+		sperre.sperren(k.l1, "Etikett fehlerhaft")
+		with self.assertRaisesRegex(frappe.ValidationError, "ist gesperrt"):
+			demo.liefern(self.ctx, k.tag3, [("KT-FW-NUSS-SCHOKO", k.l1, 5)])
+		sperre.freigeben(k.l1, "Etikett korrigiert")
+		self.assertEqual(demo.liefern(self.ctx, k.tag3, [("KT-FW-NUSS-SCHOKO", k.l1, 5)]).docstatus, 1)
+
+	def test_t19_nur_qs_darf_sperren_und_mhd_aendern(self):
+		email = "kt-lager-test@example.com"
+		if not frappe.db.exists("User", email):
+			frappe.get_doc(
+				{
+					"doctype": "User",
+					"email": email,
+					"first_name": "Lager",
+					"send_welcome_email": 0,
+					"roles": [{"role": "Stock User"}],
+				}
+			).insert(ignore_permissions=True)
+		frappe.set_user(email)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				sperre.freigeben(self.k.wl2, "darf ich nicht")
+			b = frappe.get_doc("Batch", self.k.gt3)
+			b.expiry_date = add_days(b.expiry_date, 30)
+			b.flags.ignore_permissions = True
+			with self.assertRaisesRegex(frappe.PermissionError, "Nur die QS"):
+				b.save()
+		finally:
+			frappe.set_user("Administrator")
+
+	# ------------------------------------------------------------------ Unveränderbarkeit (IFS 2.1.2.1)
+
+	def test_t20_protokolle_nicht_aenderbar_und_nicht_loeschbar(self):
+		kante = frappe.get_doc("Chargen Genealogie", {"output_batch": self.k.v2, "input_batch": self.k.r1})
+		kante.menge = 0
+		with self.assertRaisesRegex(frappe.ValidationError, "kann nicht geändert werden"):
+			kante.save(ignore_permissions=True)
+		with self.assertRaisesRegex(frappe.ValidationError, "kann nicht gelöscht werden"):
+			frappe.delete_doc("Chargen Genealogie", kante.name, ignore_permissions=True)
+		eintrag = frappe.get_last_doc("Chargen Sperre", filters={"charge": self.k.wl1})
+		with self.assertRaisesRegex(frappe.ValidationError, "kann nicht gelöscht werden"):
+			frappe.delete_doc("Chargen Sperre", eintrag.name, ignore_permissions=True)
+		belegung = frappe.get_last_doc("Traeger Belegung", filters={"traeger": self.k.tb1})
+		with self.assertRaisesRegex(frappe.ValidationError, "kann nicht gelöscht werden"):
+			frappe.delete_doc("Traeger Belegung", belegung.name, ignore_permissions=True)
+
+	def test_t21_gebuchte_und_stornierte_belege_nicht_loeschbar(self):
+		_c, se = self._grundteig(self.k.tag3, "16:00:00")
+		with self.assertRaises(frappe.ValidationError):  # gebucht: sperrt schon Frappe selbst
+			frappe.delete_doc("Stock Entry", se.name, ignore_permissions=True)
+		se.cancel()  # storniert: Frappe würde das Löschen erlauben, keks_trace verbietet es
+		with self.assertRaisesRegex(frappe.ValidationError, "nicht gelöscht"):
+			frappe.delete_doc("Stock Entry", se.name, ignore_permissions=True)
+		with self.assertRaises(frappe.ValidationError):
+			frappe.delete_doc("Batch", self.k.gt1, ignore_permissions=True)
+		self.assertTrue(frappe.db.exists("Batch", self.k.gt1))
+
+	def test_t22_sperrstatus_nicht_von_hand_aenderbar(self):
+		b = frappe.get_doc("Batch", self.k.wl2)
+		b.kt_status = "Freigegeben" if b.kt_status == "Gesperrt" else "Gesperrt"
+		with self.assertRaisesRegex(frappe.ValidationError, "vom System gesetzt"):
+			b.save(ignore_permissions=True)
+
+	# ------------------------------------------------------------------ Vollständigkeit
+
+	def test_t23_fehlende_rezeptzutat(self):
+		def ohne_zucker(zeit):
+			charge = demo.neue_charge("KT-GT-MUERBE", f"XVZ-{_hash()}", self.k.tag3)
+			return demo.buchen(
+				self.ctx,
+				"Manufacture",
+				self.k.tag3,
+				zeit,
+				eingaenge=[("KT-MEHL", self.k.mehl, 70), ("KT-BUTTER", self.k.butter, 30)],
+				ausgaenge=[("KT-GT-MUERBE", charge, 100)],
+			)
+
+		frappe.db.set_single_value("Keks Trace Einstellungen", "vollstaendigkeit", "Warnen")
+		se = ohne_zucker("16:10:00")
+		self.assertEqual(se.docstatus, 1)
+		self.assertEqual(se.flags.kt_fehlende_zutaten, ["KT-ZUCKER"])
+		frappe.db.set_single_value("Keks Trace Einstellungen", "vollstaendigkeit", "Blockieren")
+		try:
+			with self.assertRaisesRegex(frappe.ValidationError, "KT-ZUCKER"):
+				ohne_zucker("16:11:00")
+		finally:
+			frappe.db.set_single_value("Keks Trace Einstellungen", "vollstaendigkeit", "Warnen")
+
+	# ------------------------------------------------------------------ Mengenbilanz und Test (IFS 4.18.2)
+
+	def test_t24_mengenbilanz_rohstoff(self):
+		tag = self.k.tag3
+		roh = self._rohstoffe(tag)
+		self._grundteig(tag, "17:00:00", roh=roh)
+		demo.buchen(self.ctx, "Material Issue", tag, "17:01:00", eingaenge=[("KT-MEHL", roh["KT-MEHL"], 3)])
+		b = mengenbilanz(roh["KT-MEHL"])
+		self.assertEqual(b["zugang"], 100)
+		self.assertEqual(b["summen"]["Verbraucht in Produktion"], -60)
+		self.assertEqual(b["summen"]["Ausgebucht / entsorgt"], -3)
+		self.assertEqual(b["bestand"], 37)
+		self.assertEqual(b["differenz_lager"], 0)
+		self.assertEqual(b["differenz_genealogie"], 0)
+		self.assertTrue(b["ok"])
+
+		b = mengenbilanz(self.k.bw1)
+		self.assertEqual(b["summen"]["Zu Rework umgefüllt"], -2)
+		self.assertAlmostEqual(b["ausbeute_prozent"], 83.3, places=1)
+		self.assertTrue(b["ok"])
+
+	def test_t25_mengenbilanz_erkennt_luecke(self):
+		tag = self.k.tag3
+		roh = self._rohstoffe(tag)
+		gt, se = self._grundteig(tag, "17:10:00", roh=roh)
+		# Manipulation simulieren: Verbrauch steht im Lager, aber die Kante fehlt
+		frappe.db.set_value(
+			"Chargen Genealogie", {"stock_entry": se.name, "input_batch": roh["KT-ZUCKER"]}, "storniert", 1
+		)
+		b = mengenbilanz(roh["KT-ZUCKER"])
+		self.assertFalse(b["ok"])
+		self.assertEqual(b["differenz_genealogie"], 20)
+		test = frappe.get_doc({"doctype": "Rueckverfolgungstest", "charge": gt, "anlass": "Audit"}).insert()
+		self.assertEqual(
+			test.ergebnis, "Bestanden", "Rückwärts fehlt der Zucker; die Bilanz des Grundteigs selbst stimmt"
+		)
+		test = frappe.get_doc(
+			{"doctype": "Rueckverfolgungstest", "charge": roh["KT-ZUCKER"], "anlass": "Audit"}
+		).insert()
+		self.assertEqual(test.ergebnis, "Abweichung")
+		self.assertIn("laut Genealogie", test.bericht)
+
+	def test_t26_rueckverfolgungstest_als_nachweis(self):
+		test = frappe.get_doc(
+			{"doctype": "Rueckverfolgungstest", "charge": self.k.mehl, "anlass": "Jährlicher Test"}
+		).insert()
+		self.assertEqual(test.ergebnis, "Bestanden")
+		self.assertGreater(test.anzahl_vorwaerts, 10)
+		self.assertGreaterEqual(test.anzahl_kunden, 1)
+		self.assertGreater(test.dauer_sekunden, 0)
+		self.assertIn(self.k.l1, test.bericht)
+		test.submit()
+		test.reload()
+		test.bericht = "geändert"
+		with self.assertRaises(frappe.UpdateAfterSubmitError):
+			test.save()

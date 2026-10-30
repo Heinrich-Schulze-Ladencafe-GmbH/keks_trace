@@ -49,6 +49,16 @@ Füllungen werden gekauft (Chargenstufe **Rohstoff**) oder selbst hergestellt (C
 - **Storno:** stornierte Buchungen bleiben sichtbar, fließen aber nicht mehr in die
   Rückverfolgung ein; Behälterinhalt wird zurückgesetzt.
 
+### IFS Food 8
+
+| Anforderung | Umsetzung |
+| --- | --- |
+| 4.18.1 Rückverfolgung über alle Stufen, Rework, Verpackung, Auslieferung (KO) | Genealogie und Bericht „Rueckverfolgung“ (siehe oben) |
+| 4.18.2 Test mit Mengenbilanz, mindestens jährlich | **Mengenbilanz** je Charge (Bericht „Mengenbilanz“, API `mengenbilanz`): Zugang, verbraucht, zu Rework umgefüllt, ausgeliefert, entsorgt, Bestand, Ausbeute, Abgleich Lager gegen Genealogie. **Rückverfolgungstest** (DocType `Rueckverfolgungstest`): führt beim Anlegen vorwärts, rückwärts und alle Mengenbilanzen aus, misst die Dauer, speichert Bericht und Rohdaten; nach dem Buchen unveränderbar |
+| 2.1.2.1 Aufzeichnungen nicht nachträglich änderbar, nur Berechtigte | Genealogie, Behälterhistorie und Sperrprotokoll für niemanden änderbar oder löschbar; gebuchte und stornierte Belege nicht löschbar; Chargen mit Historie nicht löschbar; Herstell- und Verfallsdatum nur durch die QS, mit Änderungsprotokoll an Charge und Artikel |
+| 5.11 Nicht konforme Ware | **Sperren/Freigeben** (`keks_trace.sperre.sperren`, `freigeben`, nur QS): Artikel mit „Freigabe vor Verwendung“ starten gesperrt (Wareneingang, lose Ware). Gesperrte Chargen können nicht verarbeitet, umgefüllt oder ausgeliefert werden; Umlagern ins Sperrlager und Ausbuchen bleiben möglich. **Rückrufsperre** (`rueckruf_sperre`): sperrt eine Charge und alle, in die sie eingeflossen ist, und liefert die betroffenen Kunden. Alles im Protokoll `Chargen Sperre` |
+| Vollständigkeit (Auditor-Frage) | Fehlt bei einer Fertigung eine Zutat laut Stückliste, warnt oder blockiert die Buchung (Einstellung in `Keks Trace Einstellungen`) |
+
 Gebucht wird ausschließlich mit ERPNext-Standardbelegen (Stock Entry „Manufacture“ und „Repack“,
 Lieferschein). Der ERPNext-Kern wird nicht verändert.
 
@@ -63,20 +73,29 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | `keks_trace/traeger.py` | Behälter befüllen, entnehmen, freigeben, Storno |
 | `keks_trace/genealogie.py` | Genealogie-Kanten, Ursprung, Backtag, Komponenten-MHD, Verfall |
 | `keks_trace/trace.py` | Rekursive Rückverfolgung vorwärts/rückwärts, Kunden |
-| `keks_trace/api.py` | `rueckverfolgung` und `traeger_info` für Scanner und Terminals |
+| `keks_trace/api.py` | `rueckverfolgung`, `mengenbilanz` und `traeger_info` für Scanner und Terminals |
+| `keks_trace/sperre.py` | Sperren, Freigeben, Rückrufsperre, Prüfung bei Buchung und Lieferung |
+| `keks_trace/schutz.py` | Unveränderbarkeit von Protokollen, Belegen und Chargendaten |
+| `keks_trace/vollstaendigkeit.py` | Fehlende Rezeptzutaten erkennen |
+| `keks_trace/bilanz.py` | Mengenbilanz je Charge |
 | DocType `Allergengruppe` | Allergene je Teig, Füllung, Rework |
 | DocType `Rework Regel` | Rework-Matrix |
 | DocType `Produkttraeger` | Behälter, Kiste oder Palette mit Code (QR) |
 | DocType `Traeger Belegung` | Historie: welche Charge wann in welchem Behälter lag |
 | DocType `Chargen Genealogie` | Kanten der Rückverfolgung (wird nur automatisch geschrieben) |
+| DocType `Chargen Sperre` | Protokoll aller Sperren und Freigaben |
+| DocType `Rueckverfolgungstest` | Testprotokoll mit Mengenbilanz als Audit-Nachweis |
+| DocType `Keks Trace Einstellungen` | Vollständigkeitsprüfung, Toleranz der Mengenbilanz |
 | Bericht `Rueckverfolgung` | Rückverfolgung in der Oberfläche |
+| Bericht `Mengenbilanz` | Mengenbilanz einer Charge in der Oberfläche |
 | `keks_trace/demo.py` | Demo-Stammdaten und drei Produktionstage |
 | `keks_trace/tests/` | Abnahmetests |
 
 **Zusatzfelder:**
 - am Artikel: **Chargenstufe** (Rohstoff, Packmittel, Halbfabrikat, Grundteig, Teig veredelt,
-  Rework, Backware, Ware lose, Fertigware) und **Allergengruppe**;
-- an der Charge: **Chargenstufe**, **Ursprungsdatum**, **Backtag**, **Kürzestes Komponenten-MHD**;
+  Rework, Backware, Ware lose, Fertigware), **Allergengruppe**, **Freigabe vor Verwendung**;
+- an der Charge: **Chargenstufe**, **Sperrstatus**, **Sperrgrund**, **Ursprungsdatum**, **Backtag**,
+  **Kürzestes Komponenten-MHD**;
 - am Buchungsposten: **Behälter / Träger**.
 
 Haltbarkeiten nutzen die ERPNext-Standardfelder „Has Expiry Date“ und „Shelf Life In Days“ am Artikel:
@@ -109,19 +128,22 @@ cd ~/frappe-bench && bench --site keks.localhost migrate
 bench --site keks.localhost execute keks_trace.demo.run
 ```
 
-Legt Demo-Artikel (Präfix `KT-`), Allergengruppen, Rework-Regeln, Behälter, einen Demo-Lieferanten
-und -Kunden an und bucht:
+Legt Demo-Artikel (Präfix `KT-`) mit Rezepten (Stücklisten), Allergengruppen, Rework-Regeln,
+Behälter, einen Demo-Lieferanten und -Kunden an. Butter und lose Ware sind freigabepflichtig.
+Die Demo bucht:
 
-1. **Tag 1:** Wareneingang; Grundteig GT1 in Behälter TB1; Nougatfüllung selbst hergestellt;
+1. **Tag 1:** Wareneingang, Freigabe der Butter durch die QS; Grundteig GT1 in Behälter TB1; Nougatfüllung selbst hergestellt;
    halber GT1 wird zu Nussteig V1; Backen; Schokoboden mit gekaufter Kuvertüre → lose Ware in
    Kiste KL1; Bruch → Rework R1 in Rework-Behälter RB1.
 2. **Tag 2:** zweite Hälfte von GT1 + Rework R1 → Nussteig V2 (TB1 und RB1 werden frei); Backen,
    Schokolieren → KL2. Grundteig GT2 → Kakaoteig V3, Teigrest → Rework R2; Backen; Füllen mit
    Nougat → lose Ware in Kiste KL3.
-3. **Tag 3:** Grundteig GT3 mit 5 % Rework R2; Verpacken aus KL1 (Rest bleibt in der Kiste) und
+3. **Freigabe** der losen Ware in KL1 und KL3 (KL2 bleibt gesperrt).
+4. **Tag 3:** Grundteig GT3 mit 5 % Rework R2; Verpacken aus KL1 (Rest bleibt in der Kiste) und
    KL3; Lieferung beider Lose an den Demo-Kunden.
+5. **Rückverfolgungstest** für die Mehlcharge, gebucht als Protokoll.
 
-Danach gibt sie Rückverfolgungen und den Behälterstand aus. Das Kakao-Nougat-Los zeigt die
+Danach gibt sie Rückverfolgungen, den Behälterstand und den Testbericht mit allen Mengenbilanzen aus. Das Kakao-Nougat-Los zeigt die
 MHD-Begrenzung durch die Füllung (MHD = MHD des Nougats statt Backtag + 270 Tage).
 
 > Nur auf einem Testsystem ausführen. Die Demo bucht echte Lagerbewegungen.
@@ -146,14 +168,21 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_t14` | Rückwärts bis Füllung, Lieferant und Packmittel; über Rework bis zum Grundteig vom Vortag |
 | `test_t15` | Storno entfernt Kanten und leert den Behälter, Historie bleibt |
 | `test_t16*` | Belegter Behälter, falscher Behälter, zu viel entnommen, Teilentnahme, Behälter in Reinigung |
+| `test_t12`, `test_t17` | Nicht freigegebene lose Ware und gesperrter Wareneingang blockiert, nach Freigabe möglich |
+| `test_t18`, `test_t18b` | Rückrufsperre sperrt alle betroffenen Chargen; gesperrtes Los kann nicht ausgeliefert werden |
+| `test_t19` | Lagerbenutzer darf nicht freigeben und kein MHD ändern |
+| `test_t20`–`test_t22` | Protokolle nicht änderbar/löschbar; stornierte Belege und Chargen mit Historie nicht löschbar; Sperrstatus nicht von Hand |
+| `test_t23` | Fehlende Rezeptzutat: Warnung bzw. Blockade |
+| `test_t24`, `test_t25` | Mengenbilanz Rohstoff inkl. Entsorgung und Ausbeute; erkennt eine Lücke zwischen Lager und Genealogie |
+| `test_t26` | Rückverfolgungstest als unveränderbarer Nachweis |
 
 Die Tests rollen ihre Daten am Ende zurück.
 
 ## Bewusst noch nicht enthalten
 
 Silo-Zeitfenster (Mehl ist im Prototyp eine normale Charge), Scanner-Oberflächen für Terminals
-und Handscanner, Etikettendruck (QR), Waagenanbindung, Freigabe vor dem Verpacken,
-Paletten mit SSCC, Wareneingang über Bestellungen. Das folgt nach dem Go/No-Go.
+und Handscanner, Etikettendruck (QR) und Etikettenkontrolle an der Packlinie (IFS 4.5.3),
+Waagenanbindung, Paletten mit SSCC, Wareneingang über Bestellungen, Ausweis-Scan.
 
 ## Offene fachliche Annahmen (von der QS zu bestätigen)
 

@@ -1,0 +1,220 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:RVT-{YYYY}-{#####}",
+ "creation": "2026-10-28 22:00:00.000000",
+ "description": "Nachweis eines Rückverfolgungstests mit Mengenbilanz (IFS Food 4.18.2). Nach dem Buchen unveränderbar.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "charge",
+  "anlass",
+  "column_break_1",
+  "ergebnis",
+  "dauer_sekunden",
+  "gestartet",
+  "beendet",
+  "section_kennzahlen",
+  "anzahl_vorwaerts",
+  "anzahl_kunden",
+  "column_break_2",
+  "anzahl_rueckwaerts",
+  "anzahl_lieferanten",
+  "column_break_3",
+  "anzahl_geprueft",
+  "anzahl_abweichungen",
+  "section_bericht",
+  "bericht",
+  "daten",
+  "bemerkung",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "charge",
+   "fieldtype": "Link",
+   "options": "Batch",
+   "label": "Geprüfte Charge",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "anlass",
+   "fieldtype": "Select",
+   "label": "Anlass",
+   "reqd": 1,
+   "in_list_view": 1,
+   "options": "Jährlicher Test\nÄnderung am System\nReklamation\nRückruf\nAudit",
+   "default": "Jährlicher Test"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ergebnis",
+   "fieldtype": "Select",
+   "label": "Ergebnis",
+   "options": "\nBestanden\nAbweichung",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "dauer_sekunden",
+   "fieldtype": "Float",
+   "label": "Dauer (Sekunden)",
+   "read_only": 1,
+   "precision": "2"
+  },
+  {
+   "fieldname": "gestartet",
+   "fieldtype": "Datetime",
+   "label": "Gestartet",
+   "read_only": 1
+  },
+  {
+   "fieldname": "beendet",
+   "fieldtype": "Datetime",
+   "label": "Beendet",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_kennzahlen",
+   "fieldtype": "Section Break",
+   "label": "Ergebnis"
+  },
+  {
+   "fieldname": "anzahl_vorwaerts",
+   "fieldtype": "Int",
+   "label": "Chargen vorwärts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "anzahl_kunden",
+   "fieldtype": "Int",
+   "label": "Betroffene Lieferungen",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "anzahl_rueckwaerts",
+   "fieldtype": "Int",
+   "label": "Chargen rückwärts",
+   "read_only": 1
+  },
+  {
+   "fieldname": "anzahl_lieferanten",
+   "fieldtype": "Int",
+   "label": "Lieferantenchargen",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "anzahl_geprueft",
+   "fieldtype": "Int",
+   "label": "Mengenbilanzen geprüft",
+   "read_only": 1
+  },
+  {
+   "fieldname": "anzahl_abweichungen",
+   "fieldtype": "Int",
+   "label": "Abweichungen",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_bericht",
+   "fieldtype": "Section Break",
+   "label": "Bericht"
+  },
+  {
+   "fieldname": "bericht",
+   "fieldtype": "Long Text",
+   "label": "Bericht",
+   "read_only": 1
+  },
+  {
+   "fieldname": "daten",
+   "fieldtype": "Code",
+   "options": "JSON",
+   "label": "Rohdaten",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung der QS"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "options": "Rueckverfolgungstest",
+   "label": "Amended From",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-28 22:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Rueckverfolgungstest",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "submit": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "submit": 1,
+   "cancel": 1,
+   "amend": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "naming_rule": "Expression",
+ "is_submittable": 1
+}

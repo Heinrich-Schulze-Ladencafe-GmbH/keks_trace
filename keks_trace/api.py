@@ -17,3 +17,12 @@ def traeger_info(code: str) -> dict:
 	"""Inhalt eines Behälters (Charge, Menge, Verfall) nach dem Scannen seines QR-Codes."""
 	frappe.has_permission("Produkttraeger", "read", code, throw=True)
 	return traeger.info(code)
+
+
+@frappe.whitelist()
+def mengenbilanz(charge: str) -> dict:
+	"""Mengenbilanz einer Charge: Zugang, Abgang, Bestand, Abgleich mit der Genealogie."""
+	from keks_trace.bilanz import mengenbilanz as _bilanz
+
+	frappe.has_permission("Batch", "read", charge, throw=True)
+	return _bilanz(charge)

@@ -8,16 +8,18 @@ import frappe
 from frappe import _
 from frappe.utils import formatdate, getdate
 
-from keks_trace import rework, traeger
+from keks_trace import rework, sperre, traeger, vollstaendigkeit
 from keks_trace.utils import artikel_stufe, eingangs_zeilen, zeilen_chargen
 
 
 def pruefe_stock_entry(doc, method=None):
+	sperre.pruefe_stock_entry(doc)
 	if doc.purpose not in ("Manufacture", "Repack"):
 		return
 	_pruefe_verfall(doc)
 	rework.pruefe(doc)
 	traeger.pruefe(doc)
+	vollstaendigkeit.pruefe(doc)
 
 
 def _pruefe_verfall(doc):

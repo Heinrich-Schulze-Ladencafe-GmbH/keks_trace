@@ -16,10 +16,23 @@ after_migrate = "keks_trace.install.after_migrate"
 doc_events = {
 	"Stock Entry": {
 		# Läuft VOR der ERPNext-Prüfung, damit Bediener klare deutsche Meldungen sehen:
-		# Verfall, Rework-Regeln, Allergene, Behälter.
+		# Sperren, Verfall, Rework-Regeln, Allergene, Behälter, Vollständigkeit.
 		"before_validate": "keks_trace.pruefungen.pruefe_stock_entry",
 		# Genealogie-Kanten, Ursprungs-/Backtag-/MHD-Daten und Behälterinhalt.
 		"on_submit": ["keks_trace.genealogie.on_submit", "keks_trace.traeger.on_submit"],
 		"on_cancel": ["keks_trace.genealogie.on_cancel", "keks_trace.traeger.on_cancel"],
-	}
+		"on_trash": "keks_trace.schutz.beleg_on_trash",
+	},
+	"Delivery Note": {
+		"before_validate": "keks_trace.sperre.pruefe_lieferung",
+		"on_trash": "keks_trace.schutz.beleg_on_trash",
+	},
+	"Purchase Receipt": {"on_trash": "keks_trace.schutz.beleg_on_trash"},
+	"Stock Reconciliation": {"on_trash": "keks_trace.schutz.beleg_on_trash"},
+	"Batch": {
+		"before_insert": "keks_trace.sperre.batch_before_insert",
+		"after_insert": "keks_trace.sperre.batch_after_insert",
+		"validate": "keks_trace.schutz.batch_validate",
+		"on_trash": "keks_trace.schutz.batch_on_trash",
+	},
 }
