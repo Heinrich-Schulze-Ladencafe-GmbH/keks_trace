@@ -220,10 +220,14 @@
 	}
 
 	let meldungTimer;
+	let statusTimer;
 	function status(art, text) {
 		const s = document.getElementById("status");
 		s.className = art || "";
 		document.getElementById("status-text").textContent = text;
+		clearTimeout(statusTimer);
+		// Erfolg und Hinweise verschwinden von selbst; Fehler bleiben bis zum nächsten Bildschirm
+		if (art && art !== "rot") statusTimer = setTimeout(() => status("", "Bereit."), 6000);
 	}
 	document.getElementById("status-start").addEventListener("click", () => zustand.station && startseite());
 	document.getElementById("status-zurueck").addEventListener("click", () => {
@@ -393,6 +397,7 @@
 
 	// ------------------------------------------------------------------ Rahmen
 	function kopf(titel, zurueck) {
+		status("", "Bereit."); // neuer Bildschirm: alte Meldung weg (eine neue kommt ggf. direkt danach)
 		return `<div class="kopf">
 			<h1>${esc(titel)}</h1>
 			<div style="text-align:right"><div class="klein">Station ${esc(zustand.station || "-")}</div>${zurueck ? `<button class="link" data-a="zurueck">← Zurück</button>` : `<button class="link" data-a="station-wechseln">Station wechseln</button>`}</div>
@@ -428,6 +433,7 @@
 
 	// ------------------------------------------------------------------ Station
 	async function stationWaehlen() {
+		status("", "Bereit.");
 		app.innerHTML = `<div class="kopf"><h1>Keks Trace Terminal</h1></div><div id="meldung"></div>
 			<p>An welcher Station steht dieses Terminal?</p><div class="raster" id="liste">Lädt …</div>`;
 		try {
