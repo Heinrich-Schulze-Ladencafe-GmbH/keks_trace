@@ -556,6 +556,12 @@ class TestTerminal(IntegrationTestCase):
 		terminal.umlagern("Lager", code=e["charge"], anzahl=2, einheit="Karton", nach=self.ctx.verkauf)
 		self.assertTrue(terminal.charge_lager(e["charge"]).get(self.ctx.verkauf))
 
+	def test_19e_kopfdaten_statusleiste(self):
+		d = terminal.kopfdaten("Herzen Verpackung")
+		self.assertTrue(d["zeit"] and d["datum_text"] and d["kw"])
+		self.assertEqual(d["station"], "Herzen Verpackung")
+		self.assertIn("Metalldetektor Herzenboden", d["pruefung"]["text"])
+
 	# ------------------------------------------------------------------ Prüfungen (CP/CCP)
 	def test_20_ueberfaellige_ccp_sperrt_station(self):
 		demo.pruefungen_altern("Metalldetektor Herzenboden")

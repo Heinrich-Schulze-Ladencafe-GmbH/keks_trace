@@ -131,6 +131,9 @@ def faellig(station: str) -> list[dict]:
 				"faellig_ab": faellig_ab.strftime("%H:%M") if faellig_ab else None,
 				"faellig": faellig_ab is None or jetzt >= faellig_ab,
 				"bald": bool(faellig_ab and jetzt < faellig_ab <= jetzt + timedelta(minutes=10)),
+				"in_minuten": int((faellig_ab - jetzt).total_seconds() // 60)
+				if faellig_ab and faellig_ab > jetzt
+				else 0,
 				"sperrt": bool(p.sperrt_wenn_faellig),
 			}
 		)

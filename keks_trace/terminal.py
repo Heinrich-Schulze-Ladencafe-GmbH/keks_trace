@@ -119,6 +119,56 @@ def start(station: str) -> dict:
 
 
 @frappe.whitelist()
+def kopfdaten(station: str) -> dict:
+	"""Für die Statusleiste: Serverzeit, KW, Los des Tages, Benutzer, laufender Auftrag, nächste Prüfung."""
+	s = _station(station)
+	jetzt = now_datetime()
+	tage = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+	daten = {
+		"zeit": jetzt.isoformat(),
+		"datum_text": f"{tage[jetzt.weekday()]} {jetzt.strftime('%d.%m.%Y')}",
+		"kw": jetzt.isocalendar()[1],
+		"los": los_modul.jwwt(jetzt.date()) if los_modul.format_() == "JWWT" else None,
+		"benutzer": frappe.utils.get_fullname(frappe.session.user),
+		"station": s.name,
+		"auftrag": None,
+		"pruefung": None,
+	}
+	if s.f_linie and s.aktueller_auftrag:
+		pa = frappe.db.get_value(
+			"Produktionsauftrag",
+			s.aktueller_auftrag,
+			["name", "artikel", "menge_kg", "gebucht_kg", "status"],
+			as_dict=True,
+		)
+		if pa and pa.status == "Läuft":
+			from keks_trace.linienbuchung import _menge_text
+
+			daten["auftrag"] = (
+				f"{pa.name} · {frappe.get_cached_value('Item', pa.artikel, 'item_name')} · "
+				f"{_menge_text(pa.artikel, pa.gebucht_kg)} von {_menge_text(pa.artikel, pa.menge_kg)}"
+			)
+	try:
+		liste = pruefung.faellig(s.name)
+	except Exception:
+		liste = []
+	if liste:
+		faellig = [p for p in liste if p["faellig"]]
+		if faellig:
+			daten["pruefung"] = {
+				"text": f"{faellig[0]['titel']} fällig",
+				"art": "rot" if faellig[0]["sperrt"] else "orange",
+			}
+		else:
+			p = min(liste, key=lambda x: x["in_minuten"])
+			daten["pruefung"] = {
+				"text": f"{p['titel']} in {p['in_minuten']} min",
+				"art": "orange" if p["bald"] else "",
+			}
+	return daten
+
+
+@frappe.whitelist()
 def pruefungen_faellig(station: str) -> list[dict]:
 	return pruefung.faellig(_station(station).name)
 
