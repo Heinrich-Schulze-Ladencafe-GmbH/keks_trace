@@ -463,6 +463,30 @@
 		return `<table class="tab"><thead><tr>${spalten.map(([t, , r]) => `<th class="${r ? "z" : ""}">${esc(t)}</th>`).join("")}</tr></thead><tbody>${zeilen.map((z, i) =>
 			`<tr ${aktion ? `data-a="${aktion}" data-i="${i}"` : ""}>${spalten.map(([, f, r]) => `<td class="${r ? "z" : ""}">${esc(typeof f === "function" ? f(z) : z[f])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
 	}
+	// Lange Listen wie bei FOBIS: Suchfeld + Tabelle, zeigt höchstens 50 Treffer (bei 2.000 Artikeln keine Knopfwüste).
+	// Eine Zeile antippen ruft wahl(zeile) auf. Gesucht wird in allen Spalten.
+	function suchListe(elId, spalten, zeilen, wahl, platzhalter) {
+		const el = document.getElementById(elId);
+		if (!el) return;
+		if (!zeilen.length) { el.innerHTML = `<p class="fehlt">Keine Einträge.</p>`; return; }
+		const MAX = 50;
+		const text = zeilen.map((z) => spalten.map(([, f]) => (typeof f === "function" ? f(z) : z[f]) || "").join(" ").toLowerCase());
+		el.innerHTML = `<input class="feld" data-art="text" inputmode="none" autocomplete="off" placeholder="${esc(platzhalter || "Suchen …")}">
+			<div class="treffer"></div><p class="fehlt mehr" style="font-size:16px"></p>`;
+		const f = el.querySelector("input"), box = el.querySelector(".treffer"), mehr = el.querySelector(".mehr");
+		const zeigen = () => {
+			const worte = f.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+			const idx = [];
+			for (let i = 0; i < zeilen.length; i++) if (worte.every((w) => text[i].includes(w))) idx.push(i);
+			const sicht = idx.slice(0, MAX).map((i) => ({ ...zeilen[i], _i: i }));
+			box.innerHTML = tabelle(spalten, sicht, "wahl");
+			box.querySelectorAll("tr[data-i]").forEach((tr) => { tr.dataset.i = sicht[+tr.dataset.i]._i; });
+			mehr.textContent = idx.length > MAX ? `${idx.length} Treffer, die ersten ${MAX} angezeigt – Suche verfeinern.` : `${idx.length} von ${zeilen.length}`;
+		};
+		f.addEventListener("input", zeigen);
+		box.addEventListener("click", (e) => { const tr = e.target.closest("tr[data-i]"); if (tr) wahl(zeilen[+tr.dataset.i]); });
+		zeigen();
+	}
 	function zahlText(n) { return n == null ? "" : rund(n, 3).toLocaleString("de-DE"); }
 	// Position wie bei FOBIS: Bestellt / Erledigt / ToDo groß
 	function positionBox(titel, rechts, bestellt, erledigt, todo, einheit) {
@@ -800,7 +824,7 @@
 		const la = zustand.linienAuftrag;
 		app.innerHTML = kopf(la ? "Kneten" : verpackung ? "Verpacken" : "Herstellen", true) + (la ? auftragKopf(la) : "") +
 			(verpackung ? `<p><b>Kundenaufträge</b> – Zeile antippen</p><div id="auftraege">Lädt …</div><p style="margin-top:22px"><b>Ohne Auftrag</b></p>` : `<p>Was wird hergestellt?</p>`) +
-			`<div class="raster" id="liste">Lädt …</div>`;
+			`<div id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
 			const [liste, auftraege] = await Promise.all([
@@ -815,9 +839,7 @@
 						["Einh.", (z) => ein(z.einheit)], ["Termin", "termin"]], auftragsListe, "auftrag")
 					: `<span class="fehlt">Keine offenen Kundenaufträge.</span>`;
 			}
-			document.getElementById("liste").innerHTML = liste.length
-				? liste.map((r) => `<button class="knopf" data-a="rezept" data-artikel="${esc(r.artikel)}">${esc(r.name)}<small>${esc(r.stufe)} · ${esc(r.artikel)}</small></button>`).join("")
-				: "Keine Rezepte für diese Station.";
+			suchListe("liste", [["Artikel", "artikel"], ["Bezeichnung", "name"], ["Stufe", "stufe"]], liste, (r) => rezeptMenge(r.artikel), "Suchen: Artikelnummer oder Bezeichnung …");
 			aktionen((a, d) => {
 				if (a === "pa-wechseln") return auftragWaehlen("Kneten", herstellenStart);
 				if (a === "rezept") return rezeptMenge(d.artikel);
@@ -1094,13 +1116,11 @@
 
 	// ------------------------------------------------------------------ Rework / Bruch
 	async function reworkStart() {
-		app.innerHTML = kopf(zustand.nur_fertigware ? "Packbruch" : "Rework / Bruch", true) + `<p>In welchen Rework-Behälter?</p><div class="raster" id="liste">Lädt …</div>`;
+		app.innerHTML = kopf(zustand.nur_fertigware ? "Packbruch" : "Rework / Bruch", true) + `<p>In welchen Rework-Behälter?</p><div id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
 			const liste = await api("rework_artikel");
-			document.getElementById("liste").innerHTML = liste.map((r) => `<button class="knopf" data-a="rw" data-artikel="${esc(r.artikel)}" data-name="${esc(r.name)}">${esc(r.name)}<small>${esc(r.allergengruppe || "")}</small></button>`).join("") || "Keine Rework-Artikel angelegt.";
-			suche("liste");
-			aktionen((a, d) => (a === "rw" ? reworkErfassen(d.artikel, d.name) : beiAllgemein(a)));
+			suchListe("liste", [["Rework-Artikel", "name"], ["Artikel", "artikel"], ["Allergengruppe", "allergengruppe"]], liste, (r) => reworkErfassen(r.artikel, r.name));
 		} catch (e) { meldung("rot", e.message); }
 	}
 
@@ -1131,13 +1151,13 @@
 	// ------------------------------------------------------------------ Wareneingang
 	let artikelListe = [];
 	async function wareneingangStart() {
-		app.innerHTML = kopf("Wareneingang", true) + `<p>Welcher Artikel?</p><div class="raster" id="liste">Lädt …</div>`;
+		app.innerHTML = kopf("Wareneingang", true) + `<p>Welcher Artikel? Zeile antippen</p><div id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
 			artikelListe = await api("wareneingang_artikel");
-			document.getElementById("liste").innerHTML = artikelListe.map((r, i) => `<button class="knopf" data-a="art" data-i="${i}">${esc(r.name)}<small>${esc(r.artikel)}${r.kt_freigabe_pflicht ? " · Freigabe durch QS" : ""}${r.bio ? " · BIO" : ""}</small></button>`).join("");
-			suche("liste");
-			aktionen((a, d) => (a === "art" ? wareneingangErfassen(artikelListe[+d.i]) : beiAllgemein(a)));
+			suchListe("liste", [["Artikel", "artikel"], ["Bezeichnung", "name"], ["Einheit", (r) => ein(r.stock_uom)],
+				["Hinweis", (r) => [r.silo ? "Silo" : "", r.kt_freigabe_pflicht ? "Freigabe QS" : "", r.bio ? "BIO" : ""].filter(Boolean).join(", ")]],
+				artikelListe, (r) => wareneingangErfassen(r), "Suchen: Artikelnummer oder Bezeichnung …");
 		} catch (e) { meldung("rot", e.message); }
 	}
 
@@ -1350,17 +1370,14 @@
 	// ------------------------------------------------------------------ Lieferung
 	let lieferung;
 	async function lieferungStart() {
-		app.innerHTML = kopf("Lieferung", true) + `<p>An welchen Kunden?</p><div class="raster" id="liste">Lädt …</div>`;
+		app.innerHTML = kopf("Lieferung", true) + `<p>An welchen Kunden? Zeile antippen</p><div id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
 			const liste = await api("kunden");
-			document.getElementById("liste").innerHTML = liste.map((k) => `<button class="knopf" data-a="kunde" data-name="${esc(k.name)}" data-titel="${esc(k.customer_name)}">${esc(k.customer_name)}</button>`).join("") || "Keine Kunden angelegt.";
-			suche("liste");
-			aktionen((a, d) => {
-				if (a !== "kunde") return beiAllgemein(a);
-				lieferung = { kunde: d.name, titel: d.titel, zeilen: [], auftrag: null, positionen: [] };
+			suchListe("liste", [["Kunde", "customer_name"], ["Nr.", "name"]], liste, (k) => {
+				lieferung = { kunde: k.name, titel: k.customer_name, zeilen: [], auftrag: null, positionen: [] };
 				lieferAuftragWaehlen();
-			});
+			}, "Suchen: Kundenname …");
 		} catch (e) { meldung("rot", e.message); }
 	}
 

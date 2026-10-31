@@ -567,7 +567,7 @@ def kunden() -> list[dict]:
 		filters={"disabled": 0},
 		fields=["name", "customer_name"],
 		order_by="customer_name",
-		limit=200,
+		limit=10000,
 	)
 
 
