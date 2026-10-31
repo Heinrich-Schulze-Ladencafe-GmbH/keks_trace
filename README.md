@@ -359,6 +359,18 @@ MHD-Begrenzung durch die Füllung (MHD = MHD des Nougats statt Backtag + 270 Tag
 
 > Nur auf einem Testsystem ausführen. Die Demo bucht echte Lagerbewegungen.
 
+## Einkauf: Kontrakte und Reichweite
+
+Eingekauft wird nach Auftragslage und Börse, nicht nach Bestellvorschlag. ERPNext-Standard deckt das ab:
+
+- **Rahmenauftrag (Blanket Order, Typ Einkauf)** für Kontrakte: Menge und Preis fest, jede Bestellung
+  zeigt auf den Rahmenauftrag (Häkchen „Gegen Rahmenauftrag“), ERPNext zählt den Abruf mit.
+- **Mindestbestand** (Artikel → Nachbestellung) nur für Kleinkram wie Folie, Etiketten, Schleifen.
+- Bericht **Reichweite Rohstoffe** (Workspace Keks Trace → Einkauf): Bestand, bestellt, Kontrakt offen,
+  Verbrauch je Tag, reicht bis, Bedarf aus offenen Kundenaufträgen (über die Rezepte bis zum Rohstoff).
+
+Demo: `bench --site keks.localhost execute keks_trace.demo_einkauf.anlegen` (50 t Zucker-Kontrakt, zwei Abrufe).
+
 ## Lasttest (Datenflut)
 
 Wie schnell bleibt das System, wenn Jahre an Daten drin sind? Auf dem Demo-Server:

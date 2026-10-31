@@ -228,3 +228,19 @@ class TestLinie(IntegrationTestCase):
 		for _code, c in kuebel:
 			self.assertIn(c, kette)
 		linienbuchung.beenden("Paletten-Terminal", pa.name)
+
+	def test_07_reichweite_und_kontrakt(self):
+		"""Einkauf: Kontrakt (Rahmenauftrag) mit Abrufen; Reichweite zeigt Bestand, bestellt, Kontrakt offen."""
+		from keks_trace import demo_einkauf
+		from keks_trace.keks_trace.report.reichweite_rohstoffe.reichweite_rohstoffe import execute
+
+		k = demo_einkauf.anlegen()
+		self.assertEqual(k["menge"], 50000)
+		self.assertGreaterEqual(k["abgerufen"], 24000)
+		zeilen = {z["artikel"]: z for z in execute({"stufe": "Rohstoff", "artikel": "KT-ZUCKER"})[1]}
+		z = zeilen["KT-ZUCKER"]
+		self.assertGreaterEqual(z["bestellt"], 24000)
+		self.assertAlmostEqual(z["kontrakt"], 50000 - k["abgerufen"])
+		# Bedarf aus offenen Kundenaufträgen geht bis auf Rohstoffe herunter
+		alle = execute({"stufe": "Rohstoff und Packmittel"})[1]
+		self.assertTrue(any(r["bedarf_auftraege"] > 0 for r in alle))
