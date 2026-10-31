@@ -220,15 +220,22 @@ def grossauftraege(ctx) -> list[str]:
 
 def kuebel_fuellen(ctx, anzahl: int = 6):
 	"""Anfangsbestand: veredelter Honigteig 5888 in Kübeln, unterschiedlich alt (für „ältester zuerst“)."""
+	belegt = frappe.db.count(
+		"Produkttraeger", {"status": "Belegt", "artikel": "5888", "code": ["like", "K-%"]}
+	)
 	frei = frappe.get_all(
 		"Produkttraeger",
 		{"typ": "Teigbehälter", "status": "Frei", "code": ["like", "K-%"]},
 		pluck="code",
 		order_by="code",
 	)
-	for i, code in enumerate(frei[:anzahl]):
-		tag = add_days(nowdate(), -(anzahl - i) // 3)
-		charge = demo.neue_charge("5888", f"5888-{getdate(tag).strftime('%y%m%d')}-{code}", tag)
+	fehlen = max(anzahl - belegt, 0)  # erneuter Lauf füllt nur auf
+	for i, code in enumerate(frei[:fehlen]):
+		tag = add_days(nowdate(), -(fehlen - i) // 3)
+		name = f"5888-{getdate(tag).strftime('%y%m%d')}-{code}"
+		if frappe.db.exists("Batch", name):
+			name += "-" + frappe.generate_hash(length=3).upper()
+		charge = demo.neue_charge("5888", name, tag)
 		demo.buchen(ctx, "Material Receipt", tag, "05:00:00", ausgaenge=[("5888", charge, 200, code)])
 
 
