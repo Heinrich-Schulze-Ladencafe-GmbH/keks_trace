@@ -267,6 +267,16 @@ ist der Engpass; von den Verpackungsanlagen zählt die, die der Auftrag nutzt.
   Rest auf der Linie als „Linienrest“ aus.
 - Lange Listen am Terminal haben ab 8 Einträgen ein Suchfeld.
 
+**Metallcheck je Verpackungsanlage:** Jede Anlage (InoTec, Thürlings, Carina, Manuelles Band) hat
+einen eigenen stündlichen CCP-Prüfplan („Prüfplan → Verpackungsanlage“). Er ist an Packstation und
+Paletten-Terminal fällig, solange dort ein Auftrag auf dieser Anlage läuft; überfällig = keine
+Palette. Abweichung sperrt die Lose, die seit dem letzten OK auf dieser Anlage verpackt wurden.
+
+**Herzenboden** (`keks_trace.demo_herzen.anlegen`): Herzen in Stück, je Größe ein Artikel
+(Platzhalter 12, 18, 25 cm). Rohling backen (Backstube, aus Grundteig) → Zuckerglasur nach eigener
+Rezeptur (Halbfabrikat, max. 2 Tage; Haken „begrenzt das MHD des Endprodukts nicht“) → Garnieren
+(Rohling + Glasur) → Verpacken auf der Kalfass (Herz + Folie + Etikett + Schleife, Metallcheck Fe 2,8 mm).
+
 **Kübel:** Produktträger „Teigbehälter“ mit Nummer K-001 …; `/kuebel_code` erzeugt je Kübel
 Data Matrix + Nummer als SVG zum Einlasern.
 

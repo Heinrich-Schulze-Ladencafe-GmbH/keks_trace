@@ -63,19 +63,41 @@ def fuer_herstellen(ziel: str, station: str | None = None) -> list:
 	return fuer_artikel(HERSTELLEN, ziel) + fuer_umstellung(station, ziel)
 
 
+def anlage_der_station(station) -> str | None:
+	"""Verpackungsanlage des Auftrags, der an Packstation/Paletten-Terminal gerade läuft."""
+	s = frappe.get_cached_doc("Terminal Station", station)
+	if not (s.get("f_packstation") or s.get("f_palette_fertig")):
+		return None
+	pa = frappe.db.get_value("Terminal Station", station, "aktueller_auftrag")
+	return frappe.db.get_value("Produktionsauftrag", pa, "verpackungsanlage") if pa else None
+
+
 def fuer_station(station) -> list:
 	s = frappe.get_cached_doc("Terminal Station", station)
-	return [
-		p
-		for p in _plaene(REGEL)
-		if (station in {x.station for x in p.stationen}) or (not p.stationen and s.f_herstellen)
-	]
+	anlage = anlage_der_station(station)
+	ergebnis = []
+	for p in _plaene(REGEL):
+		if p.get("verpackungsanlage"):
+			# Metallcheck je Anlage: gilt dort, wo gerade auf dieser Anlage verpackt wird
+			if anlage and p.verpackungsanlage == anlage:
+				ergebnis.append(p)
+		elif (station in {x.station for x in p.stationen}) or (not p.stationen and s.f_herstellen):
+			ergebnis.append(p)
+	return ergebnis
+
+
+def _filter(plan, station, **weitere):
+	"""Prüfungen eines Plans: je Station, bei Anlagen-Plänen unabhängig von der Station."""
+	f = {"pruefplan": plan, **weitere}
+	if not frappe.get_cached_value("Pruefplan", plan, "verpackungsanlage"):
+		f["station"] = station
+	return f
 
 
 def _letzte_ok(plan, station):
 	return frappe.db.get_value(
 		"Pruefung",
-		{"pruefplan": plan, "station": station, "ergebnis": "OK"},
+		_filter(plan, station, ergebnis="OK"),
 		"zeitpunkt",
 		order_by="zeitpunkt desc",
 	)
@@ -85,7 +107,7 @@ def _zuletzt_abweichung(plan, station) -> bool:
 	return (
 		frappe.db.get_value(
 			"Pruefung",
-			{"pruefplan": plan, "station": station},
+			_filter(plan, station),
 			"ergebnis",
 			order_by="zeitpunkt desc, creation desc",
 		)
@@ -260,6 +282,25 @@ def chargen_seit(station, seit) -> list[str]:
 	return sorted({z.charge for z in zeilen if z.charge})
 
 
+def chargen_seit_anlage(anlage, seit) -> list[str]:
+	"""Lose, die seit dem Zeitpunkt auf einer Verpackungsanlage verpackt wurden (Aufträge dieser Anlage)."""
+	bedingung = "and timestamp(se.posting_date, se.posting_time) >= %(seit)s" if seit else ""
+	zeilen = frappe.db.sql(
+		f"""
+		select distinct ifnull(nullif(sed.batch_no, ''), sbe.batch_no) as charge
+		from `tabStock Entry` se
+		join `tabProduktionsauftrag` pa on pa.name = se.kt_produktionsauftrag
+		join `tabStock Entry Detail` sed on sed.parent = se.name
+		left join `tabSerial and Batch Entry` sbe on sbe.parent = sed.serial_and_batch_bundle
+		where se.docstatus = 1 and se.purpose = 'Manufacture' and pa.verpackungsanlage = %(anlage)s
+			and ifnull(sed.t_warehouse, '') != '' {bedingung}
+		""",
+		{"anlage": anlage, "seit": get_datetime(seit).replace(microsecond=0) if seit else None},
+		as_dict=True,
+	)
+	return sorted({z.charge for z in zeilen if z.charge})
+
+
 @frappe.whitelist()
 def erfassen(station: str, pruefplan: str, eingabe, bemerkung: str | None = None) -> dict:
 	"""Regelmäßige Prüfung an der Station erfassen."""
@@ -274,8 +315,13 @@ def erfassen(station: str, pruefplan: str, eingabe, bemerkung: str | None = None
 		if p.bei_abweichung == "Sperren":
 			seit = _letzte_ok(p.name, station)
 			vorgang = "PR-" + now_datetime().strftime("%Y%m%d-%H%M%S")
+			chargen = (
+				chargen_seit_anlage(p.verpackungsanlage, seit)
+				if p.get("verpackungsanlage")
+				else chargen_seit(station, seit)
+			)
 			gesperrt = _sperren(
-				chargen_seit(station, seit),
+				chargen,
 				_("{0} ({1}) nicht bestanden an {2}").format(p.titel, p.lenkung, station),
 				vorgang,
 			)

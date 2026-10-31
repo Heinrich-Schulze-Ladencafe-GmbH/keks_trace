@@ -14,6 +14,7 @@
   "sperrt_wenn_faellig",
   "section_break_1",
   "stationen",
+  "verpackungsanlage",
   "artikel",
   "section_break_2",
   "art",
@@ -167,11 +168,18 @@
    "fieldtype": "Data",
    "label": "Zugehöriges Dokument",
    "description": "Z. B. FO 3.10.12 Prüfprotokoll"
+  },
+  {
+   "fieldname": "verpackungsanlage",
+   "fieldtype": "Link",
+   "label": "Verpackungsanlage",
+   "options": "Linienabschnitt",
+   "description": "Nur für regelmäßige Prüfungen: gilt für die Anlage (z. B. Metallcheck InoTec), fällig an Packstation und Paletten-Terminal, solange ein Auftrag auf dieser Anlage läuft. Abweichung sperrt die Lose, die seit der letzten OK-Prüfung auf der Anlage verpackt wurden."
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-31 09:00:00.000000",
+ "modified": "2026-10-31 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Pruefplan",

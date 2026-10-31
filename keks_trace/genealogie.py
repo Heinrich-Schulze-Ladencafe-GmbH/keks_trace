@@ -150,7 +150,11 @@ def daten_berechnen(out_item, eingaenge, buchungstag, out_charge=None, ohne_bele
 		if backtag:
 			backtage.append(getdate(backtag))
 		if stufe in ("Ware lose", "Fertigware"):
-			if in_stufe in KOMPONENTEN_STUFEN and verfall:
+			if (
+				in_stufe in KOMPONENTEN_STUFEN
+				and verfall
+				and not frappe.get_cached_value("Item", in_item, "kt_mhd_nicht_begrenzend")
+			):
 				komponenten_mhd.append(getdate(verfall))
 			if kmhd:
 				komponenten_mhd.append(getdate(kmhd))

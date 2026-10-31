@@ -414,7 +414,7 @@ PRUEFPLAENE = [
 		"sperrt_wenn_faellig": 1,
 		"stationen": ["Herzen Verpackung"],
 		"art": "Prüfkörper",
-		"frage": "Prüfkörper durch den Metalldetektor geschickt: erkannt?",
+		"frage": "Kalfass (garnierte Herzen): Prüfkörper durch den Metalldetektor geschickt, erkannt?",
 		"pruefkoerper": "Fe 2,8 mm",
 		"bei_abweichung": "Sperren",
 		"korrekturmassnahme": "Ware sperren, Sperrprotokoll",

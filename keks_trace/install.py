@@ -72,6 +72,13 @@ CUSTOM_FIELDS = {
 			"description": "Für lose Ware und Fertigware. Leer = Backtag.",
 		},
 		{
+			"fieldname": "kt_mhd_nicht_begrenzend",
+			"label": "Begrenzt das MHD des Endprodukts nicht",
+			"fieldtype": "Check",
+			"insert_after": "kt_mhd_bezug",
+			"description": "Für Zutaten nach dem Backen, deren eigene Lagerzeit nur bis zur Verarbeitung gilt (z. B. Zuckerglasur, die antrocknet). Sonst begrenzt ihr MHD das MHD der losen Ware und Fertigware.",
+		},
+		{
 			"fieldname": "kt_linienleistung",
 			"label": "Leistung je Linienabschnitt",
 			"fieldtype": "Table",

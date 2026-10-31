@@ -4,7 +4,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_months, flt, getdate, nowdate
 
-from keks_trace import demo, demo_linie, linienbuchung, planung, terminal
+from keks_trace import demo, demo_linie, linienbuchung, planung, pruefung, terminal
 from keks_trace.linienbuchung import LinienFehler
 
 
@@ -75,6 +75,13 @@ class TestLinie(IntegrationTestCase):
 		# Paletten-Terminal: 10 Karton = 40 kg Fertigware
 		linienbuchung.waehlen("Paletten-Terminal", self.pa.name)
 		nve = terminal.palette_neu("Paletten-Terminal")["nve"]
+		# Metallcheck der Anlage (InoTec) ist fällig: erst prüfen, dann buchen
+		faellig = [f["titel"] for f in pruefung.faellig("Paletten-Terminal") if f["faellig"]]
+		self.assertIn("Metallcheck InoTec", faellig)
+		self.assertNotIn("Metallcheck Thürlings", faellig)
+		with self.assertRaisesRegex(pruefung.PruefFehler, "Metallcheck InoTec"):
+			terminal.linie_palette("Paletten-Terminal", 10, "Karton", nve)
+		demo_linie.metallcheck_ok("Paletten-Terminal")
 		e = terminal.linie_palette("Paletten-Terminal", 10, "Karton", nve)
 		self.assertEqual(e["menge"], 40)
 		verbraucht = {v["charge"]: v["menge"] for v in e["verbraucht"]}
@@ -95,6 +102,21 @@ class TestLinie(IntegrationTestCase):
 		)
 		# Packmittel nicht an der Linie gebucht: kein Fehler, nur Teig verbraucht
 		self.assertFalse(any("Schlauchbeutel" in h for h in e["hinweise"]))
+
+		# Metallcheck an der Packstation nicht bestanden: Lose dieser Anlage seit dem letzten OK gesperrt
+		frappe.db.set_value("Terminal Station", "Packstation", "aktueller_auftrag", self.pa.name)
+		koerper = frappe.get_doc("Pruefplan", "Metallcheck InoTec").koerper()
+		r = pruefung.erfassen(
+			"Packstation",
+			"Metallcheck InoTec",
+			{"koerper": {k: k != koerper[0] for k in koerper}},
+			"Fe nicht erkannt",
+		)
+		self.assertIn(e["charge"], r["gesperrt"])
+		from keks_trace import sperre
+
+		sperre.freigeben(e["charge"], "Test: nachgeprüft")
+		demo_linie.metallcheck_ok("Packstation")
 
 		# Packstation zeigt Los und MHD
 		frappe.db.set_value("Terminal Station", "Packstation", "aktueller_auftrag", self.pa.name)

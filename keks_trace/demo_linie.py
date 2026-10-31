@@ -75,6 +75,9 @@ GROSSKUNDEN = [
 
 KUEBEL = 40
 
+# Jede Verpackungsanlage hat einen eigenen Metalldetektor (CCP, HACCP-Schritt 20)
+METALLCHECK_ANLAGEN = ["InoTec", "Thürlings", "Carina", "Manuelles Band"]
+
 
 def stammdaten() -> frappe._dict:
 	ctx = pilot.anlegen()
@@ -102,6 +105,12 @@ def stammdaten() -> frappe._dict:
 				"fertiglager": ctx.fertig,
 			}
 		).insert()
+	# Kalfass verpackt die garnierten Herzen am Herzenboden (eigene Station, nicht an der Backstraße)
+	if not frappe.db.exists("Linienabschnitt", "Kalfass"):
+		frappe.get_doc(
+			{"doctype": "Linienabschnitt", "abschnitt_name": "Kalfass", "art": "Verpackungsanlage",
+			 "beschreibung": "Verpackung garnierte Herzen (Herzenboden), Metallcheck Fe 2,8 mm"}
+		).insert()  # fmt: skip
 	for i, (name, art) in enumerate(ABSCHNITTE, 1):
 		if not frappe.db.exists("Linienabschnitt", name):
 			frappe.get_doc(
@@ -111,6 +120,26 @@ def stammdaten() -> frappe._dict:
 					"art": art,
 					"linie": LINIE,
 					"reihenfolge": i,
+				}
+			).insert()
+	for anlage in METALLCHECK_ANLAGEN:
+		titel = f"Metallcheck {anlage}"
+		if not frappe.db.exists("Pruefplan", titel):
+			frappe.get_doc(
+				{
+					"doctype": "Pruefplan",
+					"titel": titel,
+					"lenkung": "CCP",
+					"ausloeser": "Regelmäßig an der Station",
+					"intervall_minuten": 60,
+					"sperrt_wenn_faellig": 1,
+					"verpackungsanlage": anlage,
+					"art": "Prüfkörper",
+					"frage": f"{anlage}: Prüfkörper durch den Metalldetektor geschickt, erkannt?",
+					"pruefkoerper": "Fe 2,5 mm\nBronze 2,5 mm\nMessing 2,5 mm\nEdelstahl 2,5 mm",
+					"bei_abweichung": "Sperren",
+					"korrekturmassnahme": "Ware seit der letzten OK-Prüfung sperren, Sperrprotokoll, Metalldetektor prüfen lassen",
+					"dokument": "HACCP 20 Metallcheck, FO 3.10.12 Prüfprotokoll",
 				}
 			).insert()
 	for artikel, zeilen in LEISTUNG.items():
@@ -225,3 +254,12 @@ def anlegen(planen: int = 1) -> dict:
 		f"Leistung 17846: {flt(frappe.db.get_value('Item', '17846', 'kt_leistung_kg_h'), 1)} kg/h, Engpass {frappe.db.get_value('Item', '17846', 'kt_engpass')}"
 	)
 	return ergebnis
+
+
+def metallcheck_ok(station: str = "Packstation"):
+	"""Bestandenen Metallcheck der Anlage erfassen, auf der an der Station gerade verpackt wird (Demo, Tests)."""
+	from keks_trace import pruefung
+
+	for p in pruefung.fuer_station(station):
+		if p.get("verpackungsanlage"):
+			pruefung.erfassen(station, p.name, {"koerper": {k: True for k in p.koerper()}})
