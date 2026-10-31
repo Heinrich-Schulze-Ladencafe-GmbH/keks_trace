@@ -476,6 +476,25 @@ class TestTerminal(IntegrationTestCase):
 		with self.assertRaisesRegex(TerminalFehler, "nicht freigeschaltet"):
 			terminal.umlagern("Versand", code=e["charge"], anzahl=1, einheit="Karton")
 
+	def test_19b_umlagern_zwischen_lagern(self):
+		"""Mehrere Lager: am Lager wird das Ziel gewählt, z. B. Außenlager und später Lagerverkauf."""
+		abbr = frappe.get_cached_value("Company", self.ctx.company, "abbr")
+		aussen = f"Außenlager (Demo) - {abbr}"
+		e = self._verpacken(10)
+		ziele = {z["name"] for z in terminal.umlager_ziele("Lager")}
+		self.assertTrue({aussen, self.ctx.verkauf} <= ziele)
+		with self.assertRaisesRegex(TerminalFehler, "wählen"):
+			terminal.umlagern("Lager", code=e["charge"], anzahl=1, einheit="Karton")
+		with self.assertRaisesRegex(TerminalFehler, "nicht umgelagert"):
+			terminal.umlagern("Lager", code=e["charge"], anzahl=1, einheit="Karton", nach="Stores - " + abbr)
+		u = terminal.umlagern("Lager", code=e["charge"], anzahl=4, einheit="Karton", nach=aussen)
+		self.assertEqual(u["nach"], aussen)
+		self.assertTrue(terminal.charge_lager(e["charge"]).get(aussen))
+		# Aus dem Außenlager darf weiter geliefert werden, aus dem Lagerverkauf nicht
+		terminal.umlagern("Lager", code=e["charge"], anzahl=6, einheit="Karton", nach=aussen)
+		terminal.umlagern("Lager", code=e["charge"], anzahl=2, einheit="Karton", nach=self.ctx.verkauf)
+		self.assertTrue(terminal.charge_lager(e["charge"]).get(self.ctx.verkauf))
+
 	# ------------------------------------------------------------------ Prüfungen (CP/CCP)
 	def test_20_ueberfaellige_ccp_sperrt_station(self):
 		with self.assertRaisesRegex(pruefung.PruefFehler, "Metalldetektor Herzenboden"):

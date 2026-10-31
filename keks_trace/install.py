@@ -212,6 +212,22 @@ CUSTOM_FIELDS = {
 			"insert_after": "kt_status",
 		},
 	],
+	"Warehouse": [
+		{
+			"fieldname": "kt_umlagerziel",
+			"label": "Ziel beim Umlagern am Terminal",
+			"fieldtype": "Check",
+			"insert_after": "warehouse_name",
+			"description": "Dieser Lagerort steht am Terminal beim Umlagern zur Auswahl.",
+		},
+		{
+			"fieldname": "kt_lagerverkauf",
+			"label": "Lagerverkauf (Endverbraucher)",
+			"fieldtype": "Check",
+			"insert_after": "kt_umlagerziel",
+			"description": "Ware hier ist für den Lagerverkauf: daraus wird nicht an Kunden geliefert und nicht weiter umgelagert.",
+		},
+	],
 	"Supplier": [
 		{
 			"fieldname": "kt_bio_kontrollstelle",

@@ -391,7 +391,7 @@
 		else if (f.includes("herstellen")) m.push(["herstellen", fw ? "Verpacken" : "Herstellen", fw ? "Los mit MHD, nach Kundenauftrag, auf Palette" : (zustand.stufen || []).join(", ")]);
 		if (f.includes("wareneingang")) m.push(["wareneingang", "Wareneingang", "Anlieferung buchen, ins Silo oder als Gebinde"]);
 		if (f.includes("lieferung")) m.push(["lieferung", "Lieferung", "Paletten und Kartons an einen Kunden"]);
-		if (f.includes("umlagern")) m.push(["umlagern", "Umlagern", zustand.umlager_ziel ? "nach " + zustand.umlager_ziel : "Ziel-Lagerort fehlt noch"]);
+		if (f.includes("umlagern")) m.push(["umlagern", "Umlagern", zustand.umlager_ziel ? "nach " + zustand.umlager_ziel : "in ein anderes Lager"]);
 		if (f.includes("paletten")) m.push(["paletten", "Paletten", "Neue Palette, Etikett, anbrechen, umpacken"]);
 		if (f.includes("rework")) m.push(["rework", fw ? "Packbruch" : "Rework / Bruch", "In einen Rework-Behälter"]);
 		if (f.includes("silo")) m.push(["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"]);
@@ -1270,16 +1270,24 @@
 
 	// ------------------------------------------------------------------ Umlagern
 	let umgelagert = [];
-	function umlagernStart(hinweis) {
-		app.innerHTML = kopf("Umlagern nach " + (zustand.umlager_ziel || "?"), true) +
+	let umlagerNach = null;
+	async function umlagernStart(hinweis) {
+		if (!zustand.umlager_ziel && !umlagerNach) return umlagerZielWaehlen();
+		const nach = zustand.umlager_ziel || umlagerNach.name;
+		const titel = zustand.umlager_ziel || umlagerNach.titel;
+		app.innerHTML = kopf("Umlagern nach " + titel, true) +
+			(zustand.umlager_ziel ? "" : `<div class="reihe"><button class="knopf" data-a="ziel-wechseln">Anderes Ziel wählen</button></div>`) +
 			textFeld("scan", "Palette oder Los scannen") +
 			(umgelagert.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Heute hier umgelagert</div>${umgelagert.map((x) =>
 				`<div class="zeile"><div>${esc(x.name)}<br><span class="fehlt" style="font-size:16px">Los ${esc(x.charge)}</span></div><div class="rechts">${esc(stk(x.anzahl, x.einheit))}</div></div>`).join("")}</div>` : "");
 		if (hinweis) meldung("gruen", hinweis);
-		aktionen(beiAllgemein);
+		aktionen((a) => {
+			if (a === "ziel-wechseln") { umlagerNach = null; return umlagerZielWaehlen(); }
+			beiAllgemein(a);
+		});
 		const buchen = async (args) => {
 			try {
-				const e = await api("umlagern", { station: zustand.station, ...args });
+				const e = await api("umlagern", { station: zustand.station, nach, ...args });
 				umgelagert = e.positionen.concat(umgelagert).slice(0, 12);
 				umlagernStart("Umgelagert: " + e.positionen.map((x) => stk(x.anzahl, x.einheit)).join(", ") + " nach " + e.nach);
 			} catch (err) { umlagernStart(); meldung("rot", err.message); }
@@ -1312,6 +1320,21 @@
 			} catch (e) { meldung("rot", e.message); }
 		});
 		fokus("scan");
+	}
+
+	async function umlagerZielWaehlen() {
+		app.innerHTML = kopf("Umlagern wohin?", true) + `<div class="raster" id="liste">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		try {
+			const ziele = await api("umlager_ziele", { station: zustand.station });
+			if (!ziele.length) throw new Error("Es ist noch kein Lagerort als Umlager-Ziel eingerichtet.");
+			document.getElementById("liste").innerHTML = ziele.map((z, i) =>
+				`<button class="knopf${z.lagerverkauf ? " gruen" : ""}" data-a="ziel" data-i="${i}">${esc(z.titel)}${z.lagerverkauf ? "<br><small>Lagerverkauf</small>" : ""}</button>`).join("");
+			aktionen((a, d) => {
+				if (a === "ziel") { umlagerNach = ziele[+d.i]; return umlagernStart(); }
+				beiAllgemein(a);
+			});
+		} catch (e) { meldung("rot", e.message); }
 	}
 
 	// ------------------------------------------------------------------ Silo leer

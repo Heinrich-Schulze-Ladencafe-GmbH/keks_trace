@@ -107,6 +107,10 @@ SILOS = [
 ]
 
 
+# Weitere Lager (Demo-Namen, bitte durch die echten ersetzen)
+UMLAGER_LAGER = ["Außenlager (Demo)"]
+
+
 def silos_anlegen(ctx, kuerzel) -> dict:
 	"""Silos und Tank für einen Demo-Lauf. Gibt {Artikel: Silo-Name} zurück."""
 	je_artikel = {}
@@ -357,12 +361,24 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 					"rohstofflager": f"Stores - {abbr}",
 					"produktionslager": f"Work In Progress - {abbr}",
 					"fertiglager": f"Finished Goods - {abbr}",
-					"umlager_ziel": verkauf if station in ("Lager", "Lagerverkauf") else None,
+					"umlager_ziel": verkauf if station == "Lagerverkauf" else None,
 				}
 			).insert()
-	for station in ("Lager", "Lagerverkauf"):
-		if not frappe.db.get_value("Terminal Station", station, "umlager_ziel"):
-			frappe.db.set_value("Terminal Station", station, "umlager_ziel", verkauf)
+	if not frappe.db.get_value("Terminal Station", "Lagerverkauf", "umlager_ziel"):
+		frappe.db.set_value("Terminal Station", "Lagerverkauf", "umlager_ziel", verkauf)
+	# Am Lager wird das Ziel beim Umlagern gewählt: Fertigwarenlager, Außenlager oder Lagerverkauf
+	frappe.db.set_value("Terminal Station", "Lager", "umlager_ziel", None)
+	wurzel = frappe.db.get_value(
+		"Warehouse", {"company": company, "is_group": 1, "parent_warehouse": ["in", ["", None]]}
+	)
+	for name in UMLAGER_LAGER:
+		if not frappe.db.exists("Warehouse", f"{name} - {abbr}"):
+			frappe.get_doc(
+				{"doctype": "Warehouse", "warehouse_name": name, "company": company, "parent_warehouse": wurzel}
+			).insert()  # fmt: skip
+	for lager in [f"{n} - {abbr}" for n in UMLAGER_LAGER] + [f"Finished Goods - {abbr}", verkauf]:
+		frappe.db.set_value("Warehouse", lager, "kt_umlagerziel", 1)
+	frappe.db.set_value("Warehouse", verkauf, "kt_lagerverkauf", 1)
 
 	_pruefplaene()
 

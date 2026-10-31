@@ -1038,10 +1038,28 @@ def _lieferpositionen(z):
 
 
 def _verkaufslager() -> set:
-	"""Lagerorte, in die umgelagert wird (z. B. Lagerverkauf): daraus wird nicht geliefert oder umgelagert."""
-	return {
-		z for z in frappe.get_all("Terminal Station", filters={"f_umlagern": 1}, pluck="umlager_ziel") if z
-	}
+	"""Lagerorte des Lagerverkaufs: daraus wird nicht geliefert oder umgelagert."""
+	return set(frappe.get_all("Warehouse", filters={"kt_lagerverkauf": 1}, pluck="name"))
+
+
+@frappe.whitelist()
+def umlager_ziele(station: str) -> list[dict]:
+	"""Lagerorte, die an dieser Station beim Umlagern zur Auswahl stehen (fest eingestelltes Ziel zuerst)."""
+	s = _station(station)
+	ziele = frappe.get_all(
+		"Warehouse",
+		filters={"kt_umlagerziel": 1, "company": s.company, "disabled": 0},
+		fields=["name", "warehouse_name", "kt_lagerverkauf"],
+		order_by="kt_lagerverkauf desc, warehouse_name",
+	)
+	if s.umlager_ziel:
+		return [
+			{
+				"name": s.umlager_ziel,
+				"titel": frappe.get_cached_value("Warehouse", s.umlager_ziel, "warehouse_name"),
+			}
+		]
+	return [{"name": z.name, "titel": z.warehouse_name, "lagerverkauf": z.kt_lagerverkauf} for z in ziele]
 
 
 def _lieferposition(charge, anzahl, einheit, palette):
@@ -1191,13 +1209,20 @@ def umlagern(
 	palette: str | None = None,
 	charge: str | None = None,
 	ganz: int = 0,
+	nach: str | None = None,
 ) -> dict:
-	"""Lose, Kartons oder eine ganze Palette in den Ziel-Lagerort der Station umlagern."""
+	"""Lose, Kartons oder eine ganze Palette in einen anderen Lagerort umlagern (z. B. Lagerverkauf).
+
+	Ist an der Station ein Ziel fest eingestellt, gilt es; sonst wird eins der Umlager-Ziele gewählt.
+	"""
 	s = _station(station)
 	_darf(s, "umlagern")
-	ziel = s.umlager_ziel
+	erlaubt = {z["name"] for z in umlager_ziele(s.name)}
+	ziel = s.umlager_ziel or nach
 	if not ziel:
-		_fehler(_("An der Station {0} ist kein Ziel-Lagerort für das Umlagern eingerichtet.").format(s.name))
+		_fehler(_("Bitte wählen, wohin umgelagert wird."))
+	if ziel not in erlaubt:
+		_fehler(_("Nach {0} kann an der Station {1} nicht umgelagert werden.").format(ziel, s.name))
 	positionen = _lieferpositionen(
 		{
 			"code": code,
@@ -1208,6 +1233,9 @@ def umlagern(
 			"ganz": cint(ganz),
 		}
 	)
+	for p in positionen:
+		if p["lager"] == ziel:
+			_fehler(_("Los {0} liegt schon in {1}.").format(p["charge"], ziel))
 	jetzt = now_datetime()
 	se = frappe.get_doc(
 		{
