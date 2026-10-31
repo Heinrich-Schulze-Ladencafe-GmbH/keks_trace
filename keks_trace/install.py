@@ -43,6 +43,14 @@ CUSTOM_FIELDS = {
 			"description": "Wo der Artikel in der Kette steht (Keks Trace).",
 		},
 		{
+			"fieldname": "kt_linie",
+			"label": "Linie",
+			"fieldtype": "Link",
+			"options": "Linie",
+			"insert_after": "kt_chargen_stufe",
+			"description": "Wo der Artikel hergestellt wird (z. B. Backstraße, Herzenboden). Stationen einer Linie zeigen nur ihre Artikel und Aufträge; die Planung plant je Linie nur diese Artikel.",
+		},
+		{
 			"fieldname": "kt_allergengruppe",
 			"label": "Allergengruppe",
 			"fieldtype": "Link",

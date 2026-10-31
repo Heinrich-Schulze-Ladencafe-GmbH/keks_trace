@@ -11,7 +11,8 @@ frappe.query_reports["Produktionsplan"] = {
 			frappe.call("keks_trace.planung.vorschlag", { linie: linie() }).then((r) => {
 				const m = r.message;
 				frappe.msgprint(__("{0} Produktionsaufträge geplant.", [m.angelegt]) +
-					(m.ohne_leistung.length ? "<br>" + __("Ohne Leistung je Abschnitt (nicht geplant): {0}", [m.ohne_leistung.join(", ")]) : ""));
+					(m.ohne_leistung.length ? "<br>" + __("Ohne Leistung je Abschnitt (nicht geplant): {0}", [m.ohne_leistung.join(", ")]) : "") +
+					(m.ohne_linie.length ? "<br>" + __("Ohne Linie am Artikel (nicht geplant): {0}", [m.ohne_linie.join(", ")]) : ""));
 				report.refresh();
 			});
 		});

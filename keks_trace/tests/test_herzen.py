@@ -65,3 +65,17 @@ class TestHerzen(IntegrationTestCase):
 		kette = {z["charge"] for z in rueckwaerts(herz["charge"])}
 		for c in (self.teig, glasur["charge"], self.zucker, self.pack["HZ-SCHLEIFE"], rohling["charge"]):
 			self.assertIn(c, kette)
+
+	def test_herzenboden_eigene_linie(self):
+		"""Die Herzen-Stationen sehen nur Artikel und Aufträge ihrer Linie."""
+		for station in ("Herzen Garnieren", "Herzen Verpackung"):
+			artikel = {r.artikel for r in terminal.rezepte(station)}
+			self.assertTrue(artikel)
+			self.assertTrue(all(a.startswith("HZ-") for a in artikel), artikel)
+		self.assertNotIn("17846", {a["artikel"] for a in terminal.auftraege("Herzen Verpackung")})
+		self.assertNotIn("HZ-18", {r.artikel for r in terminal.rezepte("Verpackung")})
+		with self.assertRaisesRegex(frappe.ValidationError, "gehört nicht zur Linie"):
+			terminal.herstellen("Herzen Verpackung", "17846", [{"code": "X", "menge": 1}])
+		# Versand sieht weiterhin alle Aufträge
+		alle = terminal.auftraege("Versand")
+		self.assertIsInstance(alle, list)

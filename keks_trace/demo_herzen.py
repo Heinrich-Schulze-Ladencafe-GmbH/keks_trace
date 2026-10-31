@@ -52,22 +52,68 @@ def _artikel(code, name, stufe, uom, tage=None, monate=None, extra=None):
 	).insert()
 
 
+LINIE = "Herzenboden"
+
+
+def _linie(ctx):
+	abbr = frappe.get_cached_value("Company", ctx.company, "abbr")
+	lager = f"{LINIE} - {abbr}"
+	if not frappe.db.exists("Warehouse", lager):
+		frappe.get_doc(
+			{
+				"doctype": "Warehouse",
+				"warehouse_name": LINIE,
+				"company": ctx.company,
+				"parent_warehouse": ctx.wurzel,
+			}
+		).insert()
+	if not frappe.db.exists("Linie", LINIE):
+		frappe.get_doc(
+			{
+				"doctype": "Linie",
+				"linie_name": LINIE,
+				"company": ctx.company,
+				"laufzeit_stunden": 8,
+				"umruestzeit_minuten": 15,
+				"durchlauf_minuten": 0,
+				"lagerort": lager,
+				"fertiglager": ctx.fertig,
+			}
+		).insert()
+	if not frappe.db.exists("Linienabschnitt", "Kalfass"):
+		frappe.get_doc(
+			{
+				"doctype": "Linienabschnitt",
+				"abschnitt_name": "Kalfass",
+				"art": "Verpackungsanlage",
+				"linie": LINIE,
+			}
+		).insert()
+	frappe.db.set_value("Linienabschnitt", "Kalfass", "linie", LINIE)
+	for station in ("Herzen Garnieren", "Herzen Verpackung"):
+		if frappe.db.exists("Terminal Station", station):
+			frappe.db.set_value("Terminal Station", station, "linie", LINIE)
+			frappe.clear_document_cache("Terminal Station", station)
+
+
 def anlegen() -> frappe._dict:
 	ctx = pilot.anlegen()  # Grundteig Honig 5812, Allergengruppe Honigteig
+	_linie(ctx)
+	herz = {"kt_linie": LINIE}
 	for code, (name, tage) in ROHSTOFFE.items():
 		_artikel(code, name, "Rohstoff", "Kg", tage)
 	for code, name in PACKMITTEL.items():
 		_artikel(code, name, "Packmittel", "Nos")
 	_artikel(
 		"HZ-GLASUR", "Zuckerglasur (eigene Herstellung)", "Halbfabrikat", "Kg", 2,
-		extra={"kt_mhd_nicht_begrenzend": 1},
+		extra={"kt_mhd_nicht_begrenzend": 1, **herz},
 	)  # fmt: skip
 	pilot._rezept(ctx.company, "HZ-GLASUR", 10, [("HZ-PUDERZUCKER", 9.5), ("HZ-EIWEISS", 0.5)])
 	for g, (teig, glasur) in GROESSEN.items():
 		_artikel(f"HZ-ROHLING-{g}", f"Herz-Rohling {g} cm", "Backware", "Nos", 180)
-		_artikel(f"HZ-GARNIERT-{g}", f"Herz {g} cm garniert", "Ware lose", "Nos", 180)
+		_artikel(f"HZ-GARNIERT-{g}", f"Herz {g} cm garniert", "Ware lose", "Nos", 180, extra=herz)
 		_artikel(f"HZ-{g}", f"Lebkuchenherz {g} cm", "Fertigware", "Nos", monate=9,
-				 extra={"kt_mhd_bezug": "Backtag"})  # fmt: skip
+				 extra={"kt_mhd_bezug": "Backtag", **herz})  # fmt: skip
 		pilot._rezept(ctx.company, f"HZ-ROHLING-{g}", 1, [("5812", teig)])
 		pilot._rezept(ctx.company, f"HZ-GARNIERT-{g}", 1, [(f"HZ-ROHLING-{g}", 1), ("HZ-GLASUR", glasur)])
 		pilot._rezept(

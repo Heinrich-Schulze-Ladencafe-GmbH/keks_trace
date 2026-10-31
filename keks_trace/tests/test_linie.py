@@ -158,6 +158,15 @@ class TestLinie(IntegrationTestCase):
 			{"doctype": "Linie", "linie_name": linie, "company": self.ctx.company, "laufzeit_stunden": 8,
 			 "umruestzeit_minuten": 30, "lagerort": self.ctx.linienlager, "fertiglager": self.ctx.fertig}
 		).insert()  # fmt: skip
+		# 17846 vorübergehend dieser Testlinie zuordnen: geplant wird je Linie nur ihre Artikel
+		frappe.db.set_value("Item", "17846", "kt_linie", linie)
+		frappe.clear_document_cache("Item", "17846")
+
+		def zurueck():
+			frappe.db.set_value("Item", "17846", "kt_linie", demo_linie.LINIE)
+			frappe.clear_document_cache("Item", "17846")
+
+		self.addCleanup(zurueck)
 		start = add_days(nowdate(), 400)
 		planung.vorschlag(linie, ab=start)
 		pas = frappe.get_all(

@@ -272,7 +272,12 @@ einen eigenen stündlichen CCP-Prüfplan („Prüfplan → Verpackungsanlage“)
 Paletten-Terminal fällig, solange dort ein Auftrag auf dieser Anlage läuft; überfällig = keine
 Palette. Abweichung sperrt die Lose, die seit dem letzten OK auf dieser Anlage verpackt wurden.
 
-**Herzenboden** (`keks_trace.demo_herzen.anlegen`): Herzen in Stück, je Größe ein Artikel
+**Linien trennen:** Am Artikel steht, auf welcher Linie er hergestellt wird (Feld „Linie“). Stationen
+einer Linie zeigen nur Artikel und Aufträge dieser Linie, Stationen ohne Linie nur Artikel ohne Linie;
+der Versand sieht alle Aufträge. Die Planung plant je Linie nur ihre Artikel und meldet Artikel ohne Linie.
+
+**Herzenboden** (`keks_trace.demo_herzen.anlegen`): Eigene Linie „Herzenboden“ mit den Stationen Herzen Garnieren und
+Herzen Verpackung. Herzen in Stück, je Größe ein Artikel
 (Platzhalter 12, 18, 25 cm). Rohling backen (Backstube, aus Grundteig) → Zuckerglasur nach eigener
 Rezeptur (Halbfabrikat, max. 2 Tage; Haken „begrenzt das MHD des Endprodukts nicht“) → Garnieren
 (Rohling + Glasur) → Verpacken auf der Kalfass (Herz + Folie + Etikett + Schleife, Metallcheck Fe 2,8 mm).

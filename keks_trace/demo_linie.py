@@ -122,6 +122,8 @@ def stammdaten() -> frappe._dict:
 					"reihenfolge": i,
 				}
 			).insert()
+	for artikel in ("17846", "17847", "5888-LOSE"):
+		frappe.db.set_value("Item", artikel, "kt_linie", LINIE)
 	for anlage in METALLCHECK_ANLAGEN:
 		titel = f"Metallcheck {anlage}"
 		if not frappe.db.exists("Pruefplan", titel):

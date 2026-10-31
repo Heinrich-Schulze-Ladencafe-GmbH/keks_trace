@@ -130,9 +130,11 @@ def rezepte(station: str) -> list[dict]:
 		from `tabItem` i
 		join `tabBOM` b on b.item = i.name and b.is_default = 1 and b.is_active = 1 and b.docstatus = 1
 		where i.disabled = 0 and i.kt_chargen_stufe in %(stufen)s
+			and ifnull(i.kt_linie, '') = %(linie)s
 		order by field(i.kt_chargen_stufe, %(reihenfolge)s), i.item_name
 		""",
-		{"stufen": tuple(stufen), "reihenfolge": ",".join(stufen)},
+		# Station einer Linie: nur Artikel dieser Linie; Station ohne Linie: nur Artikel ohne Linie
+		{"stufen": tuple(stufen), "reihenfolge": ",".join(stufen), "linie": s.linie or ""},
 		as_dict=True,
 	)
 
@@ -229,8 +231,11 @@ def _lieferanten() -> list[dict]:
 @frappe.whitelist()
 def auftraege(station: str, kunde: str | None = None) -> list[dict]:
 	"""Offene Kundenaufträge (Fertigware): was ist bestellt, verpackt, geliefert, noch offen."""
-	_station(station)
+	s = _station(station)
 	bedingung = "and so.customer = %(kunde)s" if kunde else ""
+	if s.f_herstellen:
+		# Verpacken: nur Aufträge über Artikel dieser Linie (Versand sieht alle)
+		bedingung += " and ifnull(i.kt_linie, '') = %(linie)s"
 	zeilen = frappe.db.sql(
 		f"""
 		select so.name as auftrag, so.customer as kunde, so.customer_name as kundenname,
@@ -245,7 +250,7 @@ def auftraege(station: str, kunde: str | None = None) -> list[dict]:
 			and i.kt_chargen_stufe = 'Fertigware' and soi.delivered_qty < soi.qty {bedingung}
 		order by termin, so.name, soi.idx
 		""",
-		{"kunde": kunde},
+		{"kunde": kunde, "linie": s.linie or ""},
 		as_dict=True,
 	)
 	verpackt = {}
@@ -687,6 +692,9 @@ def herstellen(
 	pruefung.pruefe_station_frei(s.name)
 	if r["stufe"] not in s.stufen_liste():
 		_fehler(_("{0} wird nicht an der Station {1} hergestellt.").format(r["name"], s.name))
+	linie = frappe.get_cached_value("Item", ziel, "kt_linie")
+	if s.linie and linie != s.linie:
+		_fehler(_("{0} gehört nicht zur Linie {1}.").format(r["name"], s.linie))
 	erlaubt = {z["artikel"] for z in r["zutaten"]}
 	eingaenge = [_zeile(z["code"], z["menge"], ziel, erlaubt) for z in _liste(zeilen)]
 	if not eingaenge:

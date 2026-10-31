@@ -152,7 +152,13 @@ def vorschlag(linie: str, ab: str | None = None, bis_tage: int = 120) -> dict:
 	start = getdate(ab or add_days(nowdate(), 1))
 	umruesten = flt(l.umruestzeit_minuten) / 60
 	angelegt, ohne_leistung = [], []
+	ohne_linie = []
 	for pos in offene_positionen():
+		eigene = frappe.get_cached_value("Item", pos["item_code"], "kt_linie")
+		if eigene != linie:
+			if not eigene:
+				ohne_linie.append(pos["item_code"])
+			continue  # gehört zu einer anderen Linie
 		kg_h, _engpass_name, anlage = leistung(pos["item_code"])
 		if kg_h <= 0:
 			ohne_leistung.append(pos["item_code"])
@@ -218,7 +224,12 @@ def vorschlag(linie: str, ab: str | None = None, bis_tage: int = 120) -> dict:
 			).insert()
 			angelegt.append(pa.name)
 			offen -= kg
-	return {"angelegt": len(angelegt), "auftraege": angelegt, "ohne_leistung": sorted(set(ohne_leistung))}
+	return {
+		"angelegt": len(angelegt),
+		"auftraege": angelegt,
+		"ohne_leistung": sorted(set(ohne_leistung)),
+		"ohne_linie": sorted(set(ohne_linie)),
+	}
 
 
 def _hat_einheit(artikel, uom) -> bool:
