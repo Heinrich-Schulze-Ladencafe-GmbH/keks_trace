@@ -19,6 +19,8 @@ def pruefe(doc):
 	doc.flags.kt_fehlende_zutaten = []
 	if doc.purpose != "Manufacture" or modus() == "Aus":
 		return
+	if doc.get("kt_produktionsauftrag"):
+		return  # Linie: Verbrauch kommt aus dem Linienrezept, nicht aus Scans
 
 	ausgaenge = [r for r in ausgangs_zeilen(doc) if r.is_finished_item] or ausgangs_zeilen(doc)
 	if not ausgaenge:

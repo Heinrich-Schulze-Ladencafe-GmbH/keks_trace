@@ -1,7 +1,7 @@
 {
  "app": "keks_trace",
  "charts": [],
- "content": "[{\"id\": \"kt_h1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Keks Trace</b></span>\", \"col\": 12}}, {\"id\": \"kt_s0\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Terminal\", \"col\": 4}}, {\"id\": \"kt_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Mengenbilanz\", \"col\": 4}}, {\"id\": \"kt_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgungstest\", \"col\": 4}}, {\"id\": \"kt_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen\", \"col\": 4}}, {\"id\": \"kt_s5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen Sperre\", \"col\": 4}}, {\"id\": \"kt_sp\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"kt_c0\", \"type\": \"card\", \"data\": {\"card_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Chargen und Sperren\", \"col\": 4}}, {\"id\": \"kt_c_pruef\", \"type\": \"card\", \"data\": {\"card_name\": \"Prüfungen (HACCP)\", \"col\": 4}}, {\"id\": \"kt_c_pal\", \"type\": \"card\", \"data\": {\"card_name\": \"Paletten und Lagerverkauf\", \"col\": 4}}, {\"id\": \"kt_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Silos und Behälter\", \"col\": 4}}, {\"id\": \"kt_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Einstellungen\", \"col\": 4}}]",
+ "content": "[{\"id\": \"kt_h1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Keks Trace</b></span>\", \"col\": 12}}, {\"id\": \"kt_s0\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Terminal\", \"col\": 4}}, {\"id\": \"kt_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Mengenbilanz\", \"col\": 4}}, {\"id\": \"kt_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgungstest\", \"col\": 4}}, {\"id\": \"kt_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen\", \"col\": 4}}, {\"id\": \"kt_s5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen Sperre\", \"col\": 4}}, {\"id\": \"kt_sp\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"kt_c_prod\", \"type\": \"card\", \"data\": {\"card_name\": \"Produktion\", \"col\": 4}}, {\"id\": \"kt_c0\", \"type\": \"card\", \"data\": {\"card_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Chargen und Sperren\", \"col\": 4}}, {\"id\": \"kt_c_pruef\", \"type\": \"card\", \"data\": {\"card_name\": \"Prüfungen (HACCP)\", \"col\": 4}}, {\"id\": \"kt_c_pal\", \"type\": \"card\", \"data\": {\"card_name\": \"Paletten und Lagerverkauf\", \"col\": 4}}, {\"id\": \"kt_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Silos und Behälter\", \"col\": 4}}, {\"id\": \"kt_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Einstellungen\", \"col\": 4}}]",
  "creation": "2026-10-30 21:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -13,6 +13,64 @@
  "is_hidden": 0,
  "label": "Keks Trace",
  "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Produktion",
+   "link_count": 5,
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Produktionsplan",
+   "link_count": 0,
+   "link_to": "Produktionsplan",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "Teigbedarf",
+   "link_count": 0,
+   "link_to": "Teigbedarf",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Produktionsauftrag",
+   "link_count": 0,
+   "link_to": "Produktionsauftrag",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Linie",
+   "link_count": 0,
+   "link_to": "Linie",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Linienabschnitt",
+   "link_count": 0,
+   "link_to": "Linienabschnitt",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
   {
    "hidden": 0,
    "is_query_report": 0,
@@ -292,7 +350,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-10-31 09:00:00.000000",
+ "modified": "2026-10-31 11:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Keks Trace",

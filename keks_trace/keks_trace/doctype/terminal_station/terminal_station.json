@@ -25,8 +25,14 @@
   "f_lieferung",
   "f_umlagern",
   "umlager_ziel",
+  "f_linie",
+  "f_packstation",
+  "f_palette_fertig",
   "section_stufen",
-  "stufen"
+  "stufen",
+  "section_linie",
+  "linie",
+  "aktueller_auftrag"
  ],
  "fields": [
   {
@@ -43,7 +49,7 @@
    "label": "Typ",
    "reqd": 1,
    "in_list_view": 1,
-   "options": "Backstube\nVerpackung\nLager\nVersand\nHerzen Garnieren\nHerzen Verpackung\nLagerverkauf\nIndividuell",
+   "options": "Backstube\nVerpackung\nLager\nVersand\nHerzen Garnieren\nHerzen Verpackung\nLagerverkauf\nIndividuell\nFormer\nNachfüllen\nPackstation\nPaletten-Terminal",
    "description": "Vorlage für die Knöpfe. Bei einer neuen Station werden die Funktionen unten passend vorbelegt und können angepasst werden."
   },
   {
@@ -144,11 +150,45 @@
    "fieldtype": "Small Text",
    "label": "Chargenstufen (eine pro Zeile)",
    "description": "Z. B. Grundteig, Teig veredelt, Backware, Ware lose, Halbfabrikat, Fertigware. Leer = Vorgabe des Typs."
+  },
+  {
+   "fieldname": "f_linie",
+   "fieldtype": "Check",
+   "label": "An die Linie geben (Kübel einkippen, Nachfüllen)"
+  },
+  {
+   "fieldname": "f_packstation",
+   "fieldtype": "Check",
+   "label": "Packstation (Auftrag anzeigen, Kartonlabel)"
+  },
+  {
+   "fieldname": "f_palette_fertig",
+   "fieldtype": "Check",
+   "label": "Palette fertig (Linie)"
+  },
+  {
+   "fieldname": "section_linie",
+   "fieldtype": "Section Break",
+   "label": "Linie"
+  },
+  {
+   "fieldname": "linie",
+   "fieldtype": "Link",
+   "label": "Linie",
+   "options": "Linie",
+   "description": "Für Former, Nachfüllen, Packstation und Paletten-Terminal."
+  },
+  {
+   "fieldname": "aktueller_auftrag",
+   "fieldtype": "Link",
+   "label": "Aktueller Produktionsauftrag",
+   "options": "Produktionsauftrag",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-28 22:00:00.000000",
+ "modified": "2026-10-31 10:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Terminal Station",

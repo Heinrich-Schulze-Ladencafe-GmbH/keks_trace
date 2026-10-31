@@ -1,0 +1,59 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-31 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "abschnitt",
+  "leistung",
+  "einheit",
+  "kg_h"
+ ],
+ "fields": [
+  {
+   "fieldname": "abschnitt",
+   "fieldtype": "Link",
+   "label": "Abschnitt",
+   "options": "Linienabschnitt",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "leistung",
+   "fieldtype": "Float",
+   "label": "Leistung",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "einheit",
+   "fieldtype": "Select",
+   "label": "Einheit",
+   "options": "kg/h\nBeutel/min\nKarton/h",
+   "default": "kg/h",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "kg_h",
+   "fieldtype": "Float",
+   "label": "= kg/h",
+   "read_only": 1,
+   "in_list_view": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-31 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Artikel Linienleistung",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "permissions": [],
+ "istable": 1,
+ "editable_grid": 1
+}

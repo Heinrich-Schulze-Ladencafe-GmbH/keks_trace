@@ -371,6 +371,7 @@
 			const liste = await api("stationen");
 			if (!liste.length) {
 				document.getElementById("liste").innerHTML = "Es ist noch keine Station eingerichtet (Terminal Station in ERPNext anlegen).";
+				suche("liste");
 				return;
 			}
 			document.getElementById("liste").innerHTML = liste
@@ -392,6 +393,9 @@
 		if (f.includes("paletten")) m.push(["paletten", "Paletten", "Neue Palette, Etikett, anbrechen, umpacken"]);
 		if (f.includes("rework")) m.push(["rework", fw ? "Packbruch" : "Rework / Bruch", "In einen Rework-Behälter"]);
 		if (f.includes("silo")) m.push(["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"]);
+		if (f.includes("linie")) m.push(["linie", "An die Linie", "Kübel einkippen, Füllung, Glasur, Schokolade nachfüllen"]);
+		if (f.includes("packstation")) m.push(["packstation", "Packstation", "Auftrag, Anlage, Los, MHD, Kartonlabel"]);
+		if (f.includes("palette_fertig")) m.push(["palette_fertig", "Palette fertig", "Kartons zählen, buchen, Palettenlabel"]);
 		m.push(["info", "Info-Scan", "Charge, Behälter, Silo oder Palette"]);
 		return m;
 	}
@@ -496,9 +500,152 @@
 			if (a === "lieferung") return lieferungStart();
 			if (a === "paletten") return palettenStart();
 			if (a === "umlagern") return umlagernStart();
+			if (a === "linie") return linieStart();
+			if (a === "packstation") return packstationStart();
+			if (a === "palette_fertig") return paletteFertigStart();
 			beiAllgemein(a);
 		});
 		pruefLeiste();
+	}
+
+	// ------------------------------------------------------------------ Suche in langen Listen
+	// Ab 8 Einträgen bekommt eine Knopfliste ein Suchfeld; filtert beim Tippen (Scanner geht weiter ins Scanfeld).
+	function suche(listeId) {
+		const liste = document.getElementById(listeId);
+		if (!liste || liste.children.length < 8 || document.getElementById(listeId + "-suche")) return;
+		const f = document.createElement("input");
+		f.id = listeId + "-suche";
+		f.className = "feld";
+		f.placeholder = "Suchen …";
+		f.style.marginBottom = "12px";
+		liste.parentNode.insertBefore(f, liste);
+		f.addEventListener("input", () => {
+			const t = f.value.trim().toLowerCase();
+			[...liste.children].forEach((k) => { k.style.display = !t || k.textContent.toLowerCase().includes(t) ? "" : "none"; });
+		});
+	}
+
+	// ------------------------------------------------------------------ Linie: Produktionsaufträge
+	async function auftragWaehlen(titel, weiter) {
+		app.innerHTML = kopf(titel, true) + `<p>Für welchen Produktionsauftrag?</p><div class="raster" id="pa-liste">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		try {
+			const liste = await api("linie_auftraege", { station: zustand.station });
+			const el = document.getElementById("pa-liste");
+			if (!liste.length) { el.innerHTML = `<p class="fehlt">Kein freigegebener Auftrag für heute. Die Produktionsleitung gibt den Tagesplan frei.</p>`; return; }
+			el.innerHTML = liste.map((a) => `<button class="knopf ${a.aktuell ? "gruen" : a.status === "Läuft" ? "blau" : ""}" data-a="pa" data-name="${esc(a.name)}">${esc(a.artikelname)}
+				<small>${esc(a.menge_text)}${a.kundenname ? " · " + esc(a.kundenname) : ""} · ${esc(a.datum_text)} · ${esc(a.status)}${a.gebucht_kg ? " · gebucht " + esc(a.gebucht_text) : ""}${a.verpackungsanlage ? " · " + esc(a.verpackungsanlage) : ""}</small></button>`).join("");
+			suche("pa-liste");
+			aktionen(async (a, d) => {
+				if (a !== "pa") return beiAllgemein(a);
+				try { await api("linie_waehlen", { station: zustand.station, auftrag: d.name }); weiter(); } catch (e) { meldung("rot", e.message); }
+			});
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	function auftragKopf(i) {
+		return `<div class="panel"><div class="zeile"><div><b>${esc(i.name)}</b><br><span class="fehlt" style="font-size:16px">${esc(i.auftrag)}${i.kunde ? " · " + esc(i.kunde) : ""}${i.verpackungsanlage ? " · " + esc(i.verpackungsanlage) : ""}</span></div>
+			<div class="rechts">${esc(i.gebucht_text)} von ${esc(i.menge_text)}<br><button class="link" data-a="pa-wechseln">Auftrag wechseln</button></div></div></div>`;
+	}
+
+	// An die Linie: Kübel einkippen (Former), Gebinde nachfüllen
+	async function linieStart() {
+		let i;
+		try { i = await api("linie_info", { station: zustand.station }); } catch (e) { return meldung("rot", e.message); }
+		if (!i || !i.auftrag || i.status !== "Läuft") return auftragWaehlen("An die Linie", linieStart);
+		const zutaten = i.zutaten.filter((z) => z.stufe !== "Packmittel").map((z) => `<div class="zeile"><div>${esc(z.name)}</div>
+			<div class="rechts ${z.auf_linie > 0 ? "ok" : "fehlt"}">${esc(mg(z.auf_linie, z.einheit))} auf der Linie${z.reicht_fuer_kg != null ? " · reicht für " + esc(kg(z.reicht_fuer_kg)) : ""}</div></div>`).join("");
+		const kuebel = i.kuebel.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Nächste Kübel (ältester zuerst)</div>
+			<div class="gross">${i.kuebel.map((k) => esc(k.code)).join(" · ")}</div>
+			<div class="fehlt" style="font-size:16px">${i.kuebel.map((k) => esc(k.code + ": " + k.name + (k.datum ? " vom " + k.datum : "") + ", " + kg(k.menge))).join("<br>")}</div></div>` : "";
+		app.innerHTML = kopf("An die Linie", true) + auftragKopf(i) + kuebel + `<div class="panel">${zutaten}</div>` +
+			textFeld("scan", "Kübel, Gebinde oder Tank scannen") +
+			zahlFeld("menge", "Menge (leer = ganzer Kübel)");
+		aktionen((a) => (a === "pa-wechseln" ? auftragWaehlen("An die Linie", linieStart) : beiAllgemein(a)));
+		enter("scan", async (code) => {
+			if (!code) return;
+			try {
+				const r = await api("linie_zufuehren", { station: zustand.station, code, menge: zahl(document.getElementById("menge").value) || null });
+				await linieStart();
+				meldung("gruen", "Zugeführt: " + r.name + " " + mg(r.menge, r.einheit), (r.behaelter ? r.behaelter + " · " : "") + "Charge " + r.chargen.join(", "));
+				ton(true);
+				(r.hinweise || []).forEach((h) => app.querySelector("#meldung").insertAdjacentHTML("beforeend", `<div class="meldung orange">${esc(h)}</div>`));
+			} catch (e) { meldung("rot", e.message); document.getElementById("scan").value = ""; }
+		});
+		fokus("scan");
+	}
+
+	// Packstation: nur anzeigen, Kartonlabel drucken
+	async function packstationStart() {
+		let d;
+		try { d = await api("packstation", { station: zustand.station }); } catch (e) { return meldung("rot", e.message); }
+		if (!d || !d.auftrag) return auftragWaehlen("Packstation", packstationStart);
+		app.innerHTML = kopf("Packstation", true) + auftragKopf(d) + `
+			<div class="panel"><div class="zeile"><div>Verpackungsanlage</div><div class="rechts gross">${esc(d.verpackungsanlage || "–")}</div></div>
+			<div class="zeile"><div>Beutel je Karton</div><div class="rechts gross">${esc(d.beutel_je_karton || "–")}</div></div>
+			<div class="zeile"><div>Los</div><div class="rechts gross">${esc(d.los_vorschau || "–")}</div></div>
+			<div class="zeile"><div>MHD</div><div class="rechts gross">${esc(d.mhd_vorschau || "–")}</div></div>
+			<div class="zeile"><div>Noch offen</div><div class="rechts">${esc(d.offen_text)}</div></div></div>` +
+			zahlFeld("anzahl", "Wie viele Kartonlabel?", 20) +
+			`<div class="reihe"><button class="knopf gruen" data-a="label">Kartonlabel drucken</button><button class="knopf" data-a="neu">Aktualisieren</button></div>`;
+		aktionen((a) => {
+			if (a === "pa-wechseln") return auftragWaehlen("Packstation", packstationStart);
+			if (a === "neu") return packstationStart();
+			if (a === "label") return window.open("/karton_etikett?druck=1&station=" + encodeURIComponent(zustand.station) + "&anzahl=" + Math.max(1, Math.round(zahl(document.getElementById("anzahl").value))), "_blank");
+			beiAllgemein(a);
+		});
+	}
+
+	// Palette fertig: Kartons zählen, buchen
+	async function paletteFertigStart() {
+		let i;
+		try { i = await api("linie_info", { station: zustand.station }); } catch (e) { return meldung("rot", e.message); }
+		if (!i || !i.auftrag || i.status !== "Läuft") return auftragWaehlen("Palette fertig", paletteFertigStart);
+		const einheiten = (i.einheiten || []).filter((e) => e.einheit !== "Palette" && e.einheit !== "Lage");
+		let einheit = (einheiten.find((e) => e.einheit === "Karton") || einheiten[0] || { einheit: "Kg" }).einheit;
+		app.innerHTML = kopf("Palette fertig", true) + auftragKopf(i) + einheitWahl(einheiten, einheit) +
+			zahlFeld("anzahl", `Wie viele <span id="einheit-text">${esc(einheit)}</span> auf der Palette?`) +
+			textFeld("scan", "Palette scannen (leer = neue Palette)") +
+			`<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button><button class="knopf" data-a="beenden">Auftrag beenden</button></div>`;
+		aktionen(async (a, d) => {
+			if (a === "pa-wechseln") return auftragWaehlen("Palette fertig", paletteFertigStart);
+			if (a === "einheit") { einheit = d.e; einheitSetzen(einheit); document.getElementById("einheit-text").textContent = einheit; return fokus("anzahl"); }
+			if (a === "beenden") return auftragBeenden(i);
+			if (a !== "buchen") return beiAllgemein(a);
+			const knopf = app.querySelector('[data-a="buchen"]');
+			knopf.disabled = true; knopf.textContent = "Bucht …";
+			try {
+				let palette = document.getElementById("scan").value.trim();
+				if (!palette) palette = (await api("palette_neu", { station: zustand.station, typ: "Lagerpalette" })).nve;
+				const e = await api("linie_palette", { station: zustand.station, anzahl: zahl(document.getElementById("anzahl").value), einheit, palette });
+				etikettDrucken(e.palette);
+				ergebnis(e.name, [
+					"Los: " + e.los, "Menge: " + stk(e.anzahl, e.einheit) + " (" + kg(e.menge) + ")", "Palette: " + e.palette,
+					e.mhd ? "MHD: " + e.mhd : "", e.kennzeichen ? "Kennzeichen: " + e.kennzeichen : "",
+					"Auftrag gesamt: " + e.gebucht_text, "Verbraucht: " + e.verbraucht.map((v) => v.name + " " + v.charge).join(", "),
+				].filter(Boolean), e.hinweise, `<button class="knopf" data-a="etikett">Palettenlabel nochmal</button><button class="knopf" data-a="weiter">Nächste Palette</button>`)((a2) => {
+					if (a2 === "etikett") return etikettDrucken(e.palette);
+					if (a2 === "weiter") return paletteFertigStart();
+					beiAllgemein(a2);
+				});
+			} catch (err) { knopf.disabled = false; knopf.textContent = "Buchen"; meldung("rot", err.message); }
+		});
+		fokus("anzahl");
+	}
+
+	function auftragBeenden(i) {
+		const rest = i.zutaten.filter((z) => z.auf_linie > 0);
+		app.innerHTML = kopf("Auftrag beenden", true) + auftragKopf(i) +
+			(rest.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Rest auf der Linie wird als Linienrest ausgebucht</div>${rest.map((z) => `<div class="zeile"><div>${esc(z.name)}</div><div class="rechts">${esc(mg(z.auf_linie, z.einheit))}</div></div>`).join("")}</div>` : `<p>Nichts mehr auf der Linie.</p>`) +
+			`<div class="reihe"><button class="knopf" data-a="zurueck-pf">← Zurück</button><button class="knopf gruen" data-a="ja">Auftrag beenden</button></div>`;
+		aktionen(async (a) => {
+			if (a === "zurueck-pf") return paletteFertigStart();
+			if (a !== "ja") return beiAllgemein(a);
+			try {
+				const r = await api("linie_beenden", { station: zustand.station, auftrag: i.auftrag });
+				ergebnis(i.name, ["Auftrag " + r.auftrag + " beendet", ...r.rest.map((z) => "Linienrest: " + z.name + " " + z.charge + " " + rund(z.menge))], [])(beiAllgemein);
+			} catch (e) { meldung("rot", e.message); }
+		});
 	}
 
 	function ergebnis(titel, zeilen, hinweise, extra) {
@@ -530,6 +677,7 @@
 					? auftragsListe.map((z, i) => `<button class="knopf blau" data-a="auftrag" data-i="${i}">${esc(z.kundenname)} · ${esc(z.name)}
 						<small>${esc(z.auftrag)} · noch ${esc(z.offen_text)} von ${esc(z.menge_text)}${z.termin ? " · Termin " + esc(z.termin) : ""}</small></button>`).join("")
 					: `<span class="fehlt">Keine offenen Kundenaufträge.</span>`;
+				suche("auftraege");
 			}
 			document.getElementById("liste").innerHTML = liste.length
 				? liste.map((r) => `<button class="knopf" data-a="rezept" data-artikel="${esc(r.artikel)}">${esc(r.name)}<small>${esc(r.stufe)} · ${esc(r.artikel)}</small></button>`).join("")
@@ -742,6 +890,7 @@
 		try {
 			const liste = await api("rework_artikel");
 			document.getElementById("liste").innerHTML = liste.map((r) => `<button class="knopf" data-a="rw" data-artikel="${esc(r.artikel)}" data-name="${esc(r.name)}">${esc(r.name)}<small>${esc(r.allergengruppe || "")}</small></button>`).join("") || "Keine Rework-Artikel angelegt.";
+			suche("liste");
 			aktionen((a, d) => (a === "rw" ? reworkErfassen(d.artikel, d.name) : beiAllgemein(a)));
 		} catch (e) { meldung("rot", e.message); }
 	}
@@ -778,6 +927,7 @@
 		try {
 			artikelListe = await api("wareneingang_artikel");
 			document.getElementById("liste").innerHTML = artikelListe.map((r, i) => `<button class="knopf" data-a="art" data-i="${i}">${esc(r.name)}<small>${esc(r.artikel)}${r.kt_freigabe_pflicht ? " · Freigabe durch QS" : ""}${r.bio ? " · BIO" : ""}</small></button>`).join("");
+			suche("liste");
 			aktionen((a, d) => (a === "art" ? wareneingangErfassen(artikelListe[+d.i]) : beiAllgemein(a)));
 		} catch (e) { meldung("rot", e.message); }
 	}
@@ -996,6 +1146,7 @@
 		try {
 			const liste = await api("kunden");
 			document.getElementById("liste").innerHTML = liste.map((k) => `<button class="knopf" data-a="kunde" data-name="${esc(k.name)}" data-titel="${esc(k.customer_name)}">${esc(k.customer_name)}</button>`).join("") || "Keine Kunden angelegt.";
+			suche("liste");
 			aktionen((a, d) => {
 				if (a !== "kunde") return beiAllgemein(a);
 				lieferung = { kunde: d.name, titel: d.titel, zeilen: [], auftrag: null, positionen: [] };
@@ -1155,6 +1306,7 @@
 		try {
 			const liste = await api("silos");
 			document.getElementById("liste").innerHTML = liste.map((s) => `<button class="knopf" data-a="silo" data-name="${esc(s.silo)}">${esc(s.silo)}<small>rechnerisch ${esc(kg(s.bestand))}</small></button>`).join("") || "Keine Silos angelegt.";
+			suche("liste");
 			aktionen((a, d) => (a === "silo" ? siloBestaetigen(d.name) : beiAllgemein(a)));
 		} catch (e) { meldung("rot", e.message); }
 	}

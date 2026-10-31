@@ -177,8 +177,8 @@ def daten_berechnen(out_item, eingaenge, buchungstag, out_charge=None, ohne_bele
 	herstelldatum = getdate(vorhanden.manufacturing_date) if vorhanden.manufacturing_date else buchungstag
 	ursprung = min([*ursprungsdaten, herstelldatum])
 
-	if stufe == "Backware" or (stufe == "Ware lose" and not backtage):
-		# Backware, oder direkt aus dem Ofen in die Kiste (ohne Füllung): heute gebacken
+	if stufe == "Backware" or (stufe in ("Ware lose", "Fertigware") and not backtage):
+		# Backware, direkt aus dem Ofen in die Kiste, oder Linie vom Former bis zur Palette: heute gebacken
 		backtag = herstelldatum
 	else:
 		backtag = min(backtage) if backtage else None

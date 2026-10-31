@@ -1,0 +1,107 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-31 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "abschnitt_name",
+  "art",
+  "linie",
+  "reihenfolge",
+  "beschreibung"
+ ],
+ "fields": [
+  {
+   "fieldname": "abschnitt_name",
+   "fieldtype": "Data",
+   "label": "Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "art",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Prozess\nVerpackungsanlage",
+   "default": "Prozess",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Prozess: läuft jedes Produkt durch, das hier eine Leistung hat (Füllen, Trocknen, Kühlung, Band). Verpackungsanlage: je Auftrag wird eine gewählt."
+  },
+  {
+   "fieldname": "linie",
+   "fieldtype": "Link",
+   "label": "Linie",
+   "options": "Linie",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "reihenfolge",
+   "fieldtype": "Int",
+   "label": "Reihenfolge an der Linie"
+  },
+  {
+   "fieldname": "beschreibung",
+   "fieldtype": "Small Text",
+   "label": "Beschreibung"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-31 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Linienabschnitt",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Manufacturing Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1
+  },
+  {
+   "role": "Manufacturing User",
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "autoname": "field:abschnitt_name",
+ "naming_rule": "By fieldname",
+ "description": "Abschnitt der Backstraße mit eigener Geschwindigkeit: Füllen, Trocknen, Schokoladenkühlung, Band, Verpackungsanlagen."
+}

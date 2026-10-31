@@ -52,7 +52,7 @@ doc_events = {
 		"on_trash": "keks_trace.schutz.beleg_on_trash",
 	},
 	"Stock Reconciliation": {"on_trash": "keks_trace.schutz.beleg_on_trash"},
-	"Item": {"validate": "keks_trace.los.item_validate"},
+	"Item": {"validate": ["keks_trace.los.item_validate", "keks_trace.planung.item_validate"]},
 	"Batch": {
 		"before_insert": "keks_trace.sperre.batch_before_insert",
 		"after_insert": "keks_trace.sperre.batch_after_insert",

@@ -1,0 +1,48 @@
+{% extends "templates/base.html" %}
+{% block title %}Kartonlabel{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block style %}
+<style>
+	@page { size: 100mm 60mm; margin: 0; }
+	html, body { background: #888 !important; margin: 0; }
+	.etikett { width: 100mm; height: 60mm; box-sizing: border-box; margin: 10px auto; padding: 3mm 4mm; background: #fff; color: #000;
+		font: 10pt/1.25 Arial, Helvetica, sans-serif; display: flex; flex-direction: column; page-break-after: always; }
+	.name { font-size: 14pt; font-weight: bold; }
+	.zeile { display: flex; justify-content: space-between; margin-top: 1.5mm; }
+	.gross { font-size: 13pt; font-weight: bold; }
+	.klein { font-size: 7pt; text-transform: uppercase; }
+	.code { margin-top: auto; text-align: center; }
+	.code svg { width: 70mm; height: 16mm; }
+	.knopf { display: block; margin: 12px auto; padding: 12px 30px; font-size: 18px; }
+	@media print { html, body { background: #fff !important; } .etikett { margin: 0; } .knopf { display: none; } }
+</style>
+{% endblock %}
+{% block content %}
+<button class="knopf" onclick="window.print()">{{ anzahl }} Label drucken</button>
+{% for i in range(anzahl) %}
+<div class="etikett">
+	<div class="name">{{ d.name }}</div>
+	<div>{{ inhalt }}{% if d.kunde %} · {{ d.kunde }}{% endif %}</div>
+	<div class="zeile">
+		<div><div class="klein">Los</div><div class="gross">{{ d.los_vorschau or "" }}</div></div>
+		<div><div class="klein">MHD</div><div class="gross">{{ d.mhd_vorschau or "" }}</div></div>
+		<div><div class="klein">Art.-Nr.</div><div class="gross">{{ d.artikel }}</div></div>
+	</div>
+	{% if ean %}<div class="code"><svg class="bc"></svg></div>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}
+{% block script %}
+<script src="/assets/frappe/node_modules/jsbarcode/dist/JsBarcode.all.min.js"></script>
+<script>
+	(function () {
+		{% if ean %}
+		const ean = {{ ean|tojson }};
+		const format = /^\d{13}$/.test(ean) ? "EAN13" : /^\d{14}$/.test(ean) ? "ITF14" : "CODE128";
+		document.querySelectorAll(".bc").forEach((el) => JsBarcode(el, ean, { format, margin: 0, height: 50, fontSize: 14 }));
+		{% endif %}
+		{% if drucken %}window.addEventListener("load", () => setTimeout(() => window.print(), 300));{% endif %}
+	})();
+</script>
+{% endblock %}

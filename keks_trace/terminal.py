@@ -55,6 +55,9 @@ FUNKTIONSNAMEN = {
 	"paletten": "Paletten",
 	"lieferung": "Lieferung",
 	"umlagern": "Umlagern",
+	"linie": "An die Linie geben",
+	"packstation": "Packstation",
+	"palette_fertig": "Palette fertig",
 }
 
 
@@ -98,6 +101,7 @@ def start(station: str) -> dict:
 		"stufen": stufen,
 		"nur_fertigware": stufen == ["Fertigware"],
 		"umlager_ziel": s.umlager_ziel,
+		"linie": s.linie,
 		"pruefungen": pruefung.faellig(s.name),
 	}
 
@@ -1288,3 +1292,74 @@ def silo_leer(station: str, silo: str) -> dict:
 		frappe.db.set_value("Stock Entry", erg["ausbuchung"], "kt_station", s.name)
 	erg["hinweise"] = _meldungen()
 	return erg
+
+
+# ---------------------------------------------------------------------------
+# Linie: Produktionsaufträge, Zuführen, Packstation, Palette fertig
+# ---------------------------------------------------------------------------
+
+
+def _linien_station(station):
+	s = _station(station)
+	if not (s.f_linie or s.f_packstation or s.f_palette_fertig):
+		_fehler(_("Die Station {0} arbeitet nicht an einer Linie.").format(s.name))
+	return s
+
+
+@frappe.whitelist()
+def linie_auftraege(station: str) -> list[dict]:
+	from keks_trace import linienbuchung
+
+	return linienbuchung.auftraege(_linien_station(station).name)
+
+
+@frappe.whitelist()
+def linie_waehlen(station: str, auftrag: str) -> dict:
+	from keks_trace import linienbuchung
+
+	return linienbuchung.waehlen(_linien_station(station).name, auftrag)
+
+
+@frappe.whitelist()
+def linie_info(station: str) -> dict:
+	from keks_trace import linienbuchung
+
+	s = _linien_station(station)
+	name = frappe.db.get_value("Terminal Station", s.name, "aktueller_auftrag")
+	return linienbuchung.info(name) if name else {}
+
+
+@frappe.whitelist()
+def linie_zufuehren(station: str, code: str, menge: float | None = None) -> dict:
+	from keks_trace import linienbuchung
+
+	s = _station(station)
+	_darf(s, "linie")
+	return linienbuchung.zufuehren(s.name, code, menge)
+
+
+@frappe.whitelist()
+def linie_palette(station: str, anzahl: float, einheit: str, palette: str | None = None) -> dict:
+	from keks_trace import linienbuchung
+
+	s = _station(station)
+	_darf(s, "palette_fertig")
+	return linienbuchung.palette_fertig(s.name, anzahl, einheit, palette)
+
+
+@frappe.whitelist()
+def linie_beenden(station: str, auftrag: str | None = None, abbrechen: int = 0) -> dict:
+	from keks_trace import linienbuchung
+
+	s = _station(station)
+	_darf(s, "palette_fertig")
+	return linienbuchung.beenden(s.name, auftrag, bool(cint(abbrechen)))
+
+
+@frappe.whitelist()
+def packstation(station: str) -> dict:
+	from keks_trace import linienbuchung
+
+	s = _station(station)
+	_darf(s, "packstation")
+	return linienbuchung.packstation(s.name)

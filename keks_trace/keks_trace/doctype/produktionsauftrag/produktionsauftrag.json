@@ -1,0 +1,284 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-31 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "naming_series",
+  "linie",
+  "datum",
+  "reihenfolge",
+  "status",
+  "column_break_1",
+  "artikel",
+  "artikelname",
+  "menge",
+  "einheit",
+  "menge_kg",
+  "dauer_stunden",
+  "verpackungsanlage",
+  "engpass",
+  "section_kunde",
+  "kundenauftrag",
+  "kt_so_detail",
+  "kunde",
+  "liefertermin",
+  "section_ablauf",
+  "freigegeben_von",
+  "freigegeben_am",
+  "gestartet_am",
+  "column_break_2",
+  "beendet_am",
+  "los",
+  "gebucht_kg",
+  "bemerkung"
+ ],
+ "fields": [
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Nummernkreis",
+   "options": "PA-.YYYY.-",
+   "default": "PA-.YYYY.-",
+   "hidden": 1
+  },
+  {
+   "fieldname": "linie",
+   "fieldtype": "Link",
+   "label": "Linie",
+   "options": "Linie",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "datum",
+   "fieldtype": "Date",
+   "label": "Produktionstag",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "reihenfolge",
+   "fieldtype": "Int",
+   "label": "Reihenfolge am Tag",
+   "default": "1"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Geplant\nFreigegeben\nLäuft\nFertig\nAbgebrochen",
+   "default": "Geplant",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "artikel",
+   "fieldtype": "Link",
+   "label": "Artikel",
+   "options": "Item",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "artikelname",
+   "fieldtype": "Data",
+   "label": "Bezeichnung",
+   "fetch_from": "artikel.item_name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "menge",
+   "fieldtype": "Float",
+   "label": "Menge",
+   "reqd": 1
+  },
+  {
+   "fieldname": "einheit",
+   "fieldtype": "Link",
+   "label": "Einheit",
+   "options": "UOM",
+   "reqd": 1
+  },
+  {
+   "fieldname": "menge_kg",
+   "fieldtype": "Float",
+   "label": "Menge (kg)",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_kunde",
+   "fieldtype": "Section Break",
+   "label": "Kunde"
+  },
+  {
+   "fieldname": "kundenauftrag",
+   "fieldtype": "Link",
+   "label": "Kundenauftrag",
+   "options": "Sales Order",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "kunde",
+   "fieldtype": "Link",
+   "label": "Kunde",
+   "options": "Customer",
+   "fetch_from": "kundenauftrag.customer",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "liefertermin",
+   "fieldtype": "Date",
+   "label": "Liefertermin",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_ablauf",
+   "fieldtype": "Section Break",
+   "label": "Ablauf"
+  },
+  {
+   "fieldname": "freigegeben_von",
+   "fieldtype": "Link",
+   "label": "Freigegeben von",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "freigegeben_am",
+   "fieldtype": "Datetime",
+   "label": "Freigegeben am",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gestartet_am",
+   "fieldtype": "Datetime",
+   "label": "Gestartet am",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "beendet_am",
+   "fieldtype": "Datetime",
+   "label": "Beendet am",
+   "read_only": 1
+  },
+  {
+   "fieldname": "los",
+   "fieldtype": "Link",
+   "label": "Los",
+   "options": "Batch",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gebucht_kg",
+   "fieldtype": "Float",
+   "label": "Gebucht (kg, Paletten)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung"
+  },
+  {
+   "fieldname": "dauer_stunden",
+   "fieldtype": "Float",
+   "label": "Dauer (Stunden)",
+   "read_only": 1,
+   "precision": "2",
+   "in_list_view": 1,
+   "description": "Menge / Leistung des Artikels auf der Linie."
+  },
+  {
+   "fieldname": "verpackungsanlage",
+   "fieldtype": "Link",
+   "label": "Verpackungsanlage",
+   "options": "Linienabschnitt",
+   "description": "z. B. InoTec, Thürlings, Carina. Leer = schnellste Anlage, für die der Artikel eine Leistung hat."
+  },
+  {
+   "fieldname": "engpass",
+   "fieldtype": "Data",
+   "label": "Engpass",
+   "read_only": 1,
+   "description": "Der langsamste Abschnitt bestimmt das Tempo."
+  },
+  {
+   "fieldname": "kt_so_detail",
+   "fieldtype": "Data",
+   "label": "Auftragsposition",
+   "read_only": 1,
+   "hidden": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-31 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Produktionsauftrag",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Manufacturing Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1
+  },
+  {
+   "role": "Manufacturing User",
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "autoname": "naming_series:",
+ "naming_rule": "By \"Naming Series\" field",
+ "description": "Was eine Linie an einem Tag herstellt und verpackt. Freigegebene Aufträge erscheinen an den Terminals.",
+ "title_field": "artikelname"
+}

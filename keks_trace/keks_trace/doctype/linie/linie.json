@@ -1,0 +1,160 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-31 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "linie_name",
+  "company",
+  "aktiv",
+  "column_break_1",
+  "laufzeit_stunden",
+  "umruestzeit_minuten",
+  "durchlauf_minuten",
+  "arbeitstage",
+  "section_lager",
+  "lagerort",
+  "fertiglager",
+  "rest_buchung"
+ ],
+ "fields": [
+  {
+   "fieldname": "linie_name",
+   "fieldtype": "Data",
+   "label": "Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Firma",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "aktiv",
+   "fieldtype": "Check",
+   "label": "Aktiv",
+   "default": "1"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "laufzeit_stunden",
+   "fieldtype": "Float",
+   "label": "Laufzeit pro Tag (Stunden)",
+   "reqd": 1,
+   "default": "8",
+   "in_list_view": 1,
+   "description": "Wie lange die Linie an einem Arbeitstag produziert. Die Menge pro Tag ergibt sich aus der Leistung des Produkts (kg/h am Artikel)."
+  },
+  {
+   "fieldname": "umruestzeit_minuten",
+   "fieldtype": "Int",
+   "label": "Umrüstzeit bei Produktwechsel (Minuten)",
+   "default": "30"
+  },
+  {
+   "fieldname": "durchlauf_minuten",
+   "fieldtype": "Int",
+   "label": "Durchlaufzeit Former bis Verpackung (Minuten)",
+   "default": "45",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "arbeitstage",
+   "fieldtype": "Data",
+   "label": "Arbeitstage",
+   "default": "Mo,Di,Mi,Do,Fr",
+   "description": "Kürzel, mit Komma getrennt: Mo,Di,Mi,Do,Fr,Sa,So"
+  },
+  {
+   "fieldname": "section_lager",
+   "fieldtype": "Section Break",
+   "label": "Lagerorte"
+  },
+  {
+   "fieldname": "lagerort",
+   "fieldtype": "Link",
+   "label": "Lagerort der Linie",
+   "options": "Warehouse",
+   "reqd": 1,
+   "description": "Eingekippte Kübel und nachgefüllte Gebinde liegen hier, bis sie mit einer Palette verbraucht werden."
+  },
+  {
+   "fieldname": "fertiglager",
+   "fieldtype": "Link",
+   "label": "Fertigwarenlager",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "fieldname": "rest_buchung",
+   "fieldtype": "Select",
+   "label": "Rest bei Auftragsende",
+   "options": "Fragen\nAusbuchen (Linienrest)",
+   "default": "Fragen"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-31 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Linie",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Manufacturing Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1
+  },
+  {
+   "role": "Manufacturing User",
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "autoname": "field:linie_name",
+ "naming_rule": "By fieldname",
+ "description": "Produktionslinie (Backstraße + Verpackung) mit Laufzeit, Umrüst- und Durchlaufzeit."
+}

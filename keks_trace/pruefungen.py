@@ -16,7 +16,7 @@ def pruefe_stock_entry(doc, method=None):
 	silo.zuteilen(doc)  # zuerst: Silo-Entnahmen bekommen ihre Chargen, dann greifen alle Prüfungen
 	sperre.pruefe_stock_entry(doc)
 	kennzeichnung.pruefe_stock_entry(doc)
-	if doc.purpose in ("Material Receipt", "Material Issue"):
+	if doc.purpose in ("Material Receipt", "Material Issue", "Material Transfer"):
 		traeger.pruefe(doc)
 		return
 	if doc.purpose not in ("Manufacture", "Repack"):

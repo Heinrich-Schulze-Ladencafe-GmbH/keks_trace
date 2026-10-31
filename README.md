@@ -237,6 +237,43 @@ Die Demo-Stammdaten legen an: Metalldetektor Verpackung und Herzenboden (CCP, st
 sperrend), Etikettencheck, Gewichtskontrolle, Brix Invertzuckersirup 80–84, Temperatur Butter
 ≤ 6 °C. **Die Verpackungsstationen buchen daher erst nach der Metalldetektor-Prüfung.**
 
+## Produktionsplanung und Backstraße
+
+Konzept für die QS: Dokument „Keks Trace – Produktionsplanung und Datenmodell“.
+
+**Leistung hängt am Produkt.** Die Backstraße hat Abschnitte (**Linienabschnitt**): Formen, Backen,
+Spicken, Hacken, Streichen, Füllen, Sprühen, Glasieren, Trocknen, Schoko 1, Kühlen 1, Streuseln,
+Schoko 2, Kühlen 2 und die Verpackungsanlagen Manuelles Band, InoTec, Thürlings, Carina. Am Artikel
+steht je Abschnitt die Geschwindigkeit (kg/h, Beutel/min oder Karton/h). Der langsamste Abschnitt
+ist der Engpass; von den Verpackungsanlagen zählt die, die der Auftrag nutzt.
+
+**Planung (Bericht „Produktionsplan“):**
+- „Planung vorschlagen“ verteilt offene Kundenaufträge (Fertigware) nach Liefertermin in Stunden
+  auf die Arbeitstage der **Linie** (Laufzeit pro Tag, Umrüstzeit bei Produktwechsel). Es entstehen
+  **Produktionsaufträge** „Geplant“, in ganzen Kartons; kein Rest-Schnipsel unter 30 Minuten am Tagesende.
+- „Tag freigeben“: erst freigegebene Aufträge erscheinen an den Terminals.
+- Bericht „Teigbedarf“: veredelter Teig und Grundteig für die nächsten Tage gegen den Bestand;
+  Grundteig nur für den veredelten Teig, der fehlt.
+
+**An der Linie (Terminals mit Linie):**
+- **Former / Nachfüllen** („An die Linie“): Auftrag wählen, Kübel, Gebinde oder Tank scannen. Das ist
+  eine Umlagerung in den Lagerort der Linie mit dem Auftrag als Vermerk; der Kübel wird frei. Das
+  Terminal schlägt die ältesten passenden Kübel vor; ein jüngerer gibt nur einen Hinweis.
+- **Packstation** (nur Bildschirm): Artikel, Verpackungsanlage, Beutel je Karton, Los, MHD;
+  Kartonlabel drucken (`/karton_etikett`).
+- **Paletten-Terminal** („Palette fertig“): Anzahl Kartons → Fertigung. Verbraucht wird laut
+  Linienrezept (Stückliste durch Backware und lose Ware aufgelöst) nur Ware dieses Auftrags, älteste
+  zuerst; Ergebnis ist das Tages-Los auf der Palette, Backtag = heute. „Auftrag beenden“ bucht den
+  Rest auf der Linie als „Linienrest“ aus.
+- Lange Listen am Terminal haben ab 8 Einträgen ein Suchfeld.
+
+**Kübel:** Produktträger „Teigbehälter“ mit Nummer K-001 …; `/kuebel_code` erzeugt je Kübel
+Data Matrix + Nummer als SVG zum Einlasern.
+
+Demo: `bench --site keks.localhost execute keks_trace.demo_linie.anlegen` (Linie „Backstraße“,
+Abschnitte mit Demo-Leistungen, Stationen Former, Nachfüllen …, Packstation, Paletten-Terminal,
+40 Kübel, Großkunden A/B/C mit 120.000 / 80.000 / 50.000 Beuteln, Planung, erster Tag freigegeben).
+
 ## Bio und V-Label
 
 Am Artikel gibt es die Haken **Bio (EU-Öko)**, **In Bio-Produkten erlaubt** (Salz, Wasser,

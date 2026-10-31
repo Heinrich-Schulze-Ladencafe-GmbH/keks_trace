@@ -1,0 +1,54 @@
+{% extends "templates/base.html" %}
+{% block title %}Kübel-Codes{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block style %}
+<style>
+	body { background: #f4f1ec !important; font-family: Arial, Helvetica, sans-serif; }
+	.kopf { max-width: 1000px; margin: 16px auto; padding: 0 16px; }
+	.raster { max-width: 1000px; margin: 0 auto 40px; padding: 0 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+	.kachel { background: #fff; border: 1px solid #ccc; border-radius: 8px; padding: 14px; text-align: center; }
+	.kachel .nr { font-size: 28px; font-weight: bold; letter-spacing: 1px; margin-top: 8px; }
+	.kachel svg { width: 120px; height: 120px; }
+	.kachel a { display: inline-block; margin-top: 8px; font-size: 13px; }
+	@media print { .kopf, .kachel a { display: none; } .raster { grid-template-columns: repeat(4, 1fr); } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="kopf">
+	<h2>Kübel-Codes zum Einlasern</h2>
+	<p>Je Kübel: Data Matrix mit der Kübelnummer und daneben die Nummer in Klarschrift. Seitlich am Rand und am Boden einlasern, damit der Code auch im Stapel lesbar ist. „SVG speichern“ liefert die Vektordatei für den Laser.</p>
+	<p><button onclick="alleSpeichern()">Alle als SVG speichern</button> <button onclick="window.print()">Drucken</button></p>
+</div>
+<div class="raster">
+	{% for c in codes %}
+	<div class="kachel" data-code="{{ c }}"><div class="dm"></div><div class="nr">{{ c }}</div><a href="#" onclick="speichern(this.closest('.kachel')); return false;">SVG speichern</a></div>
+	{% endfor %}
+	{% if not codes %}<p>Noch keine Kübel (Produktträger vom Typ Teigbehälter) angelegt.</p>{% endif %}
+</div>
+{% endblock %}
+{% block script %}
+<script src="/assets/keks_trace/js/bwip-js-min.js"></script>
+<script>
+	function laserSvg(code) {
+		// Data Matrix links, Nummer rechts daneben: eine Datei je Kübel
+		const dm = bwipjs.toSVG({ bcid: "datamatrix", text: code, scale: 4, paddingwidth: 2, paddingheight: 2 });
+		const inner = dm.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+		const m = dm.match(/viewBox="0 0 (\d+) (\d+)"/);
+		const w = +m[1], h = +m[2];
+		return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w * 3.2} ${h}"><g>${inner}</g>` +
+			`<text x="${w * 1.12}" y="${h * 0.68}" font-family="Arial, Helvetica, sans-serif" font-weight="bold" font-size="${h * 0.5}">${code}</text></svg>`;
+	}
+	function speichern(k) {
+		const blob = new Blob([laserSvg(k.dataset.code)], { type: "image/svg+xml" });
+		const a = document.createElement("a");
+		a.href = URL.createObjectURL(blob);
+		a.download = "kuebel-" + k.dataset.code + ".svg";
+		a.click();
+	}
+	function alleSpeichern() { document.querySelectorAll(".kachel").forEach((k, i) => setTimeout(() => speichern(k), i * 250)); }
+	document.querySelectorAll(".kachel").forEach((k) => {
+		k.querySelector(".dm").innerHTML = bwipjs.toSVG({ bcid: "datamatrix", text: k.dataset.code, scale: 4, paddingwidth: 2, paddingheight: 2 });
+	});
+</script>
+{% endblock %}

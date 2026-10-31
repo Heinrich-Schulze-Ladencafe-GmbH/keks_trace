@@ -72,6 +72,29 @@ CUSTOM_FIELDS = {
 			"description": "Für lose Ware und Fertigware. Leer = Backtag.",
 		},
 		{
+			"fieldname": "kt_linienleistung",
+			"label": "Leistung je Linienabschnitt",
+			"fieldtype": "Table",
+			"options": "Artikel Linienleistung",
+			"insert_after": "kt_mhd_bezug",
+			"description": "Fertigware: Geschwindigkeit je Abschnitt (Füllen, Glasieren, Trocknen, Schokoladenkühlung, Band, Verpackungsanlagen). Der langsamste bestimmt das Tempo.",
+		},
+		{
+			"fieldname": "kt_leistung_kg_h",
+			"label": "Leistung auf der Linie (kg/h)",
+			"fieldtype": "Float",
+			"read_only": 1,
+			"insert_after": "kt_linienleistung",
+			"description": "Engpass mit der schnellsten Verpackungsanlage, aus der Tabelle berechnet.",
+		},
+		{
+			"fieldname": "kt_engpass",
+			"label": "Engpass",
+			"fieldtype": "Data",
+			"read_only": 1,
+			"insert_after": "kt_leistung_kg_h",
+		},
+		{
 			"fieldname": "kt_bio",
 			"label": "Bio (EU-Öko)",
 			"fieldtype": "Check",
@@ -197,6 +220,14 @@ CUSTOM_FIELDS = {
 	],
 	"Stock Entry": [
 		{
+			"fieldname": "kt_produktionsauftrag",
+			"label": "Produktionsauftrag",
+			"fieldtype": "Link",
+			"options": "Produktionsauftrag",
+			"read_only": 1,
+			"insert_after": "kt_station",
+		},
+		{
 			"fieldname": "kt_station",
 			"label": "Station (Terminal)",
 			"fieldtype": "Link",
@@ -300,7 +331,7 @@ def _einheiten():
 
 
 def _buchungsarten():
-	for name in ("Silo Differenz", "Abverkauf Lagerverkauf"):
+	for name in ("Silo Differenz", "Abverkauf Lagerverkauf", "Linienrest"):
 		if not frappe.db.exists("Stock Entry Type", name):
 			frappe.get_doc({"doctype": "Stock Entry Type", "name": name, "purpose": "Material Issue"}).insert(
 				ignore_permissions=True

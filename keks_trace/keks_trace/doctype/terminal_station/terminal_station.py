@@ -14,6 +14,10 @@ VORLAGEN = {
 	"Herzen Garnieren": ({"f_herstellen", "f_rework"}, ["Halbfabrikat", "Ware lose"]),
 	"Herzen Verpackung": ({"f_herstellen", "f_paletten", "f_rework"}, ["Fertigware"]),
 	"Lagerverkauf": ({"f_umlagern"}, []),
+	"Former": ({"f_linie"}, []),
+	"Nachfüllen": ({"f_linie"}, []),
+	"Packstation": ({"f_packstation"}, []),
+	"Paletten-Terminal": ({"f_palette_fertig", "f_paletten"}, ["Fertigware"]),
 	"Individuell": (set(), []),
 }
 FUNKTIONEN = (
@@ -24,6 +28,9 @@ FUNKTIONEN = (
 	"f_paletten",
 	"f_lieferung",
 	"f_umlagern",
+	"f_linie",
+	"f_packstation",
+	"f_palette_fertig",
 )
 
 
@@ -47,6 +54,10 @@ class TerminalStation(Document):
 				_("Unbekannte Chargenstufe: {0}. Erlaubt: {1}").format(
 					", ".join(falsch), ", ".join(CHARGEN_STUFEN)
 				)
+			)
+		if (self.f_linie or self.f_packstation or self.f_palette_fertig) and not self.linie:
+			frappe.throw(
+				_("Bitte die Linie angeben (für Former, Nachfüllen, Packstation, Paletten-Terminal).")
 			)
 		if self.f_umlagern and not self.umlager_ziel and self.typ == "Lagerverkauf":
 			frappe.throw(_("Bitte „Umlagern nach“ angeben (z. B. Lagerort Lagerverkauf)."))

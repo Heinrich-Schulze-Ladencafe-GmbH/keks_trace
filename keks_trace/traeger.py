@@ -17,6 +17,14 @@ from keks_trace.utils import ausgangs_zeilen, eingangs_zeilen, zeilen_chargen, z
 TOLERANZ = 0.005  # 0,5 % Wiegetoleranz beim Entnehmen
 
 
+def _entnahme_zeilen(doc):
+	"""Zeilen, die aus einem Träger entnehmen: Verbrauch, und Umlagerung aus einem Kübel an die Linie."""
+	zeilen = eingangs_zeilen(doc)
+	if doc.purpose == "Material Transfer":
+		zeilen += [r for r in doc.items if r.s_warehouse and r.t_warehouse and r.get("kt_traeger")]
+	return zeilen
+
+
 def pruefe(doc):
 	befuellt = {}
 	for r in ausgangs_zeilen(doc):
@@ -47,7 +55,7 @@ def pruefe(doc):
 		befuellt[t.name] = r.batch_no
 
 	entnahme = {}
-	for r in eingangs_zeilen(doc):
+	for r in _entnahme_zeilen(doc):
 		if not r.get("kt_traeger"):
 			continue
 		t = _traeger(r.kt_traeger)
@@ -70,7 +78,7 @@ def pruefe(doc):
 			)
 
 
-ZWECKE = ("Manufacture", "Repack", "Material Receipt", "Material Issue")
+ZWECKE = ("Manufacture", "Repack", "Material Receipt", "Material Issue", "Material Transfer")
 
 
 def on_submit(doc, method=None):
@@ -78,7 +86,7 @@ def on_submit(doc, method=None):
 		return
 	zeit = get_datetime(f"{doc.posting_date} {doc.posting_time}")
 
-	for r in eingangs_zeilen(doc):
+	for r in _entnahme_zeilen(doc):
 		if r.get("kt_traeger"):
 			_entnehmen(r.kt_traeger, r.batch_no, zeilen_menge(r), doc.name, zeit)
 
@@ -113,7 +121,7 @@ def on_cancel(doc, method=None):
 			frappe.db.set_value("Traeger Belegung", bel.name, "menge_aktuell", rest)
 			frappe.db.set_value("Produkttraeger", r.kt_traeger, "menge", rest)
 
-	for r in eingangs_zeilen(doc):
+	for r in _entnahme_zeilen(doc):
 		if not r.get("kt_traeger"):
 			continue
 		t = _traeger(r.kt_traeger)
