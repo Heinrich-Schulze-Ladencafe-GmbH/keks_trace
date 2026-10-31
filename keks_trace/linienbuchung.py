@@ -196,10 +196,95 @@ def info(auftrag: str) -> dict:
 		"beutel_je_karton": round(karton / beutel) if beutel and karton else None,
 		"einheiten": paletten.einheiten(pa.artikel),
 		"los": pa.los,
+		"spezifikation": frappe.get_cached_value("Item", pa.artikel, "kt_spezifikation"),
+		"karton_je_palette": round(paletten.faktor(pa.artikel, "Palette") / karton)
+		if karton and _hat(pa.artikel, "Palette")
+		else None,
+		"lose_artikel": lose_artikel(pa.artikel),
+		"lose_name": frappe.get_cached_value("Item", lose_artikel(pa.artikel), "item_name")
+		if lose_artikel(pa.artikel)
+		else None,
 		"zutaten": zutaten,
 		"kuebel": kuebel_vorschlag(
 			[z["artikel"] for z in zutaten if z["stufe"] in ("Teig veredelt", "Grundteig")]
 		),
+	}
+
+
+def lose_artikel(artikel: str) -> str | None:
+	"""Die lose Ware, aus der der Artikel verpackt wird (Honig Lebkuchen 200 g → Honig Moppen lose)."""
+	bom = frappe.db.get_value("BOM", {"item": artikel, "is_default": 1, "is_active": 1, "docstatus": 1})
+	if not bom:
+		return None
+	for z in frappe.get_all("BOM Item", {"parent": bom}, ["item_code"], order_by="idx"):
+		if artikel_stufe(z.item_code) == "Ware lose":
+			return z.item_code
+	return None
+
+
+def lose_fertig(station: str, kg: float, kiste: str | None = None) -> dict:
+	"""Verpackungs-PC: Aus dem laufenden Auftrag wird auch lose Ware gemacht (in Kisten ins Lager).
+	Verbraucht wird wie bei den Kartons der Teig von der Linie und die Füllung aus dem Lager."""
+	from keks_trace import terminal
+
+	s = _station(station)
+	linie = _linie(s)
+	pa = _laufender(s)
+	artikel = lose_artikel(pa.artikel)
+	if not artikel:
+		_fehler(_("Zu {0} gibt es keine lose Ware im Rezept.").format(pa.artikel))
+	kg = flt(kg, 6)
+	if kg <= EPS:
+		_fehler(_("Bitte die Menge in kg eingeben."))
+	behaelter = terminal._ziel_behaelter(kiste) if kiste else None
+	zeilen, hinweise, vom_teig = _verbrauch(pa, artikel, kg, linie)
+	if not vom_teig:
+		_fehler(
+			_(
+				"Für Auftrag {0} ist noch nichts auf der Linie gebucht. Erst am Kneter die Kübel scannen."
+			).format(pa.name)
+		)
+	charge = terminal._neue_charge(artikel, getdate(nowdate()))
+	jetzt = now_datetime()
+	ausgabe = terminal._se_zeile(
+		{"artikel": artikel, "charge": charge, "menge": kg, "behaelter": behaelter},
+		t_warehouse=terminal._ziel_lager(s, artikel),
+	)
+	ausgabe["is_finished_item"] = 1
+	se = frappe.get_doc(
+		{
+			"doctype": "Stock Entry",
+			"stock_entry_type": "Manufacture",
+			"purpose": "Manufacture",
+			"company": linie.company,
+			"set_posting_time": 1,
+			"posting_date": jetzt.date(),
+			"posting_time": jetzt.time().strftime("%H:%M:%S"),
+			"kt_station": s.name,
+			"kt_produktionsauftrag": pa.name,
+			"items": [terminal._se_zeile(z, s_warehouse=z["lager"]) for z in zeilen] + [ausgabe],
+		}
+	)
+	se.insert()
+	se.submit()
+	b = frappe.db.get_value("Batch", charge, ["expiry_date", "kt_status"], as_dict=True)
+	return {
+		"charge": charge,
+		"name": frappe.get_cached_value("Item", artikel, "item_name"),
+		"menge": kg,
+		"kiste": behaelter,
+		"mhd": formatdate(b.expiry_date) if b.expiry_date else None,
+		"gesperrt": b.kt_status == "Gesperrt",
+		"buchung": se.name,
+		"verbraucht": [
+			{
+				"name": frappe.get_cached_value("Item", z["artikel"], "item_name"),
+				"charge": z.get("charge") or z.get("silo"),
+				"menge": flt(z["menge"], 3),
+			}
+			for z in zeilen
+		],
+		"hinweise": hinweise + list(se.flags.kt_fifo_warnungen or []),
 	}
 
 
@@ -357,33 +442,18 @@ def zufuehren(station: str, code: str, menge: float | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | None = None) -> dict:
+def _verbrauch(pa, artikel_aus, kg, linie):
+	"""Verbrauch für kg von artikel_aus laut Linienrezept: erst was für diesen Auftrag auf der Linie liegt
+	(Teig vom Kneter), der Rest (Füllung, Glasur, Schokolade, Packmittel) automatisch aus dem Lager bzw.
+	Tank, älteste zuerst. Nachgefüllt wird an der Linie nicht gebucht. Gibt (zeilen, hinweise, vom_teig)."""
 	from keks_trace import terminal
 
-	s = _station(station)
-	if not s.f_palette_fertig:
-		_fehler(_("An der Station {0} werden keine Paletten der Linie gebucht.").format(s.name))
-	linie = _linie(s)
-	pa = _laufender(s)
-	pruefung.pruefe_station_frei(s.name)
-	if flt(anzahl) <= EPS:
-		_fehler(_("Bitte die Anzahl eingeben."))
-	kg = flt(flt(anzahl) * paletten.faktor(pa.artikel, einheit), 6)
-	nve = paletten.finde(palette) if palette else None
-	if palette and not nve:
-		_fehler(_("{0} ist keine Palette.").format(palette))
-	if nve:
-		paletten._offen(nve)
-
-	# Verbrauch laut Linienrezept: erst was für diesen Auftrag auf der Linie liegt (Teig vom Kneter),
-	# der Rest (Füllung, Glasur, Schokolade, Packmittel) automatisch aus dem Lager bzw. Tank, älteste zuerst.
-	# Nachgefüllt wird an der Linie nicht gebucht.
 	vorrat = defaultdict(list)
 	for z in bestand(pa.name):
 		vorrat[z["artikel"]].append(z)
 	silos = terminal._silo_je_artikel()
 	zeilen, hinweise, vom_teig = [], [], False
-	for artikel, je in linienrezept(pa.artikel).items():
+	for artikel, je in linienrezept(artikel_aus).items():
 		bedarf = je * kg
 		offen = bedarf
 		for z in vorrat.get(artikel, []):
@@ -420,6 +490,28 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 				)
 			)
 	frappe.local.message_log = []
+	return zeilen, hinweise, vom_teig
+
+
+def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | None = None) -> dict:
+	from keks_trace import terminal
+
+	s = _station(station)
+	if not s.f_palette_fertig:
+		_fehler(_("An der Station {0} werden keine Paletten der Linie gebucht.").format(s.name))
+	linie = _linie(s)
+	pa = _laufender(s)
+	pruefung.pruefe_station_frei(s.name)
+	if flt(anzahl) <= EPS:
+		_fehler(_("Bitte die Anzahl eingeben."))
+	kg = flt(flt(anzahl) * paletten.faktor(pa.artikel, einheit), 6)
+	nve = paletten.finde(palette) if palette else None
+	if palette and not nve:
+		_fehler(_("{0} ist keine Palette.").format(palette))
+	if nve:
+		paletten._offen(nve)
+
+	zeilen, hinweise, vom_teig = _verbrauch(pa, pa.artikel, kg, linie)
 	if not vom_teig:
 		_fehler(
 			_(

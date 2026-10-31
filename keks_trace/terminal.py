@@ -323,6 +323,7 @@ def registrierungen(
 		join `tabStock Entry Detail` sed on sed.parent = se.name and sed.is_finished_item = 1
 		left join `tabBatch` b on b.name = sed.batch_no
 		where se.docstatus = 1 and se.{feld} = %(auftrag)s and se.purpose = 'Manufacture'
+			and b.kt_chargen_stufe in ('Fertigware', 'Ware lose')
 		order by se.posting_date desc, se.posting_time desc
 		limit %(n)s
 		""",
@@ -1236,7 +1237,7 @@ def herstellen(
 	if r["stufe"] not in s.stufen_liste():
 		_fehler(_("{0} wird nicht an der Station {1} hergestellt.").format(r["name"], s.name))
 	linie = frappe.get_cached_value("Item", ziel, "kt_linie")
-	if s.linie and linie != s.linie:
+	if s.linie and linie != s.linie and s.typ != "Verpackungs-PC":
 		_fehler(_("{0} gehört nicht zur Linie {1}.").format(r["name"], s.linie))
 	erlaubt = {z["artikel"] for z in r["zutaten"]}
 	eingaenge = [_zeile(z["code"], z["menge"], ziel, erlaubt) for z in _liste(zeilen)]
@@ -1967,6 +1968,49 @@ def linie_palette(station: str, anzahl: float, einheit: str, palette: str | None
 
 
 @frappe.whitelist()
+def linie_lose(station: str, kg: float, kiste: str | None = None) -> dict:
+	from keks_trace import linienbuchung
+
+	s = _station(station)
+	_darf(s, "palette_fertig")
+	return linienbuchung.lose_fertig(s.name, kg, kiste)
+
+
+@frappe.whitelist()
+def freie_kisten(station: str) -> list[dict]:
+	_station(station)
+	return frappe.get_all(
+		"Produkttraeger", {"typ": "Kiste lose Ware", "status": "Frei"}, ["code"], order_by="code", limit=200
+	)
+
+
+@frappe.whitelist()
+def offene_paletten(station: str) -> list[dict]:
+	"""Paletten, die noch nicht eingewickelt sind (Status Offen, mit Inhalt): zum Abschließen am Paletten-Terminal."""
+	_station(station)
+	ergebnis = []
+	for p in frappe.get_all(
+		"Palette", {"status": "Offen"}, ["name", "typ", "kunde"], order_by="creation desc", limit=100
+	):
+		i = paletten.info(p.name)
+		if i.get("positionen"):
+			ergebnis.append({"nve": p.name, "typ": p.typ, "kunde": p.kunde, "inhalt": i.get("kartons") or "",
+			                 "lose": ", ".join(sorted({x["charge"] for x in i["positionen"]}))})  # fmt: skip
+	return ergebnis
+
+
+@frappe.whitelist()
+def palette_versandbereit(station: str, palette: str) -> dict:
+	"""Palette eingewickelt: abschließen, NVE-Etikett drucken, versandbereit im Lager."""
+	_station(station)
+	nve = paletten.finde(palette)
+	if not nve:
+		_fehler(_("{0} ist keine Palette.").format(palette))
+	paletten.schliessen(nve)
+	return paletten.info(nve)
+
+
+@frappe.whitelist()
 def linie_beenden(station: str, auftrag: str | None = None, abbrechen: int = 0) -> dict:
 	from keks_trace import linienbuchung
 
@@ -1980,5 +2024,6 @@ def packstation(station: str) -> dict:
 	from keks_trace import linienbuchung
 
 	s = _station(station)
-	_darf(s, "packstation")
+	if not s.f_palette_fertig:  # Verpackungs-PC zeigt den Verpackungsauftrag auch
+		_darf(s, "packstation")
 	return linienbuchung.packstation(s.name)

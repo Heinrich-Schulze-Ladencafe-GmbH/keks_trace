@@ -251,3 +251,38 @@ class TestLinie(IntegrationTestCase):
 		# Bedarf aus offenen Kundenaufträgen geht bis auf Rohstoffe herunter
 		alle = execute({"stufe": "Rohstoff und Packmittel"})[1]
 		self.assertTrue(any(r["bedarf_auftraege"] > 0 for r in alle))
+
+	def test_08_verpackungs_pc_karton_und_lose_ware(self):
+		"""Ein Lauf ergibt Beutel im Karton und lose Ware; der Verpackungs-PC bucht beides, das Paletten-Terminal wickelt ein."""
+		from keks_trace import palette as paletten_modul
+
+		kuebel = demo.neuer_traeger(f"TGV-{self.h}", "Teigbehälter")
+		c = demo.neue_charge("5812", f"T5812-V-{self.h}", add_days(nowdate(), -10))
+		demo.buchen(
+			self.ctx,
+			"Material Receipt",
+			add_days(nowdate(), -10),
+			"04:00:00",
+			ausgaenge=[("5812", c, 200, kuebel)],
+		)
+		pa = frappe.get_doc(
+			{"doctype": "Produktionsauftrag", "linie": demo_linie.LINIE, "datum": nowdate(), "artikel": "17846",
+			 "menge": 20, "einheit": "Karton", "status": "Freigegeben"}
+		).insert()  # fmt: skip
+		linienbuchung.waehlen("Kneter", pa.name)
+		terminal.herstellen("Kneter", "5888", [{"code": kuebel, "menge": 200}])
+		linienbuchung.waehlen("Verpackungs-PC", pa.name)
+		d = terminal.packstation("Verpackungs-PC")
+		self.assertEqual(d["lose_artikel"], "5888-LOSE")
+		nve = terminal.palette_neu("Verpackungs-PC")["nve"]
+		k = terminal.linie_palette("Verpackungs-PC", 5, "Karton", nve)
+		self.assertEqual(k["menge"], 20)
+		kiste = demo.neuer_traeger(f"KLV-{self.h}", "Kiste lose Ware")
+		lose = terminal.linie_lose("Verpackungs-PC", 30, kiste)
+		self.assertEqual(frappe.db.get_value("Produkttraeger", kiste, "charge"), lose["charge"])
+		reg = {r["charge"] for r in terminal.registrierungen("Verpackungs-PC", produktionsauftrag=pa.name)}
+		self.assertEqual(reg, {k["charge"], lose["charge"]})  # Teig vom Kneter zählt nicht als verpackt
+		self.assertIn(nve, {p["nve"] for p in terminal.offene_paletten("Paletten-Terminal")})
+		terminal.palette_versandbereit("Paletten-Terminal", nve)
+		self.assertEqual(frappe.db.get_value("Palette", nve, "status"), "Geschlossen")
+		self.assertTrue(paletten_modul.inhalt(nve))

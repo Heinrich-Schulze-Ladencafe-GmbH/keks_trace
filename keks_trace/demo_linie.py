@@ -66,6 +66,7 @@ STATIONEN = [
 	("Nachfüllen Streusel", "Nachfüllen"),
 	("Packstation", "Packstation"),
 	("Paletten-Terminal", "Paletten-Terminal"),
+	("Verpackungs-PC", "Verpackungs-PC"),
 ]
 
 OHNE_TERMINAL = [n for n, typ in STATIONEN if typ in ("Former", "Nachfüllen", "Packstation")]
@@ -171,6 +172,8 @@ def stammdaten() -> frappe._dict:
 			).insert()
 	# Laut Terminalfluss nicht gebraucht: Kneter bucht den Teig auf die Linie, nachgefüllt wird nicht
 	# gebucht, an der Packstation steht kein Terminal. Bleiben angelegt (Tests), erscheinen aber nicht.
+	for n in range(1, 21):
+		demo.neuer_traeger(f"KL-{n:03d}", "Kiste lose Ware")
 	for name in OHNE_TERMINAL:
 		frappe.db.set_value("Terminal Station", name, "aktiv", 0)
 	for n in range(1, KUEBEL + 1):
@@ -225,6 +228,17 @@ def grossauftraege(ctx) -> list[str]:
 	return namen
 
 
+def packmittel(ctx):
+	"""Beutel, Etiketten, Clips im Lager, damit der Verpackungs-PC sie automatisch verbrauchen kann."""
+	from keks_trace import terminal
+
+	for artikel in ("9101", "9102", "9103"):
+		if frappe.db.exists("Item", artikel) and terminal._verfuegbar(artikel) < 5000:
+			terminal.wareneingang(
+				"Lager", artikel, f"{artikel}-DEMO-{frappe.generate_hash(length=4).upper()}", 20000
+			)
+
+
 def kuebel_fuellen(ctx, anzahl: int = 8):
 	"""Anfangsbestand: Grundteig Honig 5812 in Kübeln, unterschiedlich alt (Lagerteig, bis 1 Jahr).
 
@@ -254,6 +268,7 @@ def anlegen(planen: int = 1) -> dict:
 	ctx = stammdaten()
 	auftraege = grossauftraege(ctx)
 	kuebel_fuellen(ctx)
+	packmittel(ctx)
 	ergebnis = {"kundenauftraege": auftraege}
 	if planen and not frappe.db.exists(
 		"Produktionsauftrag", {"linie": LINIE, "status": ["!=", "Abgebrochen"]}

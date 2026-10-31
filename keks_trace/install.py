@@ -35,6 +35,13 @@ KOMPONENTEN_STUFEN = ["Rohstoff", "Halbfabrikat"]
 CUSTOM_FIELDS = {
 	"Item": [
 		{
+			"fieldname": "kt_spezifikation",
+			"label": "Spezifikation (Link oder Nummer im Spezifikations-Tool)",
+			"fieldtype": "Data",
+			"insert_after": "description",
+			"description": "Wird am Verpackungs-PC zum Verpackungsauftrag angezeigt (Druck, Folie, Clip ... stehen im Spezifikations-Tool).",
+		},
+		{
 			"fieldname": "kt_chargen_stufe",
 			"label": "Chargenstufe",
 			"fieldtype": "Select",

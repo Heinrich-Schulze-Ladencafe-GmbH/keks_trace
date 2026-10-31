@@ -19,10 +19,13 @@ VORLAGEN = {
 	"Nachfüllen": ({"f_linie"}, []),
 	"Packstation": ({"f_packstation"}, []),
 	"Paletten-Terminal": ({"f_palette_fertig", "f_paletten"}, ["Fertigware"]),
+	# Ein PC am Ende der Linie: zeigt den Verpackungsauftrag und bucht Karton (auf Palette) und lose Ware;
+	# verpackt auch lose Ware aus dem Lager nach Bedarf
+	"Verpackungs-PC": ({"f_palette_fertig", "f_paletten", "f_herstellen", "f_rework"}, ["Fertigware"]),
 	"Individuell": (set(), []),
 }
 # Hier wird nicht gescannt: das Terminal schlägt Ware und Packmittel vor (Scannen nur Backstube, Paletten, Kartons)
-VORSCHLAGEN = {"Verpackung", "Herzen Garnieren", "Herzen Verpackung"}
+VORSCHLAGEN = {"Verpackung", "Herzen Garnieren", "Herzen Verpackung", "Verpackungs-PC"}
 
 FUNKTIONEN = (
 	"f_herstellen",

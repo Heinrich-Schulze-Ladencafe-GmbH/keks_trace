@@ -532,6 +532,17 @@
 	// Knöpfe aus den Funktionen der Station (in ERPNext unter Terminal Station einstellbar)
 	function menue() {
 		const f = zustand.funktionen || [];
+		if (zustand.typ === "Verpackungs-PC") return [
+			["vpc", "Linie verpacken", "Verpackungsauftrag der Backstraße: Karton auf Palette und lose Ware buchen"],
+			["vpc_lose", "Lose Ware verpacken", "nach Bedarf aus dem Lager in Beutel / Karton"],
+			["paletten", "Paletten", "Neue Palette, Etikett, umpacken"],
+			["info", "Info-Scan", "Charge, Behälter oder Palette"],
+		];
+		if (zustand.typ === "Paletten-Terminal") return [
+			["einwickeln", "Palette einwickeln", "abschließen, NVE-Etikett, versandbereit ins Lager"],
+			["paletten", "Paletten", "Neue Palette, Etikett, umpacken"],
+			["info", "Info-Scan", "Charge, Behälter oder Palette"],
+		];
 		const fw = zustand.nur_fertigware;
 		const m = [];
 		const kneter = f.includes("herstellen") && f.includes("linie");
@@ -648,6 +659,9 @@
 			if (a === "rework") return reworkStart();
 			if (a === "silo") return siloLeer();
 			if (a === "anbrechen") return anbrechenStart();
+			if (a === "vpc") return vpcStart();
+			if (a === "vpc_lose") return schnellStart(true);
+			if (a === "einwickeln") return einwickelnStart();
 			if (a === "info") return infoScan();
 			if (a === "wareneingang") return wareneingangStart();
 			if (a === "lieferung") return lieferungStart();
@@ -748,19 +762,96 @@
 		});
 	}
 
+	// ------------------------------------------------------------------ Verpackungs-PC an der Linie
+	// Zeigt den Verpackungsauftrag (Spezifikation, Anlage, Beutel je Karton, Los, MHD) und bucht, was wirklich
+	// verpackt wurde: Karton auf eine Palette (jede Palette hat eine NVE) und lose Ware in Kisten. Beliebig oft.
+	async function vpcStart(hinweis) {
+		let d;
+		try { d = await api("packstation", { station: zustand.station }); } catch (e) { return meldung("rot", e.message); }
+		if (!d || !d.auftrag || d.status !== "Läuft") return auftragWaehlen("Verpacken", vpcStart);
+		const spez = d.spezifikation ? (/^https?:/.test(d.spezifikation)
+			? `<a href="${esc(d.spezifikation)}" target="_blank" rel="noopener">Spezifikation öffnen</a>` : esc(d.spezifikation)) : "–";
+		app.innerHTML = kopf("Verpacken: " + d.name, true) + auftragKopf(d) + `
+			<div class="position"><div class="titel"><b>Verpackungsauftrag</b><span>${d.kunde ? esc(d.kunde) : "Lager"}</span></div>
+				<div class="wert">Los<div>${esc(d.los_vorschau || "–")}</div></div>
+				<div class="wert">MHD<div style="font-size:34px">${esc(d.mhd_vorschau || "–")}</div></div>
+				<div class="wert">Anlage<div style="font-size:30px">${esc(d.verpackungsanlage || "–")}</div></div>
+				<div class="wert">Beutel je Karton<div>${esc(d.beutel_je_karton || "–")}</div></div>
+				<div class="wert">Karton je Palette<div>${esc(d.karton_je_palette || "–")}</div></div>
+				<div class="wert">Spezifikation<div style="font-size:20px">${spez}</div></div></div>
+			<div class="reihe"><button class="knopf gruen" data-a="karton">Karton auf Palette buchen<small>gebucht bisher ${esc(d.gebucht_text)} von ${esc(d.menge_text)}</small></button>
+				${d.lose_artikel ? `<button class="knopf blau" data-a="lose">Lose Ware buchen<small>${esc(d.lose_name)} in Kisten ins Lager</small></button>` : ""}</div>
+			<div class="reihe"><button class="knopf" data-a="label">Kartonetiketten drucken</button><button class="knopf" data-a="beenden">Auftrag beenden</button></div>
+			<div class="reiter"><button class="an" type="button">Registrierungen</button></div><div class="panel" style="margin-top:0" id="registrierungen">Lädt …</div>`;
+		if (hinweis) meldung("gruen", hinweis);
+		registrierungenLaden({ produktionsauftrag: d.auftrag });
+		aktionen(async (a) => {
+			if (a === "pa-wechseln") return auftragWaehlen("Verpacken", vpcStart);
+			if (a === "karton") return paletteFertigStart(vpcStart);
+			if (a === "lose") return loseBuchen(d);
+			if (a === "label") return window.open("/karton_etikett?druck=1&station=" + encodeURIComponent(zustand.station) + "&anzahl=" + (d.karton_je_palette || 20), "_blank");
+			if (a === "beenden") { const i = await api("linie_info", { station: zustand.station }); return auftragBeenden(i); }
+			beiAllgemein(a);
+		});
+	}
+
+	async function loseBuchen(d) {
+		let kisten = [];
+		try { kisten = await api("freie_kisten", { station: zustand.station }); } catch (e) { /* ohne Kiste */ }
+		app.innerHTML = kopf("Lose Ware: " + d.lose_name, true) + auftragKopf(d) +
+			zahlFeld("kg", "Wie viel kg?") + textFeld("scan", "Kiste scannen oder unten antippen (leer = ohne Kiste)") +
+			(kisten.length ? `<div class="einheiten" id="kisten">${kisten.slice(0, 24).map((k) => `<button type="button" data-a="kiste" data-code="${esc(k.code)}">${esc(k.code)}</button>`).join("")}</div>` : "") +
+			`<div class="reihe"><button class="knopf" data-a="zurueck-vpc">← Zurück</button><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
+		aktionen(async (a, x) => {
+			if (a === "zurueck-vpc") return vpcStart();
+			if (a === "kiste") { document.getElementById("scan").value = x.code; app.querySelectorAll("#kisten button").forEach((b) => b.classList.toggle("an", b.dataset.code === x.code)); return; }
+			if (a !== "buchen") return beiAllgemein(a);
+			try {
+				const e = await api("linie_lose", { station: zustand.station, kg: zahl(document.getElementById("kg").value), kiste: document.getElementById("scan").value.trim() || null });
+				ergebnis(e.name, ["Charge: " + e.charge, "Menge: " + kg(e.menge), e.kiste ? "Kiste: " + e.kiste : "", e.mhd ? "Verwendbar bis: " + e.mhd : "",
+					e.gesperrt ? "Gesperrt bis zur Freigabe durch die QS" : "", "Verbraucht: " + e.verbraucht.map((v) => v.name + " " + v.charge).join(", ")].filter(Boolean),
+					e.hinweise, `<button class="knopf gruen" data-a="weiter">Zurück zum Auftrag</button>`)((b) => (b === "weiter" ? vpcStart() : beiAllgemein(b)));
+			} catch (err) { meldung("rot", err.message); }
+		});
+		fokus("kg");
+	}
+
+	// Paletten-Terminal: Palette eingewickelt → abschließen, NVE-Etikett, versandbereit
+	async function einwickelnStart(hinweis) {
+		app.innerHTML = kopf("Palette einwickeln", true) + textFeld("scan", "Palette scannen (NVE) – oder unten antippen") + `<div id="pal">Lädt …</div>`;
+		if (hinweis) meldung("gruen", hinweis);
+		aktionen(beiAllgemein);
+		const fertig = async (nve) => {
+			try {
+				const p = await api("palette_versandbereit", { station: zustand.station, palette: nve });
+				etikettDrucken(p.nve);
+				einwickelnStart("Palette " + p.nve + " versandbereit, Etikett wird gedruckt.");
+			} catch (e) { meldung("rot", e.message); }
+		};
+		enter("scan", (v) => v && fertig(v));
+		fokus("scan");
+		try {
+			const liste = await api("offene_paletten", { station: zustand.station });
+			suchListe("pal", [["NVE", (p) => "…" + p.nve.slice(-6)], ["Art", "typ"], ["Inhalt", "inhalt"], ["Lose", "lose"], ["Kunde", (p) => p.kunde || ""]],
+				liste, (p) => fertig(p.nve), "Suchen: NVE, Los, Inhalt …");
+		} catch (e) { meldung("rot", e.message); }
+	}
+
 	// Palette fertig: Kartons zählen, buchen
-	async function paletteFertigStart() {
+	async function paletteFertigStart(zurueckZu) {
+		const zurueck = typeof zurueckZu === "function" ? zurueckZu : null;
 		let i;
 		try { i = await api("linie_info", { station: zustand.station }); } catch (e) { return meldung("rot", e.message); }
-		if (!i || !i.auftrag || i.status !== "Läuft") return auftragWaehlen("Palette fertig", paletteFertigStart);
+		if (!i || !i.auftrag || i.status !== "Läuft") return auftragWaehlen("Palette fertig", zurueck || paletteFertigStart);
 		const einheiten = (i.einheiten || []).filter((e) => e.einheit !== "Palette" && e.einheit !== "Lage");
 		let einheit = (einheiten.find((e) => e.einheit === "Karton") || einheiten[0] || { einheit: "Kg" }).einheit;
-		app.innerHTML = kopf("Palette fertig", true) + auftragKopf(i) + einheitWahl(einheiten, einheit, i.lagereinheit) +
+		app.innerHTML = kopf(zurueck ? "Karton auf Palette" : "Palette fertig", true) + auftragKopf(i) + einheitWahl(einheiten, einheit, i.lagereinheit) +
 			zahlFeld("anzahl", `Wie viele <span id="einheit-text">${esc(einheit)}</span> auf der Palette?`) +
 			textFeld("scan", "Palette scannen (leer = neue Palette)") +
 			`<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button><button class="knopf" data-a="beenden">Auftrag beenden</button></div>`;
 		aktionen(async (a, d) => {
-			if (a === "pa-wechseln") return auftragWaehlen("Palette fertig", paletteFertigStart);
+			if (a === "pa-wechseln") return auftragWaehlen("Palette fertig", zurueck || paletteFertigStart);
+			if (a === "zurueck" && zurueck) return zurueck();
 			if (a === "einheit") { einheit = d.e; einheitSetzen(einheit); document.getElementById("einheit-text").textContent = einheit; return fokus("anzahl"); }
 			if (a === "beenden") return auftragBeenden(i);
 			if (a !== "buchen") return beiAllgemein(a);
@@ -777,7 +868,7 @@
 					"Auftrag gesamt: " + e.gebucht_text, "Verbraucht: " + e.verbraucht.map((v) => v.name + " " + v.charge).join(", "),
 				].filter(Boolean), e.hinweise, `<button class="knopf" data-a="etikett">Palettenlabel nochmal</button><button class="knopf" data-a="weiter">Nächste Palette</button>`)((a2) => {
 					if (a2 === "etikett") return etikettDrucken(e.palette);
-					if (a2 === "weiter") return paletteFertigStart();
+					if (a2 === "weiter") return zurueck ? zurueck() : paletteFertigStart();
 					beiAllgemein(a2);
 				});
 			} catch (err) { knopf.disabled = false; knopf.textContent = "Buchen"; meldung("rot", err.message); }
@@ -821,13 +912,14 @@
 		return herstellenListe();
 	}
 
-	async function schnellStart() {
+	async function schnellStart(nurLose) {
 		const fw = zustand.nur_fertigware;
-		const nachAuftrag = !!zustand.linie;
+		const nachAuftrag = !!zustand.linie && !nurLose;
 		app.innerHTML = kopf(fw ? "Verpacken" : "Herstellen", true) +
 			`<p><b>${nachAuftrag ? "Offene Aufträge" : "Liegt zum Verpacken im Lager"}</b> – Zeile antippen</p><div id="aufg">Lädt …</div>
 			<div class="reihe"><button class="knopf" data-a="klassisch">Ohne Auftrag${fw ? "" : " (z. B. Zuckerguss anmischen)"}</button></div>`;
 		aktionen((a) => (a === "klassisch" ? herstellenListe() : beiAllgemein(a)));
+		zustand.zurueckZu = () => schnellStart(nurLose);
 		try {
 			if (nachAuftrag) {
 				const liste = await api("aufgaben", { station: zustand.station });
@@ -852,14 +944,14 @@
 		anzahlAbfragen(a.name + " für " + a.kunde,
 			`Auftrag ${esc(a.auftrag)} · noch ${esc(zahlText(a.todo))} ${esc(ein(a.einheit))}${a.vorstufe ? ` · im Lager ${esc(zahlText(a.verfuegbar))} ${esc(a.vorstufe)}` : ""}`,
 			einheiten, { anzahl: vorschlag > 0 ? vorschlag : null, einheit: einheiten.find((e) => e.einheit === a.einheit) ? a.einheit : einheiten[0].einheit },
-			(n, e) => schnellBuchen(a.artikel, n * faktorVon(einheiten, e), { anzahl: n, einheit: e, auftrag: a }), schnellStart);
+			(n, e) => schnellBuchen(a.artikel, n * faktorVon(einheiten, e), { anzahl: n, einheit: e, auftrag: a }), () => zustand.zurueckZu());
 	}
 
 	async function zielWaehlen(q) {
 		if (q.ziele.length === 1) return verpackenAnzahl(q, q.ziele[0]);
 		app.innerHTML = kopf(q.name + ": verpacken als", true) + `<div class="raster">${q.ziele.map((z, i) =>
 			`<button class="knopf" data-a="ziel" data-i="${i}">${esc(z.name)}<small>${esc(z.artikel)}</small></button>`).join("")}</div>`;
-		aktionen((a, d) => (a === "ziel" ? verpackenAnzahl(q, q.ziele[+d.i]) : a === "zurueck" ? schnellStart() : beiAllgemein(a)));
+		aktionen((a, d) => (a === "ziel" ? verpackenAnzahl(q, q.ziele[+d.i]) : a === "zurueck" ? zustand.zurueckZu() : beiAllgemein(a)));
 	}
 
 	async function verpackenAnzahl(q, ziel) {
@@ -867,7 +959,7 @@
 		try { einheiten = await api("einheiten", { artikel: ziel.artikel }); } catch (x) { /* unten */ }
 		if (!einheiten || !einheiten.length) einheiten = [{ einheit: "Kg", faktor: 1 }];
 		anzahlAbfragen(ziel.name, `aus ${esc(q.name)} · ${esc(q.behaelter ? "Kiste " + q.behaelter : q.charge)} · ${esc(mg(q.menge, q.einheit))} im Lager`,
-			einheiten, null, (n, e) => schnellBuchen(ziel.artikel, n * faktorVon(einheiten, e), { anzahl: n, einheit: e, bevorzugt: q.code }), schnellStart);
+			einheiten, null, (n, e) => schnellBuchen(ziel.artikel, n * faktorVon(einheiten, e), { anzahl: n, einheit: e, bevorzugt: q.code }), () => zustand.zurueckZu());
 	}
 
 	async function schnellBuchen(ziel, menge, o) {
@@ -891,7 +983,7 @@
 				e.mhd ? "MHD: " + e.mhd : "",
 				au ? "Kundenauftrag: " + au.auftrag + " · " + au.kunde : "",
 				"Verbraucht: " + v.zeilen.map((z) => z.name + " " + mg(z.menge, z.einheit) + " (" + (z.silo || z.behaelter || z.charge) + ")").join(", "),
-			].filter(Boolean), e.hinweise, `<button class="knopf gruen" data-a="weiter">Nächste Buchung</button>`)((a) => (a === "weiter" ? schnellStart() : beiAllgemein(a)));
+			].filter(Boolean), e.hinweise, `<button class="knopf gruen" data-a="weiter">Nächste Buchung</button>`)((a) => (a === "weiter" ? zustand.zurueckZu() : beiAllgemein(a)));
 		} catch (err) { meldung("rot", err.message); }
 	}
 
