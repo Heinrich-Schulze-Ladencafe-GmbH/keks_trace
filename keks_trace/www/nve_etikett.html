@@ -43,6 +43,7 @@
 			{% if e.positionen|length > 8 %}<tr><td colspan="4">… und {{ e.positionen|length - 8 }} weitere Positionen</td></tr>{% endif %}
 			{% if not e.positionen %}<tr><td colspan="4">(leer)</td></tr>{% endif %}
 		</table>
+		{% if e.bio %}<div style="margin-top:1mm"><b>BIO</b>{% if e.oeko_nr %} · Öko-Kontrollstelle {{ e.oeko_nr }}{% endif %}</div>{% endif %}
 		<div style="margin-top:1mm"><b>Gesamt:</b> {{ e.kartons }} · {{ ("%g" % e.menge)|replace(".", ",") }} kg</div>
 	</div>
 	{% if e.inhalt_barcode %}

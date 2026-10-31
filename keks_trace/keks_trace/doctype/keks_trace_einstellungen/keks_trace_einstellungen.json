@@ -14,7 +14,9 @@
   "nve_reserveziffer",
   "absender",
   "section_los",
-  "los_format"
+  "los_format",
+  "section_bio",
+  "oeko_kontrollnummer"
  ],
  "fields": [
   {
@@ -68,11 +70,22 @@
    "options": "JWWT\nLJJMMTT-NN",
    "default": "JWWT",
    "description": "JWWT = Jahr (1 Stelle), Kalenderwoche, Wochentag (1 = Montag) nach ISO 8601; ein Los je Artikel und Tag. LJJMMTT-NN = neues Los je Verpackungsvorgang."
+  },
+  {
+   "fieldname": "section_bio",
+   "fieldtype": "Section Break",
+   "label": "Bio (EU-Öko)"
+  },
+  {
+   "fieldname": "oeko_kontrollnummer",
+   "fieldtype": "Data",
+   "label": "Öko-Kontrollnummer",
+   "description": "Code der eigenen Öko-Kontrollstelle, z. B. DE-ÖKO-0xx. Steht auf Etiketten von Bio-Ware."
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-28 22:00:00.000000",
+ "modified": "2026-10-31 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Keks Trace Einstellungen",

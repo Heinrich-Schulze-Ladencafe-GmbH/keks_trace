@@ -237,6 +237,31 @@ Die Demo-Stammdaten legen an: Metalldetektor Verpackung und Herzenboden (CCP, st
 sperrend), Etikettencheck, Gewichtskontrolle, Brix Invertzuckersirup 80–84, Temperatur Butter
 ≤ 6 °C. **Die Verpackungsstationen buchen daher erst nach der Metalldetektor-Prüfung.**
 
+## Bio und V-Label
+
+Am Artikel gibt es die Haken **Bio (EU-Öko)**, **In Bio-Produkten erlaubt** (Salz, Wasser,
+Backtriebmittel …), **Vegan** und **Vegetarisch**. Jede Charge trägt ein **Kennzeichen**
+(z. B. „Bio, Vegan, Vegetarisch“ oder „keine“):
+
+- **Wareneingang:** Bio-Ware nur von einem Lieferanten mit gültigem Öko-Zertifikat (am Lieferanten:
+  Öko-Kontrollstelle, gültig bis, Datei). Das Terminal bietet bei Bio-Artikeln nur zertifizierte
+  Lieferanten an; abgelaufene Zertifikate werden abgewiesen. Gleiches gilt für Eingangsrechnungen /
+  Wareneingänge im Büro.
+- **Herstellen:** Ist der Zielartikel Bio / vegan / vegetarisch, wird jede Zutat ohne dieses
+  Kennzeichen schon beim Scannen rot abgewiesen (auch Silo-Chargen und Rework). Die neue Charge
+  bekommt ein Kennzeichen nur, wenn alle Zutaten es tragen (Packmittel zählen nicht; für Bio muss
+  mindestens eine echte Bio-Zutat dabei sein).
+- **Umstellung:** Wurde an der Station zuletzt konventionell produziert, fragt das Terminal vor
+  der ersten Bio-Charge die Prüfpläne „Bei Umstellung auf Bio“ ab (Demo: „Reinigung vor Bio“).
+  Nicht in Ordnung → nicht gebucht, aber protokolliert.
+- **Etikett:** Paletten, auf denen nur Bio-Ware steht, tragen „BIO“ und die eigene
+  Öko-Kontrollnummer (Keks Trace Einstellungen). Die Vorschau am Packplatz zeigt sie mit Los und MHD.
+- **Bericht „Bio Mengenabgleich“:** je Bio-Artikel und Zeitraum Anfang, Eingang, hergestellt,
+  verbraucht, ausgeliefert, Lagerverkauf, entsorgt, Ende. Für die jährliche Öko-Kontrolle.
+
+Demo: `KT Bio Mühle` (DE-ÖKO-006), Bio-Dinkelmehl, Bio-Rohrzucker, Speisesalz und
+„Bio-Grundteig Dinkel (vegan)“.
+
 ## Lagerverkauf
 
 Der Lagerverkauf ist ein eigener Lagerort. Ware kommt per Scan über „Umlagern“ dorthin (Los,
@@ -321,7 +346,7 @@ Die Tests rollen ihre Daten am Ende zurück.
 ## Bewusst noch nicht enthalten
 
 Waagenanbindung, Wareneingang über Bestellungen, eigene Kasse mit TSE und Kundendisplay,
-Bio/V-Label-Kennzeichnung, Abweichungsmanagement/CAPA, SOPs und Schulungsnachweise.
+Abweichungsmanagement/CAPA, SOPs und Schulungsnachweise.
 
 ## Offene fachliche Annahmen (von der QS zu bestätigen)
 

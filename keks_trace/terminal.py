@@ -14,9 +14,9 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, formatdate, getdate, now_datetime, nowdate
 
+from keks_trace import kennzeichnung, pruefung
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
-from keks_trace import pruefung
 from keks_trace.install import REWORK_ZIELE
 from keks_trace.utils import allergene, artikel_stufe
 
@@ -134,7 +134,7 @@ def rezepte(station: str) -> list[dict]:
 
 
 @frappe.whitelist()
-def rezept(artikel: str, menge: float | None = None) -> dict:
+def rezept(artikel: str, menge: float | None = None, station: str | None = None) -> dict:
 	"""Zutaten laut Standard-Stückliste, auf die Sollmenge umgerechnet."""
 	bom = frappe.db.get_value("BOM", {"item": artikel, "is_default": 1, "is_active": 1, "docstatus": 1})
 	if not bom:
@@ -167,7 +167,9 @@ def rezept(artikel: str, menge: float | None = None) -> dict:
 		"rework_moeglich": artikel_stufe(artikel) in REWORK_ZIELE,
 		"ausgabe_silo": silos.get(artikel),
 		"einheiten": paletten.einheiten(artikel) if artikel_stufe(artikel) == "Fertigware" else [],
-		"pruefungen": [pruefung.beschreibung(p) for p in pruefung.fuer_artikel(pruefung.HERSTELLEN, artikel)],
+		"pruefungen": [pruefung.beschreibung(p) for p in pruefung.fuer_herstellen(artikel, station)],
+		"kennzeichen": sorted(kennzeichnung.artikel_kennzeichen(artikel), key=kennzeichnung.ALLE.index),
+		"umstellung_bio": bool(station and kennzeichnung.umstellung_noetig(station, artikel)),
 	}
 
 
@@ -196,12 +198,28 @@ def wareneingang_artikel() -> list[dict]:
 		],
 		order_by="item_name",
 	)
+	lieferanten = _lieferanten()
 	for a in artikel:
 		a["silo"] = silos.get(a["artikel"])
+		a["bio"] = kennzeichnung.BIO in kennzeichnung.artikel_kennzeichen(a["artikel"])
+		eigene = frappe.get_all("Item Supplier", {"parent": a["artikel"]}, pluck="supplier")
+		a["lieferanten"] = [
+			x
+			for x in lieferanten
+			if (not eigene or x["lieferant"] in eigene) and (x["bio_ok"] or not a["bio"])
+		]
 		a["pruefungen"] = [
 			pruefung.beschreibung(p) for p in pruefung.fuer_artikel(pruefung.WARENEINGANG, a["artikel"])
 		]
 	return artikel
+
+
+def _lieferanten() -> list[dict]:
+	ergebnis = []
+	for x in frappe.get_all("Supplier", {"disabled": 0}, ["name", "supplier_name"], order_by="supplier_name"):
+		st = kennzeichnung.bio_lieferant_status(x.name)
+		ergebnis.append({"lieferant": x.name, "name": x.supplier_name, "bio_ok": st["ok"]})
+	return ergebnis
 
 
 @frappe.whitelist()
@@ -471,11 +489,15 @@ def _zeile(code, menge, ziel=None, erlaubt=None):
 			if offen <= EPS:
 				break
 			_pruefe_charge(c["charge"], artikel)
+			if ziel:
+				kennzeichnung.pruefe_zutat(ziel, c["charge"], artikel, r["silo"])
 			offen -= c["menge"]
 		if offen > EPS:
 			_fehler(_("Im {0} sind rechnerisch nur {1} kg.").format(r["silo"], flt(menge - offen, 3)))
 	else:
 		_pruefe_charge(r["charge"], artikel)
+		if ziel:
+			kennzeichnung.pruefe_zutat(ziel, r["charge"], artikel)
 		if r["typ"] == "behaelter" and menge > flt(r["inhalt"]) * 1.005 + EPS:
 			_fehler(_("Behälter {0} enthält nur {1} kg.").format(r["behaelter"], r["inhalt"]))
 		if r["typ"] == "charge" and menge > flt(r["inhalt"]) + EPS:
@@ -625,7 +647,12 @@ def vorschau(station: str, ziel: str, zeilen) -> dict:
 	werte = daten_berechnen(ziel, eingaenge, nowdate(), charge, "-")
 	vorher = frappe.db.get_value("Batch", charge, "expiry_date") if charge else None
 	mhd = werte.get("expiry_date")
+	ziel_k = kennzeichnung.artikel_kennzeichen(ziel)
 	return {
+		"kennzeichen": [k for k in kennzeichnung.ALLE if k in ziel_k],
+		"oeko_nr": frappe.db.get_single_value("Keks Trace Einstellungen", "oeko_kontrollnummer")
+		if kennzeichnung.BIO in ziel_k
+		else None,
 		"los": los,
 		"los_vorhanden": bool(charge),
 		"mhd": formatdate(mhd) if mhd else None,
@@ -651,16 +678,17 @@ def herstellen(
 	Fertigware: Ausbringung als Anzahl + Einheit (Karton/Beutel); ziel_behaelter darf eine Palette sein.
 	"""
 	s = _station(station)
-	r = rezept(ziel)
+	r = rezept(ziel, station=s.name)
 	_darf(s, "herstellen")
 	pruefung.pruefe_station_frei(s.name)
 	if r["stufe"] not in s.stufen_liste():
 		_fehler(_("{0} wird nicht an der Station {1} hergestellt.").format(r["name"], s.name))
 	erlaubt = {z["artikel"] for z in r["zutaten"]}
 	eingaenge = [_zeile(z["code"], z["menge"], ziel, erlaubt) for z in _liste(zeilen)]
-	pruef_ergebnisse = pruefung.bei_buchung(pruefung.HERSTELLEN, ziel, pruefwerte, s.name)
 	if not eingaenge:
 		_fehler(_("Keine Zutaten gescannt."))
+	pruef_ergebnisse = pruefung.bei_buchung(pruefung.HERSTELLEN, ziel, pruefwerte, s.name)
+	pruefung.verweigern_herstellen(pruef_ergebnisse, s.name, _("Herstellen {0}").format(r["name"]))
 
 	summe = sum(z["menge"] for z in eingaenge if z.get("einheit", r["einheit"]) == r["einheit"])
 	if flt(anzahl) > EPS and einheit:
@@ -724,10 +752,13 @@ def herstellen(
 	hinweise += list(se.flags.kt_fifo_warnungen or [])
 	if se.flags.kt_fehlende_zutaten:
 		hinweise.append(_("Laut Rezept nicht gescannt: {0}").format(", ".join(se.flags.kt_fehlende_zutaten)))
-	b = frappe.db.get_value("Batch", charge, ["expiry_date", "kt_status", "kt_los"], as_dict=True)
+	b = frappe.db.get_value(
+		"Batch", charge, ["expiry_date", "kt_status", "kt_los", "kt_kennzeichen"], as_dict=True
+	)
 	return {
 		"charge": charge,
 		"los": b.kt_los,
+		"kennzeichen": b.kt_kennzeichen if b.kt_kennzeichen != kennzeichnung.KEINE else None,
 		"artikel": ziel,
 		"name": r["name"],
 		"menge": ausbringung,
@@ -835,6 +866,8 @@ def wareneingang(
 		_fehler(_("Bitte die Charge des Lieferanten scannen oder eingeben."))
 	if frappe.get_cached_value("Item", artikel, "has_expiry_date") and not mhd:
 		_fehler(_("Bitte das MHD eingeben."))
+	if kennzeichnung.BIO in kennzeichnung.artikel_kennzeichen(artikel):
+		kennzeichnung.pruefe_bio_lieferant(lieferant, artikel)
 
 	pruef_ergebnisse = pruefung.bei_buchung(pruefung.WARENEINGANG, artikel, pruefwerte, s.name)
 	abgelehnt = pruefung.verweigert(pruef_ergebnisse)

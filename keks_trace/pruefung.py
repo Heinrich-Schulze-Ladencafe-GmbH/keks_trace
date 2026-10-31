@@ -22,6 +22,7 @@ from frappe.utils import flt, get_datetime, now_datetime
 REGEL = "Regelmäßig an der Station"
 HERSTELLEN = "Beim Herstellen"
 WARENEINGANG = "Beim Wareneingang"
+UMSTELLUNG = "Bei Umstellung auf Bio"
 
 
 class PruefFehler(frappe.ValidationError):
@@ -47,6 +48,19 @@ def _plaene(ausloeser):
 def fuer_artikel(ausloeser: str, artikel: str) -> list:
 	"""Prüfpläne, die beim Herstellen bzw. Wareneingang dieses Artikels abgefragt werden."""
 	return [p for p in _plaene(ausloeser) if not p.artikel or artikel in {a.artikel for a in p.artikel}]
+
+
+def fuer_umstellung(station: str, ziel: str) -> list:
+	"""Prüfungen vor Bio-Herstellung, wenn an der Station zuletzt konventionell produziert wurde."""
+	from keks_trace.kennzeichnung import umstellung_noetig
+
+	if not station or not umstellung_noetig(station, ziel):
+		return []
+	return [p for p in _plaene(UMSTELLUNG) if not p.stationen or station in {x.station for x in p.stationen}]
+
+
+def fuer_herstellen(ziel: str, station: str | None = None) -> list:
+	return fuer_artikel(HERSTELLEN, ziel) + fuer_umstellung(station, ziel)
 
 
 def fuer_station(station) -> list:
@@ -278,7 +292,10 @@ def bei_buchung(ausloeser, artikel, eingaben, station=None):
 	Gibt Liste (plan, ok, felder) zurück. Fehlt eine Eingabe, kommt eine Fehlermeldung.
 	"""
 	eingaben = _werte(eingaben)
-	return [(p, *bewerten(p, eingaben.get(p.name))) for p in fuer_artikel(ausloeser, artikel)]
+	plaene = (
+		fuer_herstellen(artikel, station) if ausloeser == HERSTELLEN else fuer_artikel(ausloeser, artikel)
+	)
+	return [(p, *bewerten(p, eingaben.get(p.name))) for p in plaene]
 
 
 def nach_buchung(ergebnisse, station, charge, beleg) -> list[str]:
@@ -304,3 +321,24 @@ def nach_buchung(ergebnisse, station, charge, beleg) -> list[str]:
 def verweigert(ergebnisse) -> list:
 	"""Prüfungen mit Abweichung, bei denen die Annahme verweigert wird."""
 	return [(p, ok, f) for p, ok, f in ergebnisse if not ok and p.bei_abweichung == "Annahme verweigern"]
+
+
+def verweigern_herstellen(ergebnisse, station, text):
+	"""Herstellen nicht buchen, weil eine Prüfung nicht bestanden ist (z. B. Linie nicht gereinigt).
+
+	Die Prüfung wird trotzdem protokolliert (eigene Transaktion), dann kommt die Fehlermeldung.
+	"""
+	abgelehnt = verweigert(ergebnisse)
+	if not abgelehnt:
+		return
+	for p, ok, felder in ergebnisse:
+		protokoll(
+			p, ok, felder, station=station, folge=_("nicht gebucht") if not ok else None, bemerkung=text
+		)
+	if not frappe.flags.in_test:
+		frappe.db.commit()  # Nachweis bleibt, auch wenn die Buchung abgebrochen wird
+	gruende = "; ".join(
+		f"{p.titel}" + (f": {p.korrekturmassnahme}" if p.korrekturmassnahme else "")
+		for p, _o, _f in abgelehnt
+	)
+	_fehler(_("Nicht gebucht, Prüfung nicht bestanden: {0}").format(gruende))

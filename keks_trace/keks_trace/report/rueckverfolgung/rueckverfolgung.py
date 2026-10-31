@@ -35,6 +35,7 @@ def _spalten():
 		{"fieldname": "charge", "label": _("Charge"), "fieldtype": "Link", "options": "Batch", "width": 170},
 		{"fieldname": "artikel", "label": _("Artikel"), "fieldtype": "Link", "options": "Item", "width": 160},
 		{"fieldname": "stufe", "label": _("Chargenstufe"), "fieldtype": "Data", "width": 120},
+		{"fieldname": "kennzeichen", "label": _("Kennzeichen"), "fieldtype": "Data", "width": 130},
 		{"fieldname": "anteil", "label": _("Anteil %"), "fieldtype": "Percent", "width": 90},
 		{"fieldname": "herstelldatum", "label": _("Herstelldatum"), "fieldtype": "Date", "width": 110},
 		{"fieldname": "ursprungsdatum", "label": _("Ursprung"), "fieldtype": "Date", "width": 110},

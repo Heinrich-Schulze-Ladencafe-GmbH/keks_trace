@@ -8,13 +8,14 @@ import frappe
 from frappe import _
 from frappe.utils import formatdate, getdate
 
-from keks_trace import rework, silo, sperre, traeger, vollstaendigkeit
+from keks_trace import kennzeichnung, rework, silo, sperre, traeger, vollstaendigkeit
 from keks_trace.utils import artikel_stufe, eingangs_zeilen, zeilen_chargen
 
 
 def pruefe_stock_entry(doc, method=None):
 	silo.zuteilen(doc)  # zuerst: Silo-Entnahmen bekommen ihre Chargen, dann greifen alle Prüfungen
 	sperre.pruefe_stock_entry(doc)
+	kennzeichnung.pruefe_stock_entry(doc)
 	if doc.purpose in ("Material Receipt", "Material Issue"):
 		traeger.pruefe(doc)
 		return

@@ -37,6 +37,10 @@ ARTIKEL = {
 	"KT-KAKAO": ("Kakaopulver", "Rohstoff", None, 540),
 	"KT-SCHOKO": ("Zartbitter-Kuvertüre (gekauft)", "Rohstoff", None, 365),
 	"KT-FOLIE": ("Verpackungsfolie", "Packmittel", None, None),
+	# Bio-Linie (Öko-Zertifikat beim Lieferanten nötig)
+	"KT-BIO-DINKEL": ("Bio-Dinkelmehl Type 630", "Rohstoff", None, 365),
+	"KT-BIO-ZUCKER": ("Bio-Rohrzucker", "Rohstoff", None, 730),
+	"KT-SALZ": ("Speisesalz (in Bio erlaubt)", "Rohstoff", None, None),
 	# selbst hergestellt: Zuckersirup (Tank) und Füllung
 	"KT-SIRUP": ("Zuckersirup (eigene Herstellung, Tank)", "Halbfabrikat", None, 14),
 	"KT-NOUGAT": ("Nougatfüllung (eigene Herstellung)", "Halbfabrikat", "Nougat", 30),
@@ -44,6 +48,7 @@ ARTIKEL = {
 	"KT-GT-MUERBE": ("Grundteig Mürbe", "Grundteig", "Mürbeteig", 3),
 	"KT-TV-NUSS": ("Teig Haselnuss (veredelt)", "Teig veredelt", "Mürbeteig Nuss", 2),
 	"KT-TV-KAKAO": ("Teig Kakao (veredelt)", "Teig veredelt", "Mürbeteig", 2),
+	"KT-BIO-GT": ("Bio-Grundteig Dinkel (vegan)", "Grundteig", None, 3),
 	# gebacken, noch ohne Füllung/Glasur
 	"KT-BW-NUSS": ("Nusskeks gebacken", "Backware", "Mürbeteig Nuss", 7),
 	"KT-BW-KAKAO": ("Kakaokeks gebacken", "Backware", "Mürbeteig", 7),
@@ -59,6 +64,15 @@ ARTIKEL = {
 	"KT-FW-KAKAO-NOUGAT": ("Kakao-Nougat-Keks 200 g", "Fertigware", "Kakao-Nougat", 270),
 }
 
+# Bio / V-Label je Artikel (Haken am Artikel)
+KENNZEICHNUNG = {
+	"KT-BIO-DINKEL": {"kt_bio": 1, "kt_vegan": 1},
+	"KT-BIO-ZUCKER": {"kt_bio": 1, "kt_vegan": 1},
+	"KT-SALZ": {"kt_bio_erlaubt": 1, "kt_vegan": 1},
+	"KT-BIO-GT": {"kt_bio": 1, "kt_vegan": 1},
+}
+BIO_LIEFERANT = ("KT Bio Mühle", "DE-ÖKO-006")
+
 ROHSTOFF_PREIS = {
 	"KT-MEHL": 0.6,
 	"KT-DINKEL": 0.9,
@@ -68,6 +82,9 @@ ROHSTOFF_PREIS = {
 	"KT-KAKAO": 7.0,
 	"KT-SCHOKO": 8.0,
 	"KT-FOLIE": 4.0,
+	"KT-BIO-DINKEL": 1.4,
+	"KT-BIO-ZUCKER": 1.6,
+	"KT-SALZ": 0.3,
 }
 
 # Fertigware: Beutel à 200 g, Karton à 12 Beutel. GTIN aus dem Nummernkreis 20 bis 29 (nur intern, Demo).
@@ -129,6 +146,7 @@ REZEPTE = {
 	"KT-TV-KAKAO": (100, [("KT-GT-MUERBE", 85), ("KT-DINKEL", 5), ("KT-KAKAO", 5), ("KT-SIRUP", 5)]),
 	# Wasser wird nicht als Charge geführt, daher Ausbringung größer als Einsatz
 	"KT-SIRUP": (100, [("KT-ZUCKER", 60)]),
+	"KT-BIO-GT": (100, [("KT-BIO-DINKEL", 70), ("KT-BIO-ZUCKER", 25), ("KT-SALZ", 5)]),
 	"KT-BW-NUSS": (85, [("KT-TV-NUSS", 100)]),
 	"KT-BW-KAKAO": (85, [("KT-TV-KAKAO", 100)]),
 	"KT-WL-NUSS-SCHOKO": (54, [("KT-BW-NUSS", 48), ("KT-SCHOKO", 6)]),
@@ -212,6 +230,9 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 			}
 		).insert()
 
+	for code, werte in KENNZEICHNUNG.items():
+		frappe.db.set_value("Item", code, werte)
+
 	for code, einheiten in VERPACKUNG.items():
 		item = frappe.get_doc("Item", code)
 		geaendert = False
@@ -282,6 +303,18 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 			}
 		).insert()
 
+	bio, kontrollstelle = BIO_LIEFERANT
+	if not frappe.db.exists("Supplier", bio):
+		frappe.get_doc(
+			{"doctype": "Supplier", "supplier_name": bio, "supplier_group": _blatt("Supplier Group", None)}
+		).insert()
+	if getdate(frappe.db.get_value("Supplier", bio, "kt_bio_gueltig_bis") or "2000-01-01") < getdate():
+		frappe.db.set_value(
+			"Supplier",
+			bio,
+			{"kt_bio_kontrollstelle": kontrollstelle, "kt_bio_gueltig_bis": add_days(nowdate(), 365)},
+		)
+
 	kunde = "KT Demo Handel"
 	if not frappe.db.exists("Customer", kunde):
 		frappe.get_doc(
@@ -349,6 +382,16 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 
 # Prüfpläne nach der HACCP-Auflistung (2.1.1 FO, Version 5). Grenzwerte von dort übernommen.
 PRUEFPLAENE = [
+	{
+		"titel": "Reinigung vor Bio",
+		"lenkung": "CP",
+		"ausloeser": "Bei Umstellung auf Bio",
+		"art": "Ja/Nein",
+		"frage": "Linie, Kessel und Behälter gereinigt bzw. Spülcharge gefahren?",
+		"bei_abweichung": "Annahme verweigern",
+		"korrekturmassnahme": "Erst reinigen oder Spülcharge fahren und als konventionell buchen",
+		"dokument": "Bio-Handbuch: Trennung und Reinigung",
+	},
 	{
 		"titel": "Metalldetektor Verpackung",
 		"lenkung": "CCP",

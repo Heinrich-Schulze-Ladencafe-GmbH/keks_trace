@@ -154,6 +154,7 @@ def _details(chargen: list[str]) -> list[dict]:
 			"expiry_date as verfall",
 			"supplier as lieferant",
 			"batch_qty as bestand",
+			"kt_kennzeichen as kennzeichen",
 		],
 	)
 	nach_name = {z.charge: z for z in zeilen}

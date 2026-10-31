@@ -60,10 +60,11 @@
    "fieldname": "ausloeser",
    "fieldtype": "Select",
    "label": "Wann",
-   "options": "Regelmäßig an der Station\nBeim Herstellen\nBeim Wareneingang",
+   "options": "Regelmäßig an der Station\nBeim Herstellen\nBeim Wareneingang\nBei Umstellung auf Bio",
    "reqd": 1,
    "in_list_view": 1,
-   "in_standard_filter": 1
+   "in_standard_filter": 1,
+   "description": "„Bei Umstellung auf Bio“: wird beim Herstellen von Bio abgefragt, wenn an der Station zuletzt konventionell produziert wurde (Reinigung, Spülcharge)."
   },
   {
    "fieldname": "intervall_minuten",
@@ -170,7 +171,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-31 07:00:00.000000",
+ "modified": "2026-10-31 09:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Pruefplan",

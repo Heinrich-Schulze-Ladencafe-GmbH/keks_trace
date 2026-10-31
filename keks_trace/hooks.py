@@ -29,7 +29,11 @@ doc_events = {
 		# Sperren, Verfall, Rework-Regeln, Allergene, Behälter, Vollständigkeit.
 		"before_validate": "keks_trace.pruefungen.pruefe_stock_entry",
 		# Genealogie-Kanten, Ursprungs-/Backtag-/MHD-Daten und Behälterinhalt.
-		"on_submit": ["keks_trace.genealogie.on_submit", "keks_trace.traeger.on_submit"],
+		"on_submit": [
+			"keks_trace.genealogie.on_submit",
+			"keks_trace.traeger.on_submit",
+			"keks_trace.kennzeichnung.on_submit",
+		],
 		"before_cancel": "keks_trace.palette.se_before_cancel",
 		"on_cancel": ["keks_trace.genealogie.on_cancel", "keks_trace.traeger.on_cancel"],
 		"on_trash": "keks_trace.schutz.beleg_on_trash",
@@ -42,7 +46,11 @@ doc_events = {
 		"on_cancel": "keks_trace.palette.lieferung_on_cancel",
 		"on_trash": "keks_trace.schutz.beleg_on_trash",
 	},
-	"Purchase Receipt": {"on_trash": "keks_trace.schutz.beleg_on_trash"},
+	"Purchase Receipt": {
+		"validate": "keks_trace.kennzeichnung.pruefe_einkauf",
+		"on_submit": "keks_trace.kennzeichnung.einkauf_on_submit",
+		"on_trash": "keks_trace.schutz.beleg_on_trash",
+	},
 	"Stock Reconciliation": {"on_trash": "keks_trace.schutz.beleg_on_trash"},
 	"Item": {"validate": "keks_trace.los.item_validate"},
 	"Batch": {

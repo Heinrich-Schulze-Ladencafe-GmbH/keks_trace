@@ -71,6 +71,34 @@ CUSTOM_FIELDS = {
 			"insert_after": "kt_mhd_monate",
 			"description": "Für lose Ware und Fertigware. Leer = Backtag.",
 		},
+		{
+			"fieldname": "kt_bio",
+			"label": "Bio (EU-Öko)",
+			"fieldtype": "Check",
+			"insert_after": "kt_freigabe_pflicht",
+			"description": "Nur aus Bio-Zutaten herstellbar bzw. nur von Lieferanten mit Öko-Zertifikat annehmbar.",
+		},
+		{
+			"fieldname": "kt_bio_erlaubt",
+			"label": "In Bio-Produkten erlaubt",
+			"fieldtype": "Check",
+			"insert_after": "kt_bio",
+			"depends_on": "eval:!doc.kt_bio",
+			"description": "Nicht-landwirtschaftliche Zutat, die in Bio verwendet werden darf (Wasser, Salz, Backtriebmittel …).",
+		},
+		{
+			"fieldname": "kt_vegan",
+			"label": "Vegan (V-Label)",
+			"fieldtype": "Check",
+			"insert_after": "kt_bio_erlaubt",
+		},
+		{
+			"fieldname": "kt_vegetarisch",
+			"label": "Vegetarisch (V-Label)",
+			"fieldtype": "Check",
+			"insert_after": "kt_vegan",
+			"depends_on": "eval:!doc.kt_vegan",
+		},
 	],
 	"Batch": [
 		{
@@ -82,6 +110,15 @@ CUSTOM_FIELDS = {
 			"in_list_view": 1,
 			"insert_after": "batch_id",
 			"description": "Los wie auf Beutel und Karton gedruckt (z. B. JWWT). Gleich für alle Verpackungen eines Artikels an einem Tag.",
+		},
+		{
+			"fieldname": "kt_kennzeichen",
+			"label": "Kennzeichen",
+			"fieldtype": "Data",
+			"read_only": 1,
+			"in_standard_filter": 1,
+			"insert_after": "kt_los",
+			"description": "Bio / Vegan / Vegetarisch dieser Charge, aus Wareneingang bzw. allen Zutaten abgeleitet.",
 		},
 		{
 			"fieldname": "kt_chargen_stufe",
@@ -135,6 +172,27 @@ CUSTOM_FIELDS = {
 			"read_only": 1,
 			"depends_on": "eval:doc.kt_status=='Gesperrt'",
 			"insert_after": "kt_status",
+		},
+	],
+	"Supplier": [
+		{
+			"fieldname": "kt_bio_kontrollstelle",
+			"label": "Öko-Kontrollstelle (Code)",
+			"fieldtype": "Data",
+			"insert_after": "supplier_group",
+			"description": "z. B. DE-ÖKO-006. Ohne Eintrag wird Bio-Ware dieses Lieferanten nicht angenommen.",
+		},
+		{
+			"fieldname": "kt_bio_gueltig_bis",
+			"label": "Öko-Zertifikat gültig bis",
+			"fieldtype": "Date",
+			"insert_after": "kt_bio_kontrollstelle",
+		},
+		{
+			"fieldname": "kt_bio_zertifikat",
+			"label": "Öko-Zertifikat (Datei)",
+			"fieldtype": "Attach",
+			"insert_after": "kt_bio_gueltig_bis",
 		},
 	],
 	"Stock Entry": [

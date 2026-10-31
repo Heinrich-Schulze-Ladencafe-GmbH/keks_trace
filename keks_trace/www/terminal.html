@@ -397,6 +397,9 @@
 	}
 
 	// ------------------------------------------------------------------ Prüfungen (CP/CCP)
+	function kennzeichenMarken(liste) {
+		return (liste || []).map((k) => `<span class="marke ${k === "Bio" ? "gruen" : ""}">${esc(k === "Bio" ? "BIO" : k)}</span>`).join("");
+	}
 	function pruefFelder(plaene, praefix) {
 		return (plaene || []).map((p, i) => {
 			const id = praefix + i;
@@ -541,7 +544,7 @@
 
 	async function rezeptMenge(artikel, auftrag) {
 		try {
-			const r = await api("rezept", { artikel });
+			const r = await api("rezept", { artikel, station: zustand.station });
 			const zaehlen = r.einheiten && r.einheiten.length > 1;
 			let einheit = zaehlen ? r.einheiten[0].einheit : null;
 			let vorschlag = zaehlen ? Math.round(r.sollmenge / r.einheiten[0].faktor) : r.sollmenge;
@@ -569,7 +572,7 @@
 	async function ansatzStarten(artikel, soll, einheit, auftrag) {
 		if (soll <= 0) return meldung("rot", "Bitte eine Sollmenge eingeben.");
 		try {
-			ansatz = { rezept: await api("rezept", { artikel, menge: soll }), zeilen: [], offen: null, einheit, auftrag };
+			ansatz = { rezept: await api("rezept", { artikel, menge: soll, station: zustand.station }), zeilen: [], offen: null, einheit, auftrag };
 			ansatzZeigen();
 		} catch (e) { meldung("rot", e.message); }
 	}
@@ -591,6 +594,8 @@
 		const liste = ansatz.zeilen.map((z, i) => `<div class="zeile"><div>${esc(z.name)}<br><span class="fehlt" style="font-size:16px">${esc(z.silo || z.behaelter || z.charge)}</span></div>
 			<div class="rechts">${esc(mg(z.menge, z.einheit))} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("");
 		app.innerHTML = kopf(r.name + " · " + kg(r.sollmenge), true) + `
+			${r.kennzeichen && r.kennzeichen.length ? `<div class="panel">${kennzeichenMarken(r.kennzeichen)} <span class="fehlt" style="font-size:16px">Nur Zutaten mit diesem Kennzeichen werden angenommen.</span></div>` : ""}
+			${r.umstellung_bio ? `<div class="meldung orange">Umstellung auf Bio: hier wurde zuletzt konventionell produziert. Vor dem Buchen Reinigung bzw. Spülcharge bestätigen.</div>` : ""}
 			<div class="panel">${zutaten}${extra}</div>
 			${ansatz.offen
 				? zahlFeld("scan", `Menge (${esc(ein(ansatz.offen.einheit))}) für ${esc(ansatz.offen.anzeige)}`, ansatz.offen.vorschlag) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
@@ -682,6 +687,7 @@
 					if (!el || !v || !(v.los || v.mhd)) return;
 					el.innerHTML = `<div class="panel"><div class="fehlt" style="font-size:16px">Am Beuteldrucker einstellen</div>
 						<div class="gross">${v.los ? "Los " + esc(v.los) : ""}${v.mhd ? " · MHD " + esc(v.mhd) : ""}</div>
+						${v.kennzeichen && v.kennzeichen.length ? `<div>${kennzeichenMarken(v.kennzeichen)}${v.oeko_nr ? ` <b>${esc(v.oeko_nr)}</b>` : ""}</div>` : ""}
 						${v.los_vorhanden ? `<div class="fehlt" style="font-size:16px">Los von heute läuft schon, diese Ware kommt dazu.</div>` : ""}</div>` +
 						(v.mhd_sinkt ? `<div class="meldung orange">MHD sinkt von ${esc(v.mhd_bisher)} auf ${esc(v.mhd)}: Drucker umstellen, gedruckte Beutel prüfen.</div>` : "");
 				}).catch(() => {});
@@ -714,6 +720,7 @@
 				e.palette ? "Auf Palette: " + e.palette : "",
 				e.kundenauftrag ? "Kundenauftrag: " + e.kundenauftrag : "",
 				e.mhd ? "Verwendbar bis / MHD: " + e.mhd : "",
+				e.kennzeichen ? "Kennzeichen: " + e.kennzeichen : "",
 				e.gesperrt ? "Gesperrt bis zur Freigabe durch die QS" : "",
 			].filter(Boolean);
 			const extra = e.palette ? `<button class="knopf" data-a="etikett">Paletten-Etikett drucken</button><button class="knopf" data-a="palette">Palette anzeigen</button>` : "";
@@ -770,7 +777,7 @@
 		aktionen(beiAllgemein);
 		try {
 			artikelListe = await api("wareneingang_artikel");
-			document.getElementById("liste").innerHTML = artikelListe.map((r, i) => `<button class="knopf" data-a="art" data-i="${i}">${esc(r.name)}<small>${esc(r.artikel)}${r.kt_freigabe_pflicht ? " · Freigabe durch QS" : ""}</small></button>`).join("");
+			document.getElementById("liste").innerHTML = artikelListe.map((r, i) => `<button class="knopf" data-a="art" data-i="${i}">${esc(r.name)}<small>${esc(r.artikel)}${r.kt_freigabe_pflicht ? " · Freigabe durch QS" : ""}${r.bio ? " · BIO" : ""}</small></button>`).join("");
 			aktionen((a, d) => (a === "art" ? wareneingangErfassen(artikelListe[+d.i]) : beiAllgemein(a)));
 		} catch (e) { meldung("rot", e.message); }
 	}
@@ -778,7 +785,11 @@
 	function wareneingangErfassen(art) {
 		const ARTEN = ["Sack", "Fass", "IBC", "Eimer", "Karton", "Kanister", "BigBag", "Sonstiges"];
 		let gebindeart = "Sack";
+		const lief = art.lieferanten || [];
 		app.innerHTML = kopf(art.name, true) +
+			(art.bio ? `<div class="panel">${kennzeichenMarken(["Bio"])} <span class="fehlt" style="font-size:16px">Nur Lieferanten mit gültigem Öko-Zertifikat.</span></div>` : "") +
+			(art.bio && !lief.length ? `<div class="meldung rot">Kein Lieferant mit gültigem Öko-Zertifikat hinterlegt. Annahme als Bio nicht möglich.<small>Zertifikat beim Lieferanten im Büro eintragen.</small></div>` : "") +
+			(lief.length ? `<label>Lieferant${art.bio ? "" : " (optional)"}</label><select id="lieferant" class="feld">${art.bio ? "" : `<option value="">–</option>`}${lief.map((l) => `<option value="${esc(l.lieferant)}">${esc(l.name)}${l.bio_ok ? " · Bio-zertifiziert" : ""}</option>`).join("")}</select>` : "") +
 			textFeld("scan", "Charge des Lieferanten (scannen oder eingeben)") +
 			`${art.has_expiry_date ? datumFeld("mhd", "MHD") : ""}
 			${art.silo ? `<label>Wohin?</label><select id="ziel" class="feld"><option value="${esc(art.silo)}">ins ${esc(art.silo)}</option><option value="">als Gebinde ins Lager</option></select>` : ""}
@@ -809,6 +820,7 @@
 					station: zustand.station,
 					artikel: art.artikel,
 					lieferantencharge: document.getElementById("scan").value.trim(),
+					lieferant: document.getElementById("lieferant") ? document.getElementById("lieferant").value || null : null,
 					menge: zahl(document.getElementById("menge").value),
 					mhd: mhd ? datumIso(mhd.value) : null,
 					silo,

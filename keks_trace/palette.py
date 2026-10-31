@@ -613,6 +613,16 @@ def etikett(nve: str) -> dict:
 		"inhalt_text": None,
 	}
 	pos = i["positionen"]
+	# Bio nur, wenn alles auf der Palette Bio ist (Artikel verspricht es und das Los trägt es)
+	from keks_trace import kennzeichnung as kz
+
+	if pos and all(
+		kz.BIO in kz.artikel_kennzeichen(p["artikel"])
+		and kz.BIO in kz.charge_kennzeichen(p["charge"], p["artikel"])
+		for p in pos
+	):
+		daten["bio"] = True
+		daten["oeko_nr"] = e.get("oeko_kontrollnummer")
 	# Sortenreine Palette (ein Los, eine Einheit): GTIN, Anzahl, MHD, Charge als zweiter Strichcode
 	if len(pos) == 1:
 		p = pos[0]
