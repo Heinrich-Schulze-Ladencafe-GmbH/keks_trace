@@ -103,8 +103,32 @@ def _linie(ctx):
 	frappe.db.set_value("Linienabschnitt", "Kalfass", "linie", LINIE)
 	for station in ("Herzen Garnieren", "Herzen Verpackung"):
 		if frappe.db.exists("Terminal Station", station):
-			frappe.db.set_value("Terminal Station", station, "linie", LINIE)
+			frappe.db.set_value("Terminal Station", station, {"linie": LINIE, "f_silo": 1})
 			frappe.clear_document_cache("Terminal Station", station)
+
+
+# Am Herzenboden ohne Scanner: Behälter und offene Kartons am Tisch (Silo-Typ Tank bzw. Vorrat am Tisch)
+BEHAELTER = [
+	("Zuckerguss Herzenboden", "HZ-GLASUR", "Tank", 1),  # Hauptmischung, morgens frisch; Farbgebinde daraus
+	("Folie Herzenboden", "HZ-FOLIE", "Vorrat am Tisch", 0),
+	("Etikett Herzenboden", "HZ-ETIKETT", "Vorrat am Tisch", 0),
+	("Schleife Herzenboden", "HZ-SCHLEIFE", "Vorrat am Tisch", 0),
+]
+
+
+def _behaelter(ctx):
+	for name, artikel, typ, nachlauf in BEHAELTER:
+		lager = f"{name} - {ctx.abbr}"
+		if not frappe.db.exists("Warehouse", lager):
+			frappe.get_doc(
+				{"doctype": "Warehouse", "warehouse_name": name, "company": ctx.company, "parent_warehouse": ctx.wurzel}
+			).insert()  # fmt: skip
+		if not frappe.db.exists("Silo", name):
+			frappe.get_doc(
+				{"doctype": "Silo", "silo_name": name, "typ": typ, "warehouse": lager, "artikel": artikel,
+				 "nachlauf": nachlauf, "aktiv": 1}
+			).insert()  # fmt: skip
+	frappe.cache.delete_value("kt_silo_lager")
 
 
 def anlegen() -> frappe._dict:
@@ -141,6 +165,7 @@ def anlegen() -> frappe._dict:
 				"kt_linienleistung", {"abschnitt": "Kalfass", "leistung": kalfass, "einheit": "Stück/min"}
 			)
 			item.save()
+	_behaelter(ctx)
 	auftrag = kundenauftrag(ctx)
 	if not frappe.db.exists("Produktionsauftrag", {"linie": LINIE}):
 		from keks_trace import planung

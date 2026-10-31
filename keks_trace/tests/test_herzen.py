@@ -34,25 +34,35 @@ class TestHerzen(IntegrationTestCase):
 		# Rohlinge backen: 100 Stück Herz 18 cm aus 12 kg Grundteig
 		rohling = terminal.herstellen("Backstube", "HZ-ROHLING-18", [{"code": self.kuebel, "menge": 12}], 100)
 		self.assertEqual(rohling["menge"], 100)
-		# Zuckerglasur nach eigener Rezeptur
+		# Zuckerguss morgens frisch: Hauptmischung geht in den Behälter „Zuckerguss Herzenboden“ (ohne Code)
 		glasur = terminal.herstellen(
 			"Herzen Garnieren", "HZ-GLASUR",
 			[{"code": self.zucker, "menge": 9.5}, {"code": self.eiweiss, "menge": 0.5}],
 		)  # fmt: skip
 		self.assertEqual(glasur["menge"], 10)
-		# Garnieren: Rohling + Glasur, Ausbringung in Stück aus dem Rezept
+		self.assertEqual(
+			terminal.rezept("HZ-GLASUR", station="Herzen Garnieren")["ausgabe_silo"], "Zuckerguss Herzenboden"
+		)
+		# Garnieren: Rohling + Guss aus dem Behälter (Knopf statt Scan), Ausbringung in Stück aus dem Rezept
 		garniert = terminal.herstellen(
 			"Herzen Garnieren", "HZ-GARNIERT-18",
-			[{"code": rohling["charge"], "menge": 100}, {"code": glasur["charge"], "menge": 2}],
+			[{"code": rohling["charge"], "menge": 100}, {"code": "Zuckerguss Herzenboden", "menge": 2}],
 		)  # fmt: skip
 		self.assertEqual(garniert["menge"], 100)
 		b = frappe.db.get_value("Batch", garniert["charge"], ["expiry_date", "kt_backtag"], as_dict=True)
 		# Glasur (2 Tage) begrenzt das MHD nicht: lose Ware 180 Tage ab Backtag
 		self.assertEqual(getdate(b.expiry_date), getdate(add_days(nowdate(), 180)))
+		# Kartons Folie, Etikett, Schleife an den Tisch: einmal anbrechen, danach ohne Scan
+		for c in self.pack.values():
+			a = terminal.anbrechen("Herzen Verpackung", c)
+			self.assertEqual(a["menge"], 500)
+		r = terminal.rezept("HZ-18", menge=100, station="Herzen Verpackung")
+		vorrat = {z["artikel"]: z["vorrat"] for z in r["zutaten"] if z["vorrat"]}
+		self.assertEqual(vorrat["HZ-SCHLEIFE"], "Schleife Herzenboden")
 		# Verpacken auf der Kalfass: erst Metallcheck Fe 2,8 mm
 		demo.metalldetektor_ok("Herzen Verpackung")
 		zeilen = [{"code": garniert["charge"], "menge": 100}] + [
-			{"code": c, "menge": 100} for c in self.pack.values()
+			{"code": v, "menge": 100} for v in vorrat.values()
 		]
 		herz = terminal.herstellen("Herzen Verpackung", "HZ-18", zeilen)
 		self.assertEqual(herz["menge"], 100)
@@ -65,6 +75,18 @@ class TestHerzen(IntegrationTestCase):
 		kette = {z["charge"] for z in rueckwaerts(herz["charge"])}
 		for c in (self.teig, glasur["charge"], self.zucker, self.pack["HZ-SCHLEIFE"], rohling["charge"]):
 			self.assertIn(c, kette)
+
+	def test_anbrechen_ohne_scanner(self):
+		"""Ohne Scanner: Charge aus der Liste wählen; nur Artikel mit Vorrat am Tisch."""
+		neu = terminal.wareneingang("Lager", "HZ-ETIKETT", f"ET2{self.h}", 50)["charge"]
+		liste = terminal.lager_chargen("Herzen Verpackung", "HZ-ETIKETT")
+		self.assertIn(neu, {c["charge"] for c in liste})
+		vorher = {v["vorrat"]: v["bestand"] for v in terminal.vorraete("Herzen Verpackung")}
+		terminal.anbrechen("Herzen Verpackung", neu)
+		nachher = {v["vorrat"]: v["bestand"] for v in terminal.vorraete("Herzen Verpackung")}
+		self.assertGreater(nachher["Etikett Herzenboden"], vorher["Etikett Herzenboden"])
+		with self.assertRaisesRegex(frappe.ValidationError, "kein Vorrat"):
+			terminal.anbrechen("Herzen Verpackung", self.zucker)
 
 	def test_herzenboden_eigene_linie(self):
 		"""Die Herzen-Stationen sehen nur Artikel und Aufträge ihrer Linie."""

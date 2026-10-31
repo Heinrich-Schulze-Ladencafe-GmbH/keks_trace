@@ -20,7 +20,7 @@
   {
    "fieldname": "silo_name",
    "fieldtype": "Data",
-   "label": "Silo / Tank",
+   "label": "Silo / Tank / Vorrat",
    "reqd": 1,
    "unique": 1,
    "in_list_view": 1
@@ -29,9 +29,10 @@
    "fieldname": "typ",
    "fieldtype": "Select",
    "label": "Typ",
-   "options": "Silo\nTank",
+   "options": "Silo\nTank\nVorrat am Tisch",
    "default": "Silo",
-   "in_list_view": 1
+   "in_list_view": 1,
+   "description": "Vorrat am Tisch: offener Karton/Rolle (Folie, Etikett, Schleife) oder Behälter ohne Code an einer Station. Wird angebrochen statt befüllt und beim Buchen automatisch genommen."
   },
   {
    "fieldname": "warehouse",

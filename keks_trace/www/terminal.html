@@ -457,7 +457,8 @@
 		if (f.includes("umlagern")) m.push(["umlagern", "Umlagern", zustand.umlager_ziel ? "nach " + zustand.umlager_ziel : "in ein anderes Lager"]);
 		if (f.includes("paletten")) m.push(["paletten", "Paletten", "Neue Palette, Etikett, anbrechen, umpacken"]);
 		if (f.includes("rework")) m.push(["rework", fw ? "Packbruch" : "Rework / Bruch", "In einen Rework-Behälter"]);
-		if (f.includes("silo")) m.push(["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"]);
+		if (zustand.vorraete) m.push(["anbrechen", "Karton anbrechen", "Neue Rolle / neuer Karton an den Tisch (Folie, Etikett, Schleife)"]);
+		if (f.includes("silo")) m.push(["silo", zustand.vorraete ? "Leer melden" : "Silo leer melden", zustand.vorraete ? "Behälter oder Vorrat ist leer" : "Silo oder Tank ist leergefahren"]);
 		if (f.includes("linie") && !kneter) m.push(["linie", "An die Linie", "Kübel einkippen, Füllung, Glasur, Schokolade nachfüllen"]);
 		if (f.includes("packstation")) m.push(["packstation", "Packstation", "Auftrag, Anlage, Los, MHD, Kartonlabel"]);
 		if (f.includes("palette_fertig")) m.push(["palette_fertig", "Palette fertig", "Kartons zählen, buchen, Palettenlabel"]);
@@ -560,6 +561,7 @@
 			if (a === "herstellen") return herstellenStart();
 			if (a === "rework") return reworkStart();
 			if (a === "silo") return siloLeer();
+			if (a === "anbrechen") return anbrechenStart();
 			if (a === "info") return infoScan();
 			if (a === "wareneingang") return wareneingangStart();
 			if (a === "lieferung") return lieferungStart();
@@ -795,7 +797,14 @@
 		if (soll <= 0) return meldung("rot", "Bitte eine Sollmenge eingeben.");
 		try {
 			ansatz = { rezept: await api("rezept", { artikel, menge: soll, station: zustand.station }), zeilen: [], offen: null, einheit, auftrag };
+			// Vorrat am Tisch (Folie, Etikett, Schleife ...): ohne Scan, Menge laut Rezept
+			const fehlt = [];
+			for (const z of ansatz.rezept.zutaten.filter((x) => x.vorrat)) {
+				try { ansatz.zeilen.push(await api("pruefe_zeile", { station: zustand.station, ziel: artikel, code: z.vorrat, menge: z.menge })); }
+				catch (e) { fehlt.push(z.vorrat + ": " + e.message); }
+			}
 			ansatzZeigen();
+			if (fehlt.length) meldung("orange", "Vorrat fehlt – erst Karton anbrechen", fehlt.join(" · "));
 		} catch (e) { meldung("rot", e.message); }
 	}
 
@@ -809,7 +818,8 @@
 			const ist = gescannt(z.artikel);
 			const fertig = ist >= z.menge * 0.98;
 			return `<div class="zeile"><div><span class="${fertig ? "ok" : ""}">${fertig ? "✔" : "○"} ${esc(z.name)}</span>
-				${z.silo ? ` <button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>` : ""}</div>
+				${z.vorrat ? ` <span class="fehlt" style="font-size:16px">aus ${esc(z.vorrat)}</span>`
+					: z.silo ? ` <button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>` : ""}</div>
 				<div class="rechts ${fertig ? "ok" : "fehlt"}">${esc(mg(ist, z.einheit))} / ${esc(mg(z.menge, z.einheit))}</div></div>`;
 		}).join("");
 		const extra = ansatz.zeilen.filter((z) => z.rework).map((z) => `<div class="zeile"><div class="ok">✔ Rework: ${esc(z.name)}</div><div class="rechts">${esc(mg(z.menge, z.einheit))}</div></div>`).join("");
@@ -1423,6 +1433,38 @@
 		} catch (e) { meldung("rot", e.message); }
 	}
 
+	// ------------------------------------------------------------------ Karton anbrechen (Vorrat am Tisch)
+	async function anbrechenStart(hinweis) {
+		app.innerHTML = kopf("Karton anbrechen", true) + textFeld("scan", "Etikett vom neuen Karton / der neuen Rolle scannen") +
+			`<p class="fehlt">Ohne Scanner: beim Vorrat auf „Wählen“ tippen.</p><div id="liste">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		if (hinweis) meldung("gruen", hinweis);
+		const buchen = async (code) => {
+			try {
+				const e = await api("anbrechen", { station: zustand.station, code });
+				anbrechenStart("Angebrochen: " + e.name + ", Charge " + e.charge + " (" + rund(e.menge) + ") → " + e.vorrat);
+			} catch (err) { meldung("rot", err.message); }
+		};
+		enter("scan", (v) => v && buchen(v));
+		fokus("scan");
+		try {
+			const liste = await api("vorraete", { station: zustand.station });
+			document.getElementById("liste").innerHTML = tabelle([["Vorrat", "vorrat"], ["Artikel", "name"],
+				["Charge dran", (v) => v.chargen.map((c) => c.charge).join(", ") || "– leer –"], ["Bestand", (v) => mg(v.bestand, v.einheit), 1], ["", () => "Wählen ›"]], liste, "waehlen");
+			aktionen(async (a, d) => {
+				if (a !== "waehlen") return beiAllgemein(a);
+				const v = liste[+d.i];
+				app.innerHTML = kopf("Anbrechen: " + v.name, true) + `<p>Welche Charge kommt an den Tisch? (ältestes MHD zuerst)</p><div id="chargen">Lädt …</div>`;
+				aktionen((b) => (b === "zurueck" ? anbrechenStart() : beiAllgemein(b)));
+				const ch = await api("lager_chargen", { station: zustand.station, artikel: v.artikel });
+				document.getElementById("chargen").innerHTML = ch.length
+					? tabelle([["Charge", "charge"], ["Im Lager", (c) => mg(c.menge, v.einheit), 1], ["MHD", (c) => c.mhd || ""]], ch, "charge")
+					: `<p class="fehlt">Keine Charge im Lager. Erst Wareneingang buchen.</p>`;
+				aktionen((b, e) => (b === "charge" ? buchen(ch[+e.i].charge) : b === "zurueck" ? anbrechenStart() : beiAllgemein(b)));
+			});
+		} catch (e) { meldung("rot", e.message); }
+	}
+
 	// ------------------------------------------------------------------ Silo leer
 	async function siloLeer() {
 		app.innerHTML = kopf("Silo leer melden", true) + `<p>Welches Silo oder welcher Tank ist leer?</p><div class="raster" id="liste">Lädt …</div>`;
@@ -1503,6 +1545,7 @@
 			zustand.stufen = s.stufen;
 			zustand.nur_fertigware = s.nur_fertigware;
 			zustand.umlager_ziel = s.umlager_ziel;
+			zustand.vorraete = s.vorraete;
 			startseite();
 		} catch (e) {
 			speichern("kt_station", "");

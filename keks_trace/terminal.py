@@ -41,6 +41,17 @@ def _silo_je_artikel():
 	}
 
 
+VORRAT = "Vorrat am Tisch"
+
+
+def _vorraete():
+	"""Artikel -> Vorrat am Tisch (offener Karton, Rolle, Behälter ohne Code)."""
+	return {
+		s.artikel: s.name
+		for s in frappe.get_all("Silo", filters={"aktiv": 1, "typ": VORRAT}, fields=["name", "artikel"])
+	}
+
+
 def _station(station):
 	if not station or not frappe.db.exists("Terminal Station", station):
 		_fehler(_("Station {0} ist nicht eingerichtet.").format(station or "-"))
@@ -101,6 +112,7 @@ def start(station: str) -> dict:
 		"stufen": stufen,
 		"nur_fertigware": stufen == ["Fertigware"],
 		"umlager_ziel": s.umlager_ziel,
+		"vorraete": bool(s.f_silo and _vorraete()),
 		"linie": s.linie,
 		"pruefungen": pruefung.faellig(s.name),
 	}
@@ -148,6 +160,7 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 	b = frappe.get_cached_doc("BOM", bom)
 	faktor = flt(menge or b.quantity) / flt(b.quantity or 1)
 	silos = _silo_je_artikel()
+	vorraete = _vorraete()
 	zutaten = [
 		{
 			"artikel": z.item_code,
@@ -156,6 +169,7 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 			"einheit": z.stock_uom or z.uom,
 			"stufe": artikel_stufe(z.item_code),
 			"silo": silos.get(z.item_code),
+			"vorrat": silos.get(z.item_code) if z.item_code in vorraete else None,
 		}
 		for z in b.items
 	]
@@ -225,6 +239,111 @@ def registrierungen(
 	]
 
 
+# ---------------------------------------------------------------------------
+# Vorrat am Tisch: Karton/Rolle anbrechen (Folie, Etikett, Schleife, ...)
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def vorraete(station: str) -> list[dict]:
+	"""Offene Vorräte am Tisch mit der Charge, die gerade dran ist."""
+	from keks_trace.silo import bestand
+
+	_station(station)
+	jetzt = now_datetime()
+	ergebnis = []
+	for v in frappe.get_all(
+		"Silo", filters={"aktiv": 1, "typ": VORRAT}, fields=["name", "artikel", "warehouse"], order_by="name"
+	):
+		chargen = bestand(v.warehouse, jetzt)
+		ergebnis.append(
+			{
+				"vorrat": v.name,
+				"artikel": v.artikel,
+				"name": frappe.get_cached_value("Item", v.artikel, "item_name"),
+				"einheit": frappe.get_cached_value("Item", v.artikel, "stock_uom"),
+				"chargen": [{"charge": c["charge"], "menge": flt(c["menge"], 3)} for c in chargen],
+				"bestand": flt(sum(c["menge"] for c in chargen), 3),
+			}
+		)
+	return ergebnis
+
+
+@frappe.whitelist()
+def lager_chargen(station: str, artikel: str) -> list[dict]:
+	"""Chargen eines Artikels im Lager (nicht im Vorrat), ältestes MHD zuerst: zum Antippen ohne Scanner."""
+	_station(station)
+	vorrat_lager = set(frappe.get_all("Silo", pluck="warehouse")) | _verkaufslager()
+	ergebnis = []
+	for b in frappe.get_all(
+		"Batch",
+		filters={"item": artikel, "disabled": 0, "kt_status": ["!=", "Gesperrt"]},
+		fields=["name", "expiry_date", "creation"],
+		order_by="expiry_date asc, creation asc",
+		limit=50,
+	):
+		menge = sum(m for w, m in charge_lager(b.name).items() if w not in vorrat_lager)
+		if menge > EPS:
+			ergebnis.append(
+				{
+					"charge": b.name,
+					"menge": flt(menge, 3),
+					"mhd": formatdate(b.expiry_date) if b.expiry_date else None,
+				}
+			)
+	return ergebnis[:12]
+
+
+@frappe.whitelist()
+def anbrechen(station: str, code: str) -> dict:
+	"""Neuen Karton / neue Rolle an den Tisch: die Charge kommt in den Vorrat und wird ab jetzt verbraucht."""
+	s = _station(station)
+	r = aufloesen(code)
+	charge = r.get("charge")
+	if r["typ"] != "charge" or not charge:
+		_fehler(_("Bitte das Etikett des Kartons bzw. der Rolle scannen (Charge)."))
+	artikel = frappe.db.get_value("Batch", charge, "item")
+	vorrat = _vorraete().get(artikel)
+	if not vorrat:
+		_fehler(
+			_("Für {0} ist kein Vorrat am Tisch eingerichtet.").format(
+				frappe.get_cached_value("Item", artikel, "item_name")
+			)
+		)
+	_pruefe_charge(charge, artikel)
+	ziel = frappe.db.get_value("Silo", vorrat, "warehouse")
+	vorrat_lager = set(frappe.get_all("Silo", pluck="warehouse")) | _verkaufslager()
+	quellen = {w: m for w, m in charge_lager(charge).items() if w not in vorrat_lager}
+	if not quellen:
+		_fehler(_("Von Charge {0} ist nichts mehr im Lager.").format(charge))
+	jetzt = now_datetime()
+	se = frappe.get_doc(
+		{
+			"doctype": "Stock Entry",
+			"stock_entry_type": "Material Transfer",
+			"purpose": "Material Transfer",
+			"company": s.company,
+			"set_posting_time": 1,
+			"posting_date": jetzt.date(),
+			"posting_time": jetzt.time().strftime("%H:%M:%S"),
+			"kt_station": s.name,
+			"items": [
+				_se_zeile({"artikel": artikel, "charge": charge, "menge": m}, w, ziel)
+				for w, m in quellen.items()
+			],
+		}
+	)
+	se.insert()
+	se.submit()
+	return {
+		"vorrat": vorrat,
+		"charge": charge,
+		"menge": flt(sum(quellen.values()), 3),
+		"name": frappe.get_cached_value("Item", artikel, "item_name"),
+		"buchung": se.name,
+	}
+
+
 @frappe.whitelist()
 def rework_artikel() -> list[dict]:
 	return frappe.get_all(
@@ -252,7 +371,7 @@ def wareneingang_artikel() -> list[dict]:
 	)
 	lieferanten = _lieferanten()
 	for a in artikel:
-		a["silo"] = silos.get(a["artikel"])
+		a["silo"] = silos.get(a["artikel"]) if a["artikel"] not in _vorraete() else None
 		a["bio"] = kennzeichnung.BIO in kennzeichnung.artikel_kennzeichen(a["artikel"])
 		eigene = frappe.get_all("Item Supplier", {"parent": a["artikel"]}, pluck="supplier")
 		a["lieferanten"] = [
@@ -548,7 +667,14 @@ def _zeile(code, menge, ziel=None, erlaubt=None):
 				kennzeichnung.pruefe_zutat(ziel, c["charge"], artikel, r["silo"])
 			offen -= c["menge"]
 		if offen > EPS:
-			_fehler(_("Im {0} sind rechnerisch nur {1} kg.").format(r["silo"], flt(menge - offen, 3)))
+			rest = max(flt(menge - offen, 3), 0)
+			if rest <= EPS and r["silo"] in _vorraete().values():
+				_fehler(_("{0} ist leer. Erst einen Karton anbrechen.").format(r["silo"]))
+			_fehler(
+				_("Im {0} sind rechnerisch nur {1}.").format(
+					r["silo"], paletten._n(rest, frappe.get_cached_value("Item", artikel, "stock_uom"))
+				)
+			)
 	else:
 		_pruefe_charge(r["charge"], artikel)
 		if ziel:
