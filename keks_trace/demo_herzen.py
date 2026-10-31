@@ -168,10 +168,11 @@ def anlegen(vorrat: int = 1) -> frappe._dict:
 			item.save()
 	_behaelter(ctx)
 	auftrag = kundenauftrag(ctx)
-	if not frappe.db.exists("Produktionsauftrag", {"linie": LINIE}):
-		from keks_trace import planung
-
-		planung.vorschlag(LINIE, ab=nowdate())
+	# Am Herzenboden wird direkt nach Kundenauftrag gearbeitet, ohne Tagesplan
+	for pa in frappe.get_all(
+		"Produktionsauftrag", {"linie": LINIE, "status": ["in", ["Geplant", "Freigegeben"]]}, pluck="name"
+	):
+		frappe.db.set_value("Produktionsauftrag", pa, "status", "Abgebrochen")
 	frappe.db.commit()
 	ctx.herz_auftrag = auftrag
 	ctx.weitere_auftraege = weitere_auftraege(ctx)

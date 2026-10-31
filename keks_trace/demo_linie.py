@@ -68,6 +68,8 @@ STATIONEN = [
 	("Paletten-Terminal", "Paletten-Terminal"),
 ]
 
+OHNE_TERMINAL = [n for n, typ in STATIONEN if typ in ("Former", "Nachfüllen", "Packstation")]
+
 GROSSKUNDEN = [
 	("Großkunde A (Demo)", 120000, 42),
 	("Großkunde B (Demo)", 80000, 70),
@@ -167,6 +169,10 @@ def stammdaten() -> frappe._dict:
 					"fertiglager": ctx.fertig,
 				}
 			).insert()
+	# Laut Terminalfluss nicht gebraucht: Kneter bucht den Teig auf die Linie, nachgefüllt wird nicht
+	# gebucht, an der Packstation steht kein Terminal. Bleiben angelegt (Tests), erscheinen aber nicht.
+	for name in OHNE_TERMINAL:
+		frappe.db.set_value("Terminal Station", name, "aktiv", 0)
 	for n in range(1, KUEBEL + 1):
 		demo.neuer_traeger(f"K-{n:03d}", "Teigbehälter")
 	for name, _menge, _tage in GROSSKUNDEN:

@@ -85,6 +85,10 @@ class TestLinie(IntegrationTestCase):
 		with self.assertRaisesRegex(pruefung.PruefFehler, "Metallcheck InoTec"):
 			terminal.linie_palette("Paletten-Terminal", 10, "Karton", nve)
 		demo_linie.metallcheck_ok("Paletten-Terminal")
+		# eigenes Los (nicht das Tages-Los, in das heute vielleicht schon ältere lose Ware verpackt wurde)
+		alt = frappe.db.get_single_value("Keks Trace Einstellungen", "los_format")
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
+		self.addCleanup(frappe.db.set_single_value, "Keks Trace Einstellungen", "los_format", alt)
 		e = terminal.linie_palette("Paletten-Terminal", 10, "Karton", nve)
 		self.assertEqual(e["menge"], 40)
 		verbraucht = {v["charge"]: v["menge"] for v in e["verbraucht"]}

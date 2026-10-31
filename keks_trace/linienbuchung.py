@@ -375,11 +375,14 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 	if nve:
 		paletten._offen(nve)
 
-	# Verbrauch laut Linienrezept, nur Ware dieses Auftrags, älteste Zuführung zuerst
+	# Verbrauch laut Linienrezept: erst was für diesen Auftrag auf der Linie liegt (Teig vom Kneter),
+	# der Rest (Füllung, Glasur, Schokolade, Packmittel) automatisch aus dem Lager bzw. Tank, älteste zuerst.
+	# Nachgefüllt wird an der Linie nicht gebucht.
 	vorrat = defaultdict(list)
 	for z in bestand(pa.name):
 		vorrat[z["artikel"]].append(z)
-	zeilen, hinweise = [], []
+	silos = terminal._silo_je_artikel()
+	zeilen, hinweise, vom_teig = [], [], False
 	for artikel, je in linienrezept(pa.artikel).items():
 		bedarf = je * kg
 		offen = bedarf
@@ -389,20 +392,35 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 			nimm = min(offen, z["menge"])
 			if nimm <= EPS:
 				continue
-			zeilen.append((artikel, z["charge"], flt(nimm, 6)))
+			zeilen.append(
+				{"artikel": artikel, "charge": z["charge"], "menge": flt(nimm, 6), "lager": linie.lagerort}
+			)
 			offen -= nimm
-		if offen > max(bedarf * 0.005, EPS) and artikel_stufe(artikel) != "Packmittel":
+			vom_teig = vom_teig or artikel_stufe(artikel) != "Packmittel"
+		quellen = (
+			[{"code": silos[artikel], "menge": offen}] if artikel in silos else terminal._quellen(artikel)
+		)
+		for q in quellen:
+			if offen <= EPS:
+				break
+			nimm = min(offen, q["menge"])
+			try:
+				z = terminal._zeile(q["code"], nimm)
+			except frappe.ValidationError:
+				continue
+			zeilen.append({**z, "menge": flt(nimm, 6)})
+			offen -= nimm
+		if offen > max(bedarf * 0.005, EPS):
 			hinweise.append(
-				_(
-					"{0}: laut Rezept {1} {3}, auf der Linie gebucht nur {2} {3}. Zuführen am Former/Nachfüllen prüfen."
-				).format(
+				_("{0}: laut Rezept {1} {3}, im Lager nur {2} {3}. Bestand prüfen.").format(
 					frappe.get_cached_value("Item", artikel, "item_name"),
 					flt(bedarf, 2),
 					flt(bedarf - offen, 2),
 					frappe.get_cached_value("Item", artikel, "stock_uom"),
 				)
 			)
-	if not any(artikel_stufe(a) != "Packmittel" for a, _c, _m in zeilen):
+	frappe.local.message_log = []
+	if not vom_teig:
 		_fehler(
 			_(
 				"Für Auftrag {0} ist noch nichts auf der Linie gebucht. Erst am Kneter die Kübel scannen."
@@ -439,11 +457,7 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 			"kt_station": s.name,
 			"kt_produktionsauftrag": pa.name,
 			"kt_kundenauftrag": pa.kundenauftrag,
-			"items": [
-				terminal._se_zeile({"artikel": a, "charge": c, "menge": m}, s_warehouse=linie.lagerort)
-				for a, c, m in zeilen
-			]
-			+ [ausgabe],
+			"items": [terminal._se_zeile(z, s_warehouse=z["lager"]) for z in zeilen] + [ausgabe],
 		}
 	)
 	se.insert()
@@ -474,8 +488,12 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 		"gebucht_text": _menge_text(pa.artikel, gebucht),
 		"buchung": se.name,
 		"verbraucht": [
-			{"name": frappe.get_cached_value("Item", a, "item_name"), "charge": c, "menge": flt(m, 3)}
-			for a, c, m in zeilen
+			{
+				"name": frappe.get_cached_value("Item", z["artikel"], "item_name"),
+				"charge": z.get("charge") or z.get("silo"),
+				"menge": flt(z["menge"], 3),
+			}
+			for z in zeilen
 		],
 		"hinweise": hinweise + list(se.flags.kt_fifo_warnungen or []),
 	}

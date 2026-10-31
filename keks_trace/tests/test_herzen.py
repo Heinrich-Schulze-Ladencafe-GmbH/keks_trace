@@ -103,7 +103,7 @@ class TestHerzen(IntegrationTestCase):
 		self.assertIsInstance(alle, list)
 
 	def test_kundenauftrag_und_planung_in_stueck(self):
-		"""Der Kunde bestellt Herzen in Stück; Planung und Terminal rechnen in Stück."""
+		"""Der Kunde bestellt Herzen in Stück; Leistung und Terminal rechnen in Stück."""
 		from keks_trace import planung
 
 		kg_h, engpass, anlage = planung.leistung("HZ-18")
@@ -112,13 +112,13 @@ class TestHerzen(IntegrationTestCase):
 		auftraege = {a["artikel"]: a for a in terminal.auftraege("Herzen Verpackung")}
 		self.assertIn("HZ-18", auftraege)
 		self.assertIn("Stk", auftraege["HZ-18"]["offen_text"] + " Stk")
-		pa = frappe.get_all(
-			"Produktionsauftrag",
-			{"linie": demo_herzen.LINIE, "artikel": "HZ-18"},
-			["menge_kg", "dauer_stunden", "engpass"],
-		)
-		self.assertTrue(pa)
-		self.assertTrue(all("Stk/h" in p.engpass for p in pa))
+		# Kein Tagesplan am Herzenboden: die Stationen arbeiten die Kundenaufträge direkt ab
+		garnieren = {(a["auftrag"], a["artikel"]): a for a in terminal.aufgaben("Herzen Garnieren")}
+		a = garnieren[(self.ctx.herz_auftrag, "HZ-GARNIERT-18")]
+		self.assertEqual(a["vorstufe"], "Herz-Rohling 18 cm")
+		self.assertGreater(a["todo"], 0)
+		verpacken = {(a["auftrag"], a["artikel"]) for a in terminal.aufgaben("Herzen Verpackung")}
+		self.assertIn((self.ctx.herz_auftrag, "HZ-18"), verpacken)
 		r = terminal.rezept("HZ-18", station="Herzen Verpackung")
 		self.assertEqual(r["einheit"], "Nos")
 
@@ -129,3 +129,22 @@ class TestHerzen(IntegrationTestCase):
 		self.assertTrue(frappe.db.exists("Delivery Note", d["lieferschein"]))
 		kette = {z["charge"] for z in rueckwaerts(d["charge"])}
 		self.assertIn(d["puderzucker"], kette)
+
+	def test_schnell_buchen_ohne_scannen(self):
+		"""Herzenboden: Auftrag antippen, Anzahl, buchen; Verbrauch automatisch. Manuelles Verpacken sieht keine Herzen."""
+		demo_herzen.vorrat_anlegen(self.ctx)
+		a = next(x for x in terminal.aufgaben("Herzen Garnieren") if x["artikel"] == "HZ-GARNIERT-12")
+		v = terminal.vorschlag("Herzen Garnieren", a["artikel"], 5)
+		self.assertFalse(v["hinweise"])
+		e = terminal.herstellen(
+			"Herzen Garnieren", a["artikel"], [{"code": z["code"], "menge": z["menge"]} for z in v["zeilen"]],
+			ausbringung=5, kundenauftrag=a["auftrag"],
+		)  # fmt: skip
+		self.assertEqual(e["menge"], 5)
+		b = next(
+			x
+			for x in terminal.aufgaben("Herzen Garnieren")
+			if x["auftrag"] == a["auftrag"] and x["artikel"] == a["artikel"]
+		)
+		self.assertEqual(b["erledigt"], a["erledigt"] + 5)
+		self.assertFalse(any(q["lose"].startswith("HZ-") for q in terminal.zum_verpacken("Verpackung")))
