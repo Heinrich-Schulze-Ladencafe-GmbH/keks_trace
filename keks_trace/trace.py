@@ -1,6 +1,6 @@
 """Rückverfolgung vorwärts (wohin ist eine Charge gegangen) und rückwärts (woraus besteht sie).
 
-Beide Richtungen laufen als eine rekursive SQL-Abfrage über `Chargen Genealogie`.
+Beide Richtungen laufen Generation für Generation über `Chargen Genealogie` (siehe _kette).
 Der Anteil gibt an, welcher Bruchteil der gefundenen Charge (vorwärts) bzw. der
 Startcharge (rückwärts) aus der jeweils anderen stammt, über alle Wege summiert.
 """
@@ -10,53 +10,76 @@ from frappe.utils import flt
 
 MAX_TIEFE = 60
 
-_VORWAERTS = """
-with recursive kette (charge, generation, anteil, pfad) as (
-	select g.output_batch, 1, g.anteil,
-		cast(concat(',', g.input_batch, ',', g.output_batch, ',') as char(8000))
-	from `tabChargen Genealogie` g
-	where g.input_batch = %(charge)s and g.storniert = 0
-	union all
-	select g.output_batch, k.generation + 1, k.anteil * g.anteil,
-		concat(k.pfad, g.output_batch, ',')
-	from `tabChargen Genealogie` g
-	join kette k on g.input_batch = k.charge
-	where g.storniert = 0
-		and k.generation < %(max_tiefe)s
-		and locate(cast(concat(',', g.output_batch, ',') as binary), cast(k.pfad as binary)) = 0
-)
-select charge, min(generation) as generation, sum(anteil) as anteil
-from kette
-group by charge
-"""
 
-_RUECKWAERTS = """
-with recursive kette (charge, generation, anteil, pfad) as (
-	select g.input_batch, 1, g.anteil,
-		cast(concat(',', g.output_batch, ',', g.input_batch, ',') as char(8000))
-	from `tabChargen Genealogie` g
-	where g.output_batch = %(charge)s and g.storniert = 0
-	union all
-	select g.input_batch, k.generation + 1, k.anteil * g.anteil,
-		concat(k.pfad, g.input_batch, ',')
-	from `tabChargen Genealogie` g
-	join kette k on g.output_batch = k.charge
-	where g.storniert = 0
-		and k.generation < %(max_tiefe)s
-		and locate(cast(concat(',', g.input_batch, ',') as binary), cast(k.pfad as binary)) = 0
-)
-select charge, min(generation) as generation, sum(anteil) as anteil
-from kette
-group by charge
-"""
+def _kette(charge: str, vorwaerts: bool) -> list[dict]:
+	"""Alle Chargen, die aus `charge` entstanden sind (vorwärts) bzw. in ihr stecken (rückwärts).
+
+	Schritt für Schritt über `Chargen Genealogie`: je Generation eine Abfrage mit allen Chargen der
+	vorigen Generation, jede Charge wird nur einmal weiterverfolgt. Der Aufwand wächst damit mit der Zahl
+	der betroffenen Chargen, nicht mit der Zahl der Wege dorthin (Rework über viele Generationen bildet
+	sehr viele Wege; eine rekursive SQL-Abfrage über alle Wege lief bei Jahren an Daten nicht mehr durch).
+
+	generation = kürzester Abstand; anteil = Anteil über alle Wege summiert (wie viel der Startcharge
+	steckt darin bzw. wie viel davon stammt aus ihr), gerechnet in zeitlicher Reihenfolge der Kette.
+	"""
+	von, nach = ("input_batch", "output_batch") if vorwaerts else ("output_batch", "input_batch")
+	generation = {charge: 0}
+	kanten = []
+	welle = [charge]
+	tiefe = 0
+	while welle and tiefe < MAX_TIEFE:
+		tiefe += 1
+		neu = []
+		for i in range(0, len(welle), 500):  # über 1.000 wandelt MariaDB IN in eine Tabelle um (langsam)
+			for a, b, anteil in frappe.db.sql(
+				f"""select {von}, {nach}, anteil from `tabChargen Genealogie`
+				where storniert = 0 and {von} in %(c)s""",
+				{"c": tuple(welle[i : i + 500])},
+			):
+				if b == charge:
+					continue
+				kanten.append((a, b, flt(anteil)))
+				if b not in generation:
+					generation[b] = tiefe
+					neu.append(b)
+		welle = neu
+
+	# Anteile in Reihenfolge der Kette aufsummieren (topologisch; Kreise, die es nicht geben sollte,
+	# werden nach Generation abgearbeitet statt endlos verfolgt)
+	aus, offen = {}, {}
+	for a, b, anteil in kanten:
+		aus.setdefault(a, []).append((b, anteil))
+		offen[b] = offen.get(b, 0) + 1
+	anteil = {charge: 1.0}
+	bereit = [charge]
+	erledigt = set()
+	rest = sorted((c for c in generation if c != charge), key=generation.get)
+	while True:
+		while bereit:
+			c = bereit.pop()
+			erledigt.add(c)
+			for b, a in aus.get(c, ()):
+				anteil[b] = anteil.get(b, 0) + anteil.get(c, 0) * a
+				offen[b] -= 1
+				if offen[b] == 0 and b not in erledigt:
+					bereit.append(b)
+		haengt = next((c for c in rest if c not in erledigt), None)
+		if haengt is None:
+			break
+		bereit.append(haengt)
+	return [
+		frappe._dict(charge=c, generation=g, anteil=anteil.get(c, 0))
+		for c, g in generation.items()
+		if c != charge
+	]
 
 
 def vorwaerts(charge: str) -> list[dict]:
-	return _mit_details(frappe.db.sql(_VORWAERTS, {"charge": charge, "max_tiefe": MAX_TIEFE}, as_dict=True))
+	return _mit_details(_kette(charge, True))
 
 
 def rueckwaerts(charge: str) -> list[dict]:
-	return _mit_details(frappe.db.sql(_RUECKWAERTS, {"charge": charge, "max_tiefe": MAX_TIEFE}, as_dict=True))
+	return _mit_details(_kette(charge, False))
 
 
 def lagerverkauf(chargen: list[str]) -> list[dict]:
@@ -140,7 +163,15 @@ def rueckverfolgung(charge: str, richtung: str = "Vorwärts") -> dict:
 def _details(chargen: list[str]) -> list[dict]:
 	if not chargen:
 		return []
-	zeilen = frappe.get_all(
+	zeilen = []
+	for i in range(0, len(chargen), 500):
+		zeilen += _details_teil(chargen[i : i + 500])
+	nach_name = {z.charge: z for z in zeilen}
+	return [nach_name[c] for c in chargen if c in nach_name]
+
+
+def _details_teil(chargen: list[str]) -> list[dict]:
+	return frappe.get_all(
 		"Batch",
 		filters={"name": ["in", chargen]},
 		fields=[
@@ -157,8 +188,6 @@ def _details(chargen: list[str]) -> list[dict]:
 			"kt_kennzeichen as kennzeichen",
 		],
 	)
-	nach_name = {z.charge: z for z in zeilen}
-	return [nach_name[c] for c in chargen if c in nach_name]
 
 
 _STUFEN_REIHENFOLGE = {

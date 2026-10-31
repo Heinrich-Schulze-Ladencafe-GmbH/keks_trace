@@ -359,6 +359,21 @@ MHD-Begrenzung durch die Füllung (MHD = MHD des Nougats statt Backtag + 270 Tag
 
 > Nur auf einem Testsystem ausführen. Die Demo bucht echte Lagerbewegungen.
 
+## Lasttest (Datenflut)
+
+Wie schnell bleibt das System, wenn Jahre an Daten drin sind? Auf dem Demo-Server:
+
+```bash
+# 2 Jahre Produktion als Chargen und Genealogie (Sekunden; faktor=3 = dreifache Tagesmenge)
+bench --site keks.localhost execute keks_trace.lasttest.flut --kwargs "{'tage': 730}"
+# echte Terminal-Buchungen (Wareneingang + Herstellen) ins Lagerbuch, misst die Buchungszeit
+bench --site keks.localhost execute keks_trace.lasttest.buchungen --kwargs "{'anzahl': 300}"
+# Antwortzeiten messen: Rückruf vorwärts, Reklamation rückwärts, Scan, Listen, Mengenbilanz
+bench --site keks.localhost execute keks_trace.lasttest.messen
+# Lasttest-Chargen wieder entfernen (Präfix LT-)
+bench --site keks.localhost execute keks_trace.lasttest.aufraeumen
+```
+
 ## Tests
 
 ```bash

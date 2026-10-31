@@ -6,47 +6,53 @@
 
 {% block style %}
 <style>
+	/* Farben angelehnt an FOBIS: hellblauer Grund, blaue Titelleiste, gelbe Felder, orange Tabellenköpfe */
 	:root {
-		--bg: #15171a;
-		--panel: #1f2328;
-		--panel2: #2a2f36;
-		--text: #f2f4f7;
-		--muted: #a9b1bb;
-		--gruen: #1f9d55;
-		--rot: #d64545;
-		--orange: #e08a1e;
-		--blau: #2f6fd6;
+		--bg: #dce8f6;
+		--panel: #fbeaa8;
+		--panel2: #e9f1fb;
+		--rand: #9db9dd;
+		--text: #1b1f24;
+		--muted: #5a6573;
+		--gruen: #2f9a3a;
+		--rot: #d23a3a;
+		--orange: #f0a030;
+		--blau: #2a7bdc;
+		--titel: linear-gradient(#4d9cf0, #1f6dd0);
+		--kopfzeile: linear-gradient(#fcd27a, #f2a83c);
 	}
 	html, body { background: var(--bg) !important; color: var(--text); margin: 0; }
 	body { font: 20px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-	#kt { position: fixed; inset: 0; overflow-y: auto; background: var(--bg); color: var(--text); padding: 12px max(16px, calc((100vw - 1100px) / 2)) 120px; box-sizing: border-box; z-index: 10; }
+	#kt { position: fixed; inset: 0 0 64px 0; overflow-y: auto; background: var(--bg); color: var(--text); padding: 0 max(16px, calc((100vw - 1280px) / 2)) 40px; box-sizing: border-box; z-index: 10; }
 	#kt h1, #kt p { color: inherit; }
 	#kt .fehlt, #kt label, #kt .klein { color: var(--muted); }
-	#kt .ok { color: #5fd38d; }
-	.kopf { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0 14px; border-bottom: 1px solid var(--panel2); margin-bottom: 16px; }
-	.kopf h1 { font-size: 26px; margin: 0; }
-	.kopf .klein { color: var(--muted); font-size: 16px; }
+	#kt .ok { color: var(--gruen); }
+	.kopf { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px max(16px, calc((100vw - 1280px) / 2)); margin: 0 calc(-1 * max(16px, calc((100vw - 1280px) / 2))) 14px;
+		background: var(--titel); color: #fff; position: sticky; top: 0; z-index: 5; box-shadow: 0 2px 4px rgba(0,0,0,.2); }
+	.kopf h1 { font-size: 28px; margin: 0; font-weight: 500; color: #fff !important; }
+	#kt .kopf .klein, #kt .kopf .link { color: #e3efff; }
 	.link { background: none; border: none; color: var(--muted); text-decoration: underline; font-size: 16px; cursor: pointer; padding: 6px; }
 	.raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-	.knopf { display: block; width: 100%; min-height: 84px; border: none; border-radius: 12px; background: var(--panel2); color: var(--text); font-size: 22px; font-weight: 600; padding: 14px; cursor: pointer; text-align: center; }
+	.knopf { display: block; width: 100%; min-height: 84px; border: 1px solid var(--rand); border-radius: 6px; background: linear-gradient(#fbfdff, #d9e7f7); color: var(--text); font-size: 22px; font-weight: 600; padding: 14px; cursor: pointer; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
 	.knopf small { display: block; font-size: 15px; font-weight: 400; color: var(--muted); margin-top: 4px; }
-	.knopf:active { transform: scale(0.98); }
-	.knopf.gruen { background: var(--gruen); }
-	.knopf.blau { background: var(--blau); }
-	.knopf.rot { background: var(--rot); }
+	.knopf:active { transform: scale(0.98); background: #c9dcf3; }
+	.knopf.gruen { background: linear-gradient(#5cc061, #2f9a3a); border-color: #2a7f33; color: #fff; }
+	.knopf.blau { background: linear-gradient(#fff7d8, #f6dc84); border-color: #d6b24a; }
+	.knopf.rot { background: linear-gradient(#ea6b6b, #c93030); border-color: #a82828; color: #fff; }
+	.knopf.gruen small, .knopf.rot small { color: #eefbe9; }
 	.knopf.klein { min-height: 52px; font-size: 18px; width: auto; display: inline-block; padding: 10px 18px; }
-	.feld { width: 100%; box-sizing: border-box; font-size: 26px; padding: 14px 16px; border-radius: 10px; border: 2px solid var(--blau); background: #0e1013; color: var(--text); }
-	.feld:focus { outline: none; border-color: #6ea0ff; }
+	.feld { width: 100%; box-sizing: border-box; font-size: 26px; padding: 12px 14px; border-radius: 4px; border: 1px solid var(--rand); background: #fff; color: var(--text); }
+	.feld:focus { outline: none; border: 2px solid var(--blau); background: #fffef2; }
 	label { display: block; color: var(--muted); font-size: 17px; margin: 14px 0 6px; }
-	.panel { background: var(--panel); border-radius: 12px; padding: 14px 16px; margin: 14px 0; }
-	.zeile { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--panel2); }
+	.panel { background: var(--panel); border: 1px solid #dfc56a; border-radius: 6px; padding: 12px 16px; margin: 14px 0; }
+	.zeile { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #e8d38a; }
 	.zeile:last-child { border-bottom: none; }
 	.zeile .rechts { text-align: right; white-space: nowrap; }
-	.ok { color: #5fd38d; }
+	.ok { color: var(--gruen); }
 	.fehlt { color: var(--muted); }
-	.meldung { border-radius: 12px; padding: 16px 18px; margin: 14px 0; font-size: 22px; font-weight: 600; }
-	.meldung.rot { background: var(--rot); }
-	.meldung.gruen { background: var(--gruen); }
+	.meldung { border-radius: 6px; padding: 14px 18px; margin: 14px 0; font-size: 22px; font-weight: 600; }
+	.meldung.rot { background: var(--rot); color: #fff; }
+	.meldung.gruen { background: var(--gruen); color: #fff; }
 	.meldung.orange { background: var(--orange); color: #111; }
 	.meldung small { display: block; font-weight: 400; font-size: 17px; margin-top: 6px; }
 	.gross { font-size: 34px; font-weight: 700; letter-spacing: 0.5px; word-break: break-all; }
@@ -55,29 +61,60 @@
 	.x { background: none; border: none; color: var(--muted); font-size: 26px; cursor: pointer; padding: 0 8px; }
 	.dialog { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.7); display: flex; align-items: center; justify-content: center; padding: 16px; }
 	.dialog .panel { max-width: 520px; width: 100%; }
-	#tasten { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; gap: 8px; padding: 10px max(12px, calc((100vw - 1100px) / 2)) 14px;
-		background: #0b0c0e; border-top: 1px solid var(--panel2); box-shadow: 0 -6px 20px rgba(0,0,0,.5); }
+	#tasten { display: none; position: fixed; left: 0; right: 0; bottom: 64px; z-index: 50; gap: 8px; padding: 10px max(12px, calc((100vw - 1280px) / 2)) 14px;
+		background: #e9f1fb; border-top: 1px solid var(--rand); box-shadow: 0 -4px 12px rgba(0,0,0,.2); }
 	#tasten.zahl { grid-template-columns: repeat(4, minmax(0, 150px)); justify-content: center; }
 	#tasten.text { grid-template-columns: repeat(10, 1fr); }
-	#tasten button { min-height: 60px; border: none; border-radius: 10px; background: var(--panel2); color: var(--text); font-size: 26px; font-weight: 600; cursor: pointer; touch-action: manipulation; padding: 0; }
+	#tasten button { min-height: 60px; border: 1px solid #d8bd62; border-radius: 4px; background: linear-gradient(#fffbea, #f9e7a4); color: var(--text); font-size: 28px; font-weight: 500; cursor: pointer; touch-action: manipulation; padding: 0; }
 	#tasten.text button { min-height: 52px; font-size: 21px; }
-	#tasten button:active { background: #3a414a; }
-	#tasten .ok { background: var(--gruen); color: #fff; }
+	#tasten button:active { background: #f2d470; }
+	#tasten .ok { background: linear-gradient(#5cc061, #2f9a3a); color: #fff; border-color: #2a7f33; }
 	#tasten.zahl .ok { grid-row: span 2; }
-	#tasten .weg { background: #3a2a2a; }
+	#tasten .weg { background: linear-gradient(#f1f6fc, #d5e3f4); border-color: var(--rand); font-size: 20px; }
+	/* Breiter Bildschirm: Ziffernblock fest rechts wie bei FOBIS, Inhalt rückt nach links */
+	@media (min-width: 1000px) {
+		#tasten.zahl { left: auto; right: 16px; bottom: 76px; width: 360px; padding: 12px; grid-template-columns: repeat(4, 1fr);
+			border: 1px solid var(--rand); border-radius: 6px; }
+		#tasten.zahl button { min-height: 74px; }
+		#kt.blockrechts > *:not(.kopf) { max-width: calc(100% - 384px); }
+	}
+	/* Statusleiste unten wie bei FOBIS: Start, letzte Meldung, Zurück */
+	#status { position: fixed; left: 0; right: 0; bottom: 0; height: 64px; z-index: 60; display: flex; align-items: center; gap: 14px; padding: 0 16px;
+		background: linear-gradient(#e8f1fc, #bcd5f2); border-top: 1px solid var(--rand); color: var(--text); box-sizing: border-box; }
+	#status button { border: 1px solid var(--rand); background: linear-gradient(#fff, #dbe8f8); border-radius: 6px; font-size: 26px; min-width: 64px; height: 50px; cursor: pointer; }
+	#status .text { flex: 1; font-size: 20px; line-height: 1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+	#status .text b { display: inline-block; width: 30px; height: 30px; border-radius: 50%; background: var(--blau); color: #fff; text-align: center; font: 700 20px/30px serif; margin-right: 8px; }
+	#status.rot { background: linear-gradient(#ffd9d9, #f19c9c); } #status.rot .text b { background: var(--rot); }
+	#status.gruen { background: linear-gradient(#e2f7df, #a9dea4); } #status.gruen .text b { background: var(--gruen); }
+	#status.orange .text b { background: var(--orange); }
+	/* Tabellen wie bei FOBIS: orange Kopfzeile, angetippte Zeile gelb */
+	.tab { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--rand); font-size: 19px; margin: 8px 0 14px; }
+	.tab th { background: var(--kopfzeile); text-align: left; padding: 8px 10px; font-weight: 700; border-right: 1px solid #e3a24a; white-space: nowrap; }
+	.tab td { padding: 10px; border-top: 1px solid #e4e9f0; }
+	.tab tr[data-a] { cursor: pointer; }
+	.tab tr[data-a]:active, .tab tr.an { background: #f8d98a; }
+	.tab .z { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+	.tab a, .tab .code { color: #1a55c4; text-decoration: underline; }
+	.position { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: var(--panel); border: 1px solid #dfc56a; border-radius: 6px; padding: 12px 16px; margin: 14px 0; }
+	.position .titel { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 22px; }
+	.position .wert { color: #1a55c4; font-size: 17px; }
+	.position .wert div { color: var(--text); font-size: 46px; font-weight: 500; line-height: 1.1; }
+	.reiter { display: flex; gap: 4px; margin-top: 14px; }
+	.reiter button { border: 1px solid var(--rand); border-bottom: none; border-radius: 8px 8px 0 0; background: linear-gradient(#fbfdff, #d9e7f7); padding: 8px 18px; font-size: 17px; cursor: pointer; }
+	.reiter button.an { background: var(--panel); border-color: #dfc56a; font-weight: 700; }
 	#tasten .breit { grid-column: span 2; }
 	.einheiten { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
-	.einheiten button { flex: 1 1 120px; min-height: 56px; border: 2px solid var(--panel2); border-radius: 10px; background: var(--panel); color: var(--text); font-size: 20px; cursor: pointer; }
-	.einheiten button.an { border-color: #6ea0ff; background: var(--blau); }
+	.einheiten button { flex: 1 1 120px; min-height: 56px; border: 1px solid #d8bd62; border-radius: 6px; background: linear-gradient(#fffbea, #f9e7a4); color: var(--text); font-size: 20px; cursor: pointer; }
+	.einheiten button.an { border: 2px solid #b8860b; background: linear-gradient(#fcd27a, #f2a83c); font-weight: 700; }
 	.mitknopf { display: flex; gap: 10px; }
 	.mitknopf .feld { flex: 1; }
 	.mitknopf .knopf { width: auto; min-height: 0; flex: 0 0 auto; font-size: 18px; padding: 0 18px; }
 	.nve { font-size: 30px; font-weight: 700; letter-spacing: 1px; }
 	.nve small { font-size: 18px; color: var(--muted); font-weight: 400; }
-	.pos { display: flex; justify-content: space-between; gap: 10px; width: 100%; text-align: left; background: var(--panel2); border: none; color: var(--text); border-radius: 10px; padding: 12px 14px; margin: 8px 0; font-size: 19px; cursor: pointer; }
+	.pos { display: flex; justify-content: space-between; gap: 10px; width: 100%; text-align: left; background: #fff; border: 1px solid var(--rand); color: var(--text); border-radius: 6px; padding: 12px 14px; margin: 8px 0; font-size: 19px; cursor: pointer; }
 	.pos small { display: block; color: var(--muted); font-size: 15px; }
-	.marke { display: inline-block; font-size: 15px; padding: 2px 10px; border-radius: 20px; background: var(--panel2); margin-left: 8px; vertical-align: middle; }
-	.marke.gruen { background: var(--gruen); } .marke.orange { background: var(--orange); color: #111; } .marke.rot { background: var(--rot); }
+	.marke { display: inline-block; font-size: 15px; padding: 2px 10px; border-radius: 20px; background: #d9e7f7; margin-left: 8px; vertical-align: middle; }
+	.marke.gruen { background: var(--gruen); color: #fff; } .marke.orange { background: var(--orange); color: #111; } .marke.rot { background: var(--rot); color: #fff; }
 	@media (max-width: 600px) {
 		body { font-size: 18px; }
 		.knopf { min-height: 72px; font-size: 20px; }
@@ -90,6 +127,7 @@
 
 {% block content %}
 <div id="kt" data-csrf="{{ kt_csrf }}"><p style="padding:24px">Lädt …</p></div>
+<div id="status"><button type="button" id="status-start" title="Startseite">⌂</button><div class="text"><b>i</b><span id="status-text">Bereit.</span></div><button type="button" id="status-zurueck" title="Zurück">←</button></div>
 {% endblock %}
 
 {% block script %}
@@ -182,7 +220,18 @@
 	}
 
 	let meldungTimer;
+	function status(art, text) {
+		const s = document.getElementById("status");
+		s.className = art || "";
+		document.getElementById("status-text").textContent = text;
+	}
+	document.getElementById("status-start").addEventListener("click", () => zustand.station && startseite());
+	document.getElementById("status-zurueck").addEventListener("click", () => {
+		const z = app.querySelector('[data-a="zurueck"], [data-a="zurueck-ansatz"]');
+		if (z) z.click(); else if (zustand.station) startseite();
+	});
 	function meldung(art, text, klein) {
+		status(art, text + (klein ? " " + klein : ""));
 		const el = document.getElementById("meldung");
 		if (!el) return;
 		el.innerHTML = `<div class="meldung ${art}">${esc(text)}${klein ? `<small>${esc(klein)}</small>` : ""}</div>`;
@@ -247,7 +296,7 @@
 		const f = document.activeElement;
 		let art = f && f.dataset ? f.dataset.art : null;
 		if (art === "text" && angetippt !== f) art = null;
-		if (!art) { tasten.style.display = "none"; app.style.paddingBottom = ""; tastenArt = null; return; }
+		if (!art) { tasten.style.display = "none"; app.style.paddingBottom = ""; app.classList.remove("blockrechts"); tastenArt = null; return; }
 		if (art !== tastenArt) {
 			tastenArt = art;
 			if (art === "text") {
@@ -262,7 +311,8 @@
 			}
 		}
 		tasten.style.display = "grid";
-		app.style.paddingBottom = tasten.offsetHeight + 40 + "px";
+		if (art !== "text" && window.innerWidth >= 1000) { app.classList.add("blockrechts"); app.style.paddingBottom = ""; }
+		else { app.classList.remove("blockrechts"); app.style.paddingBottom = tasten.offsetHeight + 40 + "px"; }
 		setTimeout(() => f.scrollIntoView({ block: "nearest", behavior: "smooth" }), 20);
 	}
 	document.addEventListener("focusin", tastenZeigen);
@@ -344,9 +394,22 @@
 	// ------------------------------------------------------------------ Rahmen
 	function kopf(titel, zurueck) {
 		return `<div class="kopf">
-			<div><h1>${esc(titel)}</h1><div class="klein">Station ${esc(zustand.station || "-")}</div></div>
-			<div>${zurueck ? `<button class="link" data-a="zurueck">← Zurück</button>` : `<button class="link" data-a="station-wechseln">Station wechseln</button>`}</div>
+			<h1>${esc(titel)}</h1>
+			<div style="text-align:right"><div class="klein">Station ${esc(zustand.station || "-")}</div>${zurueck ? `<button class="link" data-a="zurueck">← Zurück</button>` : `<button class="link" data-a="station-wechseln">Station wechseln</button>`}</div>
 		</div><div id="meldung"></div>`;
+	}
+	// Tabelle wie bei FOBIS: spalten = [[Titel, Feld, rechtsbündig?]], Zeile antippen = aktion mit data-i
+	function tabelle(spalten, zeilen, aktion) {
+		return `<table class="tab"><thead><tr>${spalten.map(([t, , r]) => `<th class="${r ? "z" : ""}">${esc(t)}</th>`).join("")}</tr></thead><tbody>${zeilen.map((z, i) =>
+			`<tr ${aktion ? `data-a="${aktion}" data-i="${i}"` : ""}>${spalten.map(([, f, r]) => `<td class="${r ? "z" : ""}">${esc(typeof f === "function" ? f(z) : z[f])}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+	}
+	function zahlText(n) { return n == null ? "" : rund(n, 3).toLocaleString("de-DE"); }
+	// Position wie bei FOBIS: Bestellt / Erledigt / ToDo groß
+	function positionBox(titel, rechts, bestellt, erledigt, todo, einheit) {
+		return `<div class="position"><div class="titel"><b>${esc(titel)}</b><span>${esc(rechts || "")}</span></div>
+			<div class="wert">Bestellt<div>${esc(zahlText(bestellt))}</div></div>
+			<div class="wert">Erledigt<div>${esc(zahlText(erledigt))}</div></div>
+			<div class="wert">ToDo<div>${esc(zahlText(todo))}</div>${esc(einheit ? ein(einheit) : "")}</div></div>`;
 	}
 	function aktionen(handler) {
 		app.querySelectorAll("[data-a]").forEach((b) => b.addEventListener("click", () => handler(b.dataset.a, b.dataset)));
@@ -529,25 +592,24 @@
 
 	// ------------------------------------------------------------------ Linie: Produktionsaufträge
 	async function auftragWaehlen(titel, weiter) {
-		app.innerHTML = kopf(titel, true) + `<p>Für welchen Produktionsauftrag?</p><div class="raster" id="pa-liste">Lädt …</div>`;
+		app.innerHTML = kopf(titel, true) + `<p>Für welchen Produktionsauftrag? Zeile antippen</p><div id="pa-liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
 			const liste = await api("linie_auftraege", { station: zustand.station });
 			const el = document.getElementById("pa-liste");
 			if (!liste.length) { el.innerHTML = `<p class="fehlt">Kein freigegebener Auftrag für heute. Die Produktionsleitung gibt den Tagesplan frei.</p>`; return; }
-			el.innerHTML = liste.map((a) => `<button class="knopf ${a.aktuell ? "gruen" : a.status === "Läuft" ? "blau" : ""}" data-a="pa" data-name="${esc(a.name)}">${esc(a.artikelname)}
-				<small>${esc(a.menge_text)}${a.kundenname ? " · " + esc(a.kundenname) : ""} · ${esc(a.datum_text)} · ${esc(a.status)}${a.gebucht_kg ? " · gebucht " + esc(a.gebucht_text) : ""}${a.verpackungsanlage ? " · " + esc(a.verpackungsanlage) : ""}</small></button>`).join("");
-			suche("pa-liste");
+			el.innerHTML = tabelle([["Auftrag", "name"], ["Artikel", "artikel"], ["Bezeichnung", "artikelname"], ["Kunde", "kundenname"], ["Tag", "datum_text"],
+				["Bestellt", "menge_text", 1], ["Gebucht", "gebucht_text", 1], ["Anlage", "verpackungsanlage"], ["Status", (a) => (a.aktuell ? "▶ " : "") + a.status]], liste, "pa");
 			aktionen(async (a, d) => {
 				if (a !== "pa") return beiAllgemein(a);
-				try { await api("linie_waehlen", { station: zustand.station, auftrag: d.name }); weiter(); } catch (e) { meldung("rot", e.message); }
+				try { await api("linie_waehlen", { station: zustand.station, auftrag: liste[+d.i].name }); weiter(); } catch (e) { meldung("rot", e.message); }
 			});
 		} catch (e) { meldung("rot", e.message); }
 	}
 
 	function auftragKopf(i) {
-		return `<div class="panel"><div class="zeile"><div><b>${esc(i.name)}</b><br><span class="fehlt" style="font-size:16px">${esc(i.auftrag)}${i.kunde ? " · " + esc(i.kunde) : ""}${i.verpackungsanlage ? " · " + esc(i.verpackungsanlage) : ""}</span></div>
-			<div class="rechts">${esc(i.gebucht_text)} von ${esc(i.menge_text)}<br><button class="link" data-a="pa-wechseln">Auftrag wechseln</button></div></div></div>`;
+		return tabelle([["Auftrag", "auftrag"], ["Bezeichnung", "name"], ["Kunde", (x) => x.kunde || ""], ["Anlage", (x) => x.verpackungsanlage || ""],
+			["Bestellt", "menge_text", 1], ["Gebucht", "gebucht_text", 1]], [i]) + `<div style="text-align:right;margin-top:-8px"><button class="link" data-a="pa-wechseln">Auftrag wechseln</button></div>`;
 	}
 
 	// An die Linie: Kübel einkippen (Former), Gebinde nachfüllen
@@ -673,7 +735,7 @@
 		} else zustand.linienAuftrag = null;
 		const la = zustand.linienAuftrag;
 		app.innerHTML = kopf(la ? "Kneten" : verpackung ? "Verpacken" : "Herstellen", true) + (la ? auftragKopf(la) : "") +
-			(verpackung ? `<p>Kundenaufträge</p><div class="raster" id="auftraege">Lädt …</div><p style="margin-top:22px">Ohne Auftrag</p>` : `<p>Was wird hergestellt?</p>`) +
+			(verpackung ? `<p><b>Kundenaufträge</b> – Zeile antippen</p><div id="auftraege">Lädt …</div><p style="margin-top:22px"><b>Ohne Auftrag</b></p>` : `<p>Was wird hergestellt?</p>`) +
 			`<div class="raster" id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
@@ -684,10 +746,10 @@
 			auftragsListe = auftraege.filter((z) => z.offen_verpacken > 0);
 			if (verpackung) {
 				document.getElementById("auftraege").innerHTML = auftragsListe.length
-					? auftragsListe.map((z, i) => `<button class="knopf blau" data-a="auftrag" data-i="${i}">${esc(z.kundenname)} · ${esc(z.name)}
-						<small>${esc(z.auftrag)} · noch ${esc(z.offen_text)} von ${esc(z.menge_text)}${z.termin ? " · Termin " + esc(z.termin) : ""}</small></button>`).join("")
+					? tabelle([["Auftrag", "auftrag"], ["Kunde", "kundenname"], ["Artikel", "artikel"], ["Bezeichnung", "name"],
+						["Bestellt", (z) => zahlText(z.menge), 1], ["Erledigt", (z) => zahlText(z.verpackt), 1], ["ToDo", (z) => zahlText(z.offen_verpacken), 1],
+						["Einh.", (z) => ein(z.einheit)], ["Termin", "termin"]], auftragsListe, "auftrag")
 					: `<span class="fehlt">Keine offenen Kundenaufträge.</span>`;
-				suche("auftraege");
 			}
 			document.getElementById("liste").innerHTML = liste.length
 				? liste.map((r) => `<button class="knopf" data-a="rezept" data-artikel="${esc(r.artikel)}">${esc(r.name)}<small>${esc(r.stufe)} · ${esc(r.artikel)}</small></button>`).join("")
@@ -707,12 +769,13 @@
 			const zaehlen = r.einheiten && r.einheiten.length > 1;
 			let einheit = zaehlen ? r.einheiten[0].einheit : null;
 			let vorschlag = zaehlen ? Math.round(r.sollmenge / r.einheiten[0].faktor) : r.sollmenge;
+			if (auftrag && !zaehlen) vorschlag = rund(auftrag.offen_kg);
 			if (auftrag && zaehlen) {
 				if (r.einheiten.some((e) => e.einheit === auftrag.einheit)) einheit = auftrag.einheit;
 				vorschlag = Math.ceil(auftrag.offen_kg / faktorVon(r.einheiten, einheit) - 1e-6);
 			}
 			app.innerHTML = kopf(r.name, true) +
-				(auftrag ? `<div class="panel">Für Auftrag <b>${esc(auftrag.auftrag)}</b> · ${esc(auftrag.kundenname)}<br><span class="fehlt">bestellt ${esc(auftrag.menge_text)}, schon verpackt ${esc(auftrag.verpackt_text)}, offen ${esc(auftrag.offen_text)}</span></div>` : "") +
+				(auftrag ? positionBox(auftrag.artikel + "  " + auftrag.name, auftrag.auftrag + " · " + auftrag.kundenname, auftrag.menge, auftrag.verpackt, auftrag.offen_verpacken, auftrag.einheit) : "") +
 				(zaehlen ? einheitWahl(r.einheiten, einheit, r.einheit) : "") +
 				zahlFeld("soll", zaehlen ? `Soll – wie viele <span id="einheit-text">${esc(ein(einheit))}</span>?` : `Sollmenge (${esc(ein(r.einheit))}) – laut Rezept ${esc(mg(r.sollmenge, r.einheit))}`, vorschlag);
 			const weiter = () => {
@@ -752,7 +815,10 @@
 		const extra = ansatz.zeilen.filter((z) => z.rework).map((z) => `<div class="zeile"><div class="ok">✔ Rework: ${esc(z.name)}</div><div class="rechts">${esc(mg(z.menge, z.einheit))}</div></div>`).join("");
 		const liste = ansatz.zeilen.map((z, i) => `<div class="zeile"><div>${esc(z.name)}<br><span class="fehlt" style="font-size:16px">${esc(z.silo || z.behaelter || z.charge)}</span></div>
 			<div class="rechts">${esc(mg(z.menge, z.einheit))} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("");
-		app.innerHTML = kopf(r.name + " · " + mg(r.sollmenge, r.einheit), true) + `
+		const au = ansatz.auftrag;
+		const pa = zustand.linienAuftrag;
+		app.innerHTML = kopf((au ? "Produktion " + au.auftrag + ": " : "") + r.name + " · " + mg(r.sollmenge, r.einheit), true) +
+			(au ? positionBox(au.artikel + "  " + au.name, au.kundenname, au.menge, au.verpackt, au.offen_verpacken, au.einheit) : "") + `
 			${r.kennzeichen && r.kennzeichen.length ? `<div class="panel">${kennzeichenMarken(r.kennzeichen)} <span class="fehlt" style="font-size:16px">Nur Zutaten mit diesem Kennzeichen werden angenommen.</span></div>` : ""}
 			${r.umstellung_bio ? `<div class="meldung orange">Umstellung auf Bio: hier wurde zuletzt konventionell produziert. Vor dem Buchen Reinigung bzw. Spülcharge bestätigen.</div>` : ""}
 			${r.kuebel && r.kuebel.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Grundteig-Kübel (ältester zuerst)</div><div class="gross">${r.kuebel.map((k) => esc(k.code)).join(" · ")}</div>
@@ -762,7 +828,9 @@
 				? zahlFeld("scan", `Menge (${esc(ein(ansatz.offen.einheit))}) für ${esc(ansatz.offen.anzeige)}`, ansatz.offen.vorschlag) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
 				: textFeld("scan", "Gebinde, Behälter oder Silo scannen" + (r.rework_moeglich ? " – auch Rework-Behälter" : ""))}
 			${ansatz.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Gescannt</div>${liste}</div>
-			<div class="reihe"><button class="knopf gruen" data-a="abschluss">Weiter zum Buchen</button></div>` : ""}`;
+			<div class="reihe"><button class="knopf gruen" data-a="abschluss">Weiter zum Buchen</button></div>` : ""}
+			${au || pa ? `<div class="reiter"><button class="an" type="button">Registrierungen</button></div><div class="panel" style="margin-top:0" id="registrierungen">Lädt …</div>` : ""}`;
+		if (au || pa) registrierungenLaden(au ? { kundenauftrag: au.auftrag } : { produktionsauftrag: pa.auftrag });
 		aktionen((a, d) => {
 			if (a === "silo-zutat") return codeGescannt(d.silo);
 			if (a === "weg") { ansatz.zeilen.splice(+d.i, 1); return ansatzZeigen(); }
@@ -773,6 +841,17 @@
 		enter("scan", (v) => (ansatz.offen ? mengeEingegeben(v) : codeGescannt(v)));
 		fokus("scan");
 		if (ansatz.offen) setTimeout(() => document.getElementById("scan").select(), 40);
+	}
+
+	async function registrierungenLaden(args) {
+		try {
+			const liste = await api("registrierungen", { station: zustand.station, ...args });
+			const el = document.getElementById("registrierungen");
+			if (!el) return;
+			el.innerHTML = liste.length
+				? tabelle([["Zeit", "wann"], ["Los", "los"], ["Menge", "menge_text", 1], ["MHD", "mhd"], ["Station", "station"]], liste)
+				: `<span class="fehlt">Zu diesem Auftrag ist noch nichts gebucht.</span>`;
+		} catch (e) { /* Anzeige ist nur Info */ }
 	}
 
 	async function codeGescannt(code) {

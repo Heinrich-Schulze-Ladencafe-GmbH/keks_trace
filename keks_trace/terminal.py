@@ -188,6 +188,44 @@ def _kuebel_fuer(zutaten) -> list[dict]:
 
 
 @frappe.whitelist()
+def registrierungen(
+	station: str, kundenauftrag: str | None = None, produktionsauftrag: str | None = None, anzahl: int = 30
+) -> list[dict]:
+	"""Was zu einem Auftrag schon gebucht wurde (wie „Registrierungen“ bei FOBIS), neueste zuerst."""
+	_station(station)
+	if not (kundenauftrag or produktionsauftrag):
+		return []
+	feld = "kt_kundenauftrag" if kundenauftrag else "kt_produktionsauftrag"
+	zeilen = frappe.db.sql(
+		f"""
+		select se.name as buchung, se.posting_date as datum, se.posting_time as zeit, se.kt_station as station,
+			sed.item_code as artikel, sed.batch_no as charge, sed.transfer_qty as menge, b.kt_los as los,
+			b.expiry_date as mhd
+		from `tabStock Entry` se
+		join `tabStock Entry Detail` sed on sed.parent = se.name and sed.is_finished_item = 1
+		left join `tabBatch` b on b.name = sed.batch_no
+		where se.docstatus = 1 and se.{feld} = %(auftrag)s and se.purpose = 'Manufacture'
+		order by se.posting_date desc, se.posting_time desc
+		limit %(n)s
+		""",
+		{"auftrag": kundenauftrag or produktionsauftrag, "n": cint(anzahl)},
+		as_dict=True,
+	)
+	return [
+		{
+			"buchung": z.buchung,
+			"wann": f"{formatdate(z.datum)} {str(z.zeit)[:5]}",
+			"station": z.station,
+			"los": z.los or z.charge,
+			"charge": z.charge,
+			"mhd": formatdate(z.mhd) if z.mhd else "",
+			"menge_text": paletten.zerlegen(z.artikel, z.menge),
+		}
+		for z in zeilen
+	]
+
+
+@frappe.whitelist()
 def rework_artikel() -> list[dict]:
 	return frappe.get_all(
 		"Item",
