@@ -1,0 +1,179 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-31 07:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "pruefplan",
+  "lenkung",
+  "ergebnis",
+  "station",
+  "column_break_1",
+  "zeitpunkt",
+  "nutzer",
+  "charge",
+  "beleg",
+  "section_break_1",
+  "wert",
+  "einheit",
+  "grenzwert",
+  "details",
+  "column_break_2",
+  "folge",
+  "gesperrte_chargen",
+  "bemerkung"
+ ],
+ "fields": [
+  {
+   "fieldname": "pruefplan",
+   "fieldtype": "Link",
+   "label": "Prüfplan",
+   "options": "Pruefplan",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "lenkung",
+   "fieldtype": "Data",
+   "label": "Lenkungspunkt",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "ergebnis",
+   "fieldtype": "Select",
+   "label": "Ergebnis",
+   "options": "OK\nAbweichung",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "station",
+   "fieldtype": "Link",
+   "label": "Station",
+   "options": "Terminal Station",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "zeitpunkt",
+   "fieldtype": "Datetime",
+   "label": "Zeitpunkt",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "nutzer",
+   "fieldtype": "Link",
+   "label": "Benutzer",
+   "options": "User"
+  },
+  {
+   "fieldname": "charge",
+   "fieldtype": "Link",
+   "label": "Charge",
+   "options": "Batch",
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "beleg",
+   "fieldtype": "Link",
+   "label": "Buchung",
+   "options": "Stock Entry"
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break",
+   "label": "Werte"
+  },
+  {
+   "fieldname": "wert",
+   "fieldtype": "Float",
+   "label": "Messwert"
+  },
+  {
+   "fieldname": "einheit",
+   "fieldtype": "Data",
+   "label": "Einheit"
+  },
+  {
+   "fieldname": "grenzwert",
+   "fieldtype": "Data",
+   "label": "Grenzwert"
+  },
+  {
+   "fieldname": "details",
+   "fieldtype": "Small Text",
+   "label": "Einzelergebnisse"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "folge",
+   "fieldtype": "Data",
+   "label": "Folge"
+  },
+  {
+   "fieldname": "gesperrte_chargen",
+   "fieldtype": "Small Text",
+   "label": "Gesperrte Chargen"
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung / Korrekturmaßnahme"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-31 07:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Pruefung",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "format:PR-{YYYY}-{#####}",
+ "naming_rule": "Expression",
+ "in_create": 1,
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "description": "Protokoll einer Prüfung (CP/CCP). Nicht änderbar."
+}

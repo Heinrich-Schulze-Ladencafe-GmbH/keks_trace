@@ -141,12 +141,19 @@ Keine Mitarbeiter-Anmeldung: jedes Terminal meldet sich einmal mit einem Station
 wählt beim ersten Start seine Station. Jede Buchung trägt die Station (Feld „Station (Terminal)“
 an Lagerbuchung und Lieferschein).
 
-| Station | Knöpfe |
+| Station | Knöpfe (Vorlage) |
 |---|---|
 | Backstube | Herstellen (Grundteig, Veredelung, Backen, Füllen, Sirup), Rework/Bruch, Silo leer, Info-Scan |
-| Verpackung | Verpacken (lose Ware + Folie → Los mit MHD), Packbruch, Info-Scan |
-| Lager | Wareneingang (Lieferantencharge, MHD, ins Silo oder als Sackware), Silo leer, Info-Scan |
-| Versand | Lieferung (Kunde wählen, Lose scannen → Lieferschein), Info-Scan |
+| Verpackung | Verpacken (lose Ware + Folie → Los mit MHD), Packbruch, Paletten, Info-Scan |
+| Herzen Garnieren | Herstellen (Veredelung, Füllen: Zuckerguss usw.), Rework/Bruch |
+| Herzen Verpackung | Verpacken, Packbruch, Paletten |
+| Lager | Wareneingang (Lieferantencharge, MHD, ins Silo, als Sackware oder Gebinde mit QR-Etikett), Silo leer, Paletten, Umlagern |
+| Versand | Lieferung (Kunde/Auftrag wählen, Lose oder NVE scannen → Lieferschein), Paletten |
+| Lagerverkauf | Umlagern ins Lager „Lagerverkauf“ (Scan von Los, Karton oder Palette) |
+
+Die Knöpfe sind je Station einstellbar (**Terminal Station**: Haken je Funktion und erlaubte
+Stufen); der Typ belegt sie nur vor. Der Server prüft bei jeder Buchung, ob die Station die
+Funktion darf.
 
 Eine Bildschirmtastatur unten schreibt in das angetippte Feld: Ziffern bei Mengen und Datum
 (MHD als `300628` oder `30.06.28`), Buchstaben bei Text. OK springt ins nächste Feld, ▾ blendet
@@ -156,7 +163,7 @@ auch wenn gerade ein Mengenfeld aktiv ist (dessen Inhalt bleibt). Echte Tastatur
 Gescannt werden Behälter-Codes, Silo-Namen, Paletten (NVE) oder Chargennummern. Jede Zeile wird beim Scannen
 geprüft (Rezept, Sperre, Verfall, Rework-Regel, Allergene, Bestand im Behälter/Silo). Stationen
 werden unter **Terminal Station** gepflegt (Typ und Lagerorte); `keks_trace.demo.stammdaten`
-legt die vier Demo-Stationen an.
+legt die Demo-Stationen an.
 
 ## Kundenaufträge, Los und MHD
 
@@ -208,6 +215,41 @@ MHD 32 Monate. Ausgedachte Werte (Beutelgrößen, Gebinde, Ruhezeit, Packmittel)
   Test-NVEs (Nummernkreis 02) mit Aufdruck „TEST-NVE“ erzeugt, die nicht an Kunden gehen dürfen.
   Sortenreine Paletten bekommen einen zweiten Strichcode mit GTIN, MHD, Anzahl und Los,
   wenn am Artikel ein Barcode (EAN) je Einheit hinterlegt ist.
+
+## Prüfungen (CP/CCP)
+
+Unter **Prüfplan** werden Kontrollen gepflegt: Lenkung (CCP, CP, GHP), Auslöser (Intervall in
+Minuten, je Buchung oder je Wareneingang), Stationen und/oder Artikel, Art (Messwert mit Min/Max
+und Einheit, Prüfkörper wie Fe/NE/VA beim Metalldetektor, Ja/Nein), Korrekturmaßnahme und
+Verweis auf das HACCP-Dokument.
+
+- Am Terminal erscheint eine Leiste mit fälligen Prüfungen, sortiert nach sperrend, CCP, CP.
+  Mit „sperrt wenn fällig“ (z. B. Metalldetektor stündlich) bucht die Station erst wieder,
+  wenn die Prüfung erfasst ist.
+- Prüfungen je Buchung oder Wareneingang (Brix am Sirup, Temperatur Kühlware) werden direkt im
+  Buchungsdialog abgefragt. Ein Wert außerhalb der Grenze verweigert z. B. die Annahme und zeigt
+  die Korrekturmaßnahme.
+- Abweichung bei einer Intervallprüfung: Bemerkung ist Pflicht, alle Lose der Station seit der
+  letzten OK-Prüfung werden gesperrt, die Prüfung ist sofort wieder fällig.
+- Jede Erfassung ist ein unveränderbares Protokoll **Prüfung** (PR-JJJJ-…).
+
+Die Demo-Stammdaten legen an: Metalldetektor Verpackung und Herzenboden (CCP, stündlich,
+sperrend), Etikettencheck, Gewichtskontrolle, Brix Invertzuckersirup 80–84, Temperatur Butter
+≤ 6 °C. **Die Verpackungsstationen buchen daher erst nach der Metalldetektor-Prüfung.**
+
+## Lagerverkauf
+
+Der Lagerverkauf ist ein eigener Lagerort. Ware kommt per Scan über „Umlagern“ dorthin (Los,
+Karton oder ganze Palette), auch 2. Wahl. Verkauft wird weiter über die vorhandene Kasse (TSE
+bleibt dort).
+
+Tagesabschluss: **Lagerverkauf Abschluss** anlegen, den Export der Kasse (CSV oder Excel mit
+Spalten für Artikelname und Anzahl) anhängen, „Datei einlesen“. Da die Kasse nur Namen kennt,
+ordnet **Kassenartikel** jedem Kassennamen Artikel und Einheit (Beutel, Eimer …) zu. Unbekannte
+Namen bekommen einen Vorschlag und werden einmal von Hand zugeordnet; beim Buchen merkt sich
+das System die Zuordnung. Gebucht wird als „Abverkauf Lagerverkauf“ nach FEFO (frühestes MHD
+zuerst, gesperrte Lose nie). Rückverfolgung, Mengenbilanz und Rückruf zeigen den Lagerverkauf
+als Abnehmer „Endverbraucher“ mit verkaufter Menge und Restbestand.
 
 ## Demo: drei Produktionstage
 
@@ -278,9 +320,8 @@ Die Tests rollen ihre Daten am Ende zurück.
 
 ## Bewusst noch nicht enthalten
 
-Scanner-Oberflächen für Terminals
-und Handscanner, Etikettendruck (QR) und Etikettenkontrolle an der Packlinie (IFS 4.5.3),
-Waagenanbindung, Paletten mit SSCC, Wareneingang über Bestellungen, Ausweis-Scan.
+Waagenanbindung, Wareneingang über Bestellungen, eigene Kasse mit TSE und Kundendisplay,
+Bio/V-Label-Kennzeichnung, Abweichungsmanagement/CAPA, SOPs und Schulungsnachweise.
 
 ## Offene fachliche Annahmen (von der QS zu bestätigen)
 

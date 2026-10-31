@@ -396,8 +396,92 @@
 		return m;
 	}
 
+	// ------------------------------------------------------------------ Prüfungen (CP/CCP)
+	function pruefFelder(plaene, praefix) {
+		return (plaene || []).map((p, i) => {
+			const id = praefix + i;
+			let html = `<div class="panel" style="margin:12px 0"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center">
+				<b>${esc(p.frage)}</b><span class="marke ${p.lenkung === "CCP" ? "rot" : "orange"}">${esc(p.lenkung)}</span></div>
+				<div class="fehlt" style="font-size:16px">Grenzwert: ${esc(p.grenzwert)}</div>`;
+			if (p.art === "Messwert") html += zahlFeld(id, "Messwert" + (p.einheit ? " (" + esc(p.einheit) + ")" : ""));
+			else if (p.art === "Ja/Nein") html += `<div class="einheiten" data-pw="${id}"><button type="button" data-pwv="1">✔ in Ordnung</button><button type="button" data-pwv="0">✖ nicht in Ordnung</button></div>`;
+			else html += p.pruefkoerper.map((k, j) => `<div class="zeile"><div>${esc(k)}</div>
+				<div class="einheiten" data-pw="${id}-${j}" style="margin:0;flex:0 0 440px"><button type="button" data-pwv="1">✔ erkannt</button><button type="button" data-pwv="0">✖ nicht erkannt</button></div></div>`).join("");
+			return html + "</div>";
+		}).join("");
+	}
+	app.addEventListener("click", (e) => {
+		const b = e.target.closest("[data-pwv]");
+		if (!b) return;
+		const box = b.closest("[data-pw]");
+		box.dataset.wert = b.dataset.pwv;
+		box.querySelectorAll("button").forEach((x) => { x.classList.toggle("an", x === b); x.style.background = x === b && b.dataset.pwv === "0" ? "var(--rot)" : ""; });
+	});
+	function pruefWerte(plaene, praefix) {
+		const out = {};
+		(plaene || []).forEach((p, i) => {
+			const id = praefix + i;
+			if (p.art === "Messwert") {
+				const f = document.getElementById(id);
+				if (f && f.value !== "") out[p.pruefplan] = { wert: f.value };
+			} else if (p.art === "Ja/Nein") {
+				const b = app.querySelector(`[data-pw="${id}"]`);
+				if (b && b.dataset.wert !== undefined) out[p.pruefplan] = { ok: b.dataset.wert === "1" };
+			} else {
+				const k = {};
+				let alle = true;
+				p.pruefkoerper.forEach((name, j) => {
+					const b = app.querySelector(`[data-pw="${id}-${j}"]`);
+					if (b && b.dataset.wert !== undefined) k[name] = b.dataset.wert === "1"; else alle = false;
+				});
+				if (alle) out[p.pruefplan] = { koerper: k };
+			}
+		});
+		return out;
+	}
+
+	async function pruefLeiste() {
+		const el = document.getElementById("pruef-leiste");
+		if (!el) return;
+		let liste = [];
+		try { liste = await api("pruefungen_faellig", { station: zustand.station }); } catch (e) { return; }
+		if (!liste.length) { el.innerHTML = ""; return; }
+		const faellig = liste.filter((p) => p.faellig);
+		el.innerHTML = faellig.map((p) => {
+			const i = liste.indexOf(p);
+			return `<button class="knopf ${p.sperrt ? "rot" : ""}" data-pr="${i}" style="margin-bottom:12px;${p.sperrt ? "" : "background:var(--orange);color:#111"}">Prüfung fällig: ${esc(p.titel)}
+				<small style="color:inherit">${esc(p.lenkung)}${p.letzte_ok ? " · zuletzt bestanden " + esc(p.letzte_ok) : " · heute noch nicht geprüft"}${p.sperrt ? " · Buchen gesperrt, bis bestanden" : ""}</small></button>`;
+		}).join("") + `<div class="fehlt" style="font-size:16px;margin:0 0 14px">${liste.filter((p) => !p.faellig).map((p) =>
+			`✔ ${esc(p.titel)}: nächste um ${esc(p.faellig_ab)}${p.bald ? " (bald)" : ""}`).join(" · ")}</div>`;
+		el.querySelectorAll("[data-pr]").forEach((b) => b.addEventListener("click", () => pruefDialog(liste[+b.dataset.pr])));
+	}
+
+	function pruefDialog(p) {
+		app.innerHTML = kopf(p.titel, true) + pruefFelder([p], "pd") +
+			(p.korrektur ? `<p class="fehlt">Bei Abweichung: ${esc(p.korrektur)}</p>` : "") +
+			textFeld("bem", "Bemerkung / Korrekturmaßnahme (bei Abweichung Pflicht)") +
+			`<div class="reihe"><button class="knopf gruen" data-a="speichern">Prüfung speichern</button></div>`;
+		aktionen(async (a) => {
+			if (a !== "speichern") return beiAllgemein(a);
+			try {
+				const r = await api("pruefung_erfassen", {
+					station: zustand.station, pruefplan: p.pruefplan,
+					eingabe: pruefWerte([p], "pd")[p.pruefplan] || {},
+					bemerkung: document.getElementById("bem").value.trim() || null,
+				});
+				app.innerHTML = kopf(p.titel, true) + (r.ok
+					? `<div class="meldung gruen">Bestanden<small>Protokoll ${esc(r.pruefung)}</small></div>`
+					: `<div class="meldung rot">Abweichung<small>${esc(r.folge || "")}${r.gesperrt.length ? "<br>Gesperrt: " + r.gesperrt.map(esc).join(", ") : ""}<br>Protokoll ${esc(r.pruefung)}</small></div>`) +
+					`<div class="reihe"><button class="knopf blau" data-a="zurueck">Fertig</button></div>`;
+				ton(r.ok);
+				aktionen(beiAllgemein);
+			} catch (e) { meldung("rot", e.message); }
+		});
+		fokus("pd0");
+	}
+
 	function startseite() {
-		app.innerHTML = kopf(zustand.station) + `<div class="raster">${menue()
+		app.innerHTML = kopf(zustand.station) + `<div id="pruef-leiste"></div><div class="raster">${menue()
 			.map(([a, t, u]) => `<button class="knopf ${a === "info" ? "" : "blau"}" data-a="${a}">${esc(t)}<small>${esc(u)}</small></button>`)
 			.join("")}</div>`;
 		aktionen((a) => {
@@ -411,6 +495,7 @@
 			if (a === "umlagern") return umlagernStart();
 			beiAllgemein(a);
 		});
+		pruefLeiste();
 	}
 
 	function ergebnis(titel, zeilen, hinweise, extra) {
@@ -571,6 +656,7 @@
 			${r.ausgabe_silo ? `<p class="fehlt">Geht in ${esc(r.ausgabe_silo)}.</p>`
 				: fertigware ? textFeld("scan", "Palette scannen (optional)") + `<div class="reihe"><button class="knopf" data-a="neue-palette">+ Neue Palette (Etikett drucken)</button></div>`
 				: textFeld("scan", "Zielbehälter / Kiste scannen (optional)")}
+			${pruefFelder(r.pruefungen, "ph")}
 			<div class="reihe"><button class="knopf" data-a="zurueck-ansatz">← Zutaten</button><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
 		aktionen(async (a, d) => {
 			if (a === "einheit") { einheit = d.e; einheitSetzen(einheit); document.getElementById("einheit-text").textContent = einheit; return fokus("aus"); }
@@ -619,6 +705,7 @@
 				einheit,
 				ziel_behaelter: ziel ? ziel.value.trim() || null : null,
 				kundenauftrag: ansatz.auftrag ? ansatz.auftrag.auftrag : null,
+				pruefwerte: pruefWerte(ansatz.rezept.pruefungen, "ph"),
 			});
 			const zeilen = [
 				e.los ? "Los: " + e.los + (e.los !== e.charge ? " (" + e.charge + ")" : "") : "Neue Charge: " + e.charge,
@@ -700,6 +787,7 @@
 				${zahlFeld("anzahl", "Wie viele Gebinde?", 1)}
 			</div>` +
 			zahlFeld("menge", `<span id="menge-text">${art.silo ? "Menge" : "Menge je Gebinde"}</span> (${esc(ein(art.stock_uom))})`) +
+			pruefFelder(art.pruefungen, "pw") +
 			`<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
 		const zielFeld = document.getElementById("ziel");
 		if (zielFeld) zielFeld.addEventListener("change", () => {
@@ -726,7 +814,15 @@
 					silo,
 					gebinde: silo ? 0 : Math.max(1, Math.round(zahl(document.getElementById("anzahl").value))),
 					gebindeart: silo ? null : gebindeart,
+					pruefwerte: pruefWerte(art.pruefungen, "pw"),
 				});
+				if (e.abgelehnt) {
+					app.innerHTML = kopf(e.name, true) + `<div class="meldung rot">Annahme verweigert<small>${e.gruende.map(esc).join("<br>")}</small></div>` +
+						e.korrektur.map((k) => `<div class="meldung orange">${esc(k)}</div>`).join("") +
+						`<p class="fehlt">Nichts gebucht. Die Prüfung ist protokolliert.</p><div class="reihe"><button class="knopf blau" data-a="zurueck">Fertig</button></div>`;
+					ton(false);
+					return aktionen(beiAllgemein);
+				}
 				const druck = () => window.open("/gebinde_etikett?druck=1&codes=" + encodeURIComponent(e.gebinde.join(",")), "_blank");
 				if (e.gebinde && e.gebinde.length) druck();
 				ergebnis(e.name, ["Charge: " + e.charge, "Menge: " + mg(e.menge, art.stock_uom), "Ort: " + e.lager,

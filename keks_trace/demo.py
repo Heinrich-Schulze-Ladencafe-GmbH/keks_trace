@@ -331,6 +331,8 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 		if not frappe.db.get_value("Terminal Station", station, "umlager_ziel"):
 			frappe.db.set_value("Terminal Station", station, "umlager_ziel", verkauf)
 
+	_pruefplaene()
+
 	return frappe._dict(
 		company=company,
 		lager=f"Stores - {abbr}",
@@ -343,6 +345,120 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 		abbr=abbr,
 		wurzel=wurzel,
 	)
+
+
+# Prüfpläne nach der HACCP-Auflistung (2.1.1 FO, Version 5). Grenzwerte von dort übernommen.
+PRUEFPLAENE = [
+	{
+		"titel": "Metalldetektor Verpackung",
+		"lenkung": "CCP",
+		"ausloeser": "Regelmäßig an der Station",
+		"intervall_minuten": 60,
+		"sperrt_wenn_faellig": 1,
+		"stationen": ["Verpackung"],
+		"art": "Prüfkörper",
+		"frage": "Prüfkörper durch den Metalldetektor geschickt: erkannt?",
+		"pruefkoerper": "Fe 2,5 mm\nBronze 2,5 mm\nMessing 2,5 mm\nEdelstahl 2,5 mm",
+		"bei_abweichung": "Sperren",
+		"korrekturmassnahme": "Ware sperren, Sperrprotokoll, Metalldetektor prüfen lassen",
+		"dokument": "FO 3.10.12 Prüfprotokoll",
+	},
+	{
+		"titel": "Metalldetektor Herzenboden",
+		"lenkung": "CCP",
+		"ausloeser": "Regelmäßig an der Station",
+		"intervall_minuten": 60,
+		"sperrt_wenn_faellig": 1,
+		"stationen": ["Herzen Verpackung"],
+		"art": "Prüfkörper",
+		"frage": "Prüfkörper durch den Metalldetektor geschickt: erkannt?",
+		"pruefkoerper": "Fe 2,8 mm",
+		"bei_abweichung": "Sperren",
+		"korrekturmassnahme": "Ware sperren, Sperrprotokoll",
+		"dokument": "3.8.6 MC Herzenboden",
+	},
+	{
+		"titel": "Etikettencheck Verpackung",
+		"lenkung": "CP",
+		"ausloeser": "Regelmäßig an der Station",
+		"intervall_minuten": 60,
+		"stationen": ["Verpackung", "Herzen Verpackung"],
+		"art": "Ja/Nein",
+		"frage": "Etiketten richtig (Artikel, Los, MHD; Rückstellmuster)?",
+		"bei_abweichung": "Sperren",
+		"korrekturmassnahme": "Ware sperren, umetikettieren",
+		"dokument": "1.6.1 FO gesperrte Ware, 3.10.12 Prüfprotokoll",
+	},
+	{
+		"titel": "Gewichtskontrolle VE",
+		"lenkung": "CP",
+		"ausloeser": "Regelmäßig an der Station",
+		"intervall_minuten": 60,
+		"stationen": ["Verpackung", "Herzen Verpackung"],
+		"art": "Ja/Nein",
+		"frage": "Stichprobe: VE-Gewichte nach Vorgabe eingehalten?",
+		"bei_abweichung": "Sperren",
+		"korrekturmassnahme": "Ware sperren, zu leichte Ware aussortieren",
+		"dokument": "3.7.1 Gewichtsprotokoll",
+	},
+	{
+		"titel": "Brix Invertzuckersirup",
+		"lenkung": "CP",
+		"ausloeser": "Beim Herstellen",
+		"artikel": ["KT-SIRUP"],
+		"art": "Messwert",
+		"frage": "Brix-Wert der Kochung",
+		"einheit": "°Brix",
+		"min_wert": "80",
+		"max_wert": "84",
+		"bei_abweichung": "Sperren",
+		"korrekturmassnahme": "Ware sperren, weiter aufkochen, ggf. verwerfen, Sirup neu kochen",
+		"dokument": "FO 3.7.5 Invertzuckersirup",
+	},
+	{
+		"titel": "Temperatur Kühlware Wareneingang",
+		"lenkung": "CP",
+		"ausloeser": "Beim Wareneingang",
+		"artikel": ["KT-BUTTER"],
+		"art": "Messwert",
+		"frage": "Kerntemperatur bei Anlieferung",
+		"einheit": "°C",
+		"max_wert": "6",
+		"bei_abweichung": "Annahme verweigern",
+		"korrekturmassnahme": "Warenannahme verweigern und retournieren, auf dem Lieferschein dokumentieren",
+		"dokument": "3.3.4 FO Wareneingangskontrolle",
+	},
+]
+
+
+def _pruefplaene():
+	for p in PRUEFPLAENE:
+		if frappe.db.exists("Pruefplan", p["titel"]):
+			continue
+		werte = {k: v for k, v in p.items() if k not in ("stationen", "artikel")}
+		doc = frappe.get_doc({"doctype": "Pruefplan", **werte})
+		for st in p.get("stationen", []):
+			if frappe.db.exists("Terminal Station", st):
+				doc.append("stationen", {"station": st})
+		for a in p.get("artikel", []):
+			if frappe.db.exists("Item", a):
+				doc.append("artikel", {"artikel": a})
+		doc.insert()
+
+
+def metalldetektor_ok(station: str = "Verpackung"):
+	"""Bestandene Metalldetektor-Prüfung erfassen (Demo und Tests)."""
+	from keks_trace import pruefung
+
+	for p in pruefung.fuer_station(station):
+		eingabe = (
+			{"koerper": {k: True for k in p.koerper()}}
+			if p.art == "Prüfkörper"
+			else {"ok": True}
+			if p.art == "Ja/Nein"
+			else {"wert": p.grenze("max_wert") or p.grenze("min_wert")}
+		)
+		pruefung.erfassen(station, p.name, eingabe)
 
 
 def _blatt(doctype: str, bevorzugt: str | None) -> str:

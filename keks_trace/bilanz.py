@@ -25,6 +25,7 @@ KATEGORIEN = {
 	"Ausgeliefert": "abgang",
 	"Ausgebucht / entsorgt": "abgang",
 	"Silo-Differenz (Leermeldung)": "abgang",
+	"Lagerverkauf (Endverbraucher)": "abgang",
 	"Inventur": "inventur",
 	"Umlagerung": "umlagerung",
 	"Sonstiges": "sonstig",
@@ -176,9 +177,8 @@ def _kategorie(z, menge, rework_ziele):
 	if vt in ("Delivery Note", "Sales Invoice"):
 		return "Ausgeliefert"
 	if zweck == "Material Issue":
-		return (
-			"Silo-Differenz (Leermeldung)"
-			if z.stock_entry_type == "Silo Differenz"
-			else "Ausgebucht / entsorgt"
-		)
+		return {
+			"Silo Differenz": "Silo-Differenz (Leermeldung)",
+			"Abverkauf Lagerverkauf": "Lagerverkauf (Endverbraucher)",
+		}.get(z.stock_entry_type, "Ausgebucht / entsorgt")
 	return "Sonstiges"

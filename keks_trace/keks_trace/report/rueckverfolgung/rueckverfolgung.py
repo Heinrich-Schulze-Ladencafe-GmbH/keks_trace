@@ -54,7 +54,7 @@ def _nachricht(ergebnis):
 	if ergebnis["richtung"] == "Rückwärts":
 		return None
 	kunden = ergebnis.get("kunden") or []
-	paletten = _paletten(ergebnis.get("paletten") or [])
+	paletten = _paletten(ergebnis.get("paletten") or []) + _lagerverkauf(ergebnis.get("lagerverkauf") or [])
 	if not kunden:
 		return "<p>" + _("Keine Lieferungen an Kunden gefunden.") + "</p>" + paletten
 	zeilen = "".join(
@@ -68,6 +68,21 @@ def _nachricht(ergebnis):
 		f"<th>{_('Kunde')}</th><th>{_('Lieferschein')}</th><th>{_('Datum')}</th>"
 		f"<th>{_('Charge')}</th><th>{_('Menge')}</th></tr></thead><tbody>{zeilen}</tbody></table>"
 	) + paletten
+
+
+def _lagerverkauf(zeilen):
+	if not zeilen:
+		return ""
+	z = "".join(
+		f"<tr><td>{r.charge}</td><td>{r.lagerort}</td><td>{flt(r.verkauft, 3)}</td><td>{flt(r.bestand, 3)}</td></tr>"
+		for r in zeilen
+	)
+	return (
+		"<h5>" + _("Lagerverkauf (Endverbraucher)") + "</h5>"
+		"<table class='table table-bordered'><thead><tr>"
+		f"<th>{_('Los')}</th><th>{_('Lagerort')}</th><th>{_('Verkauft (kg)')}</th><th>{_('Noch vorrätig (kg)')}</th>"
+		f"</tr></thead><tbody>{z}</tbody></table>"
+	)
 
 
 def _paletten(paletten):

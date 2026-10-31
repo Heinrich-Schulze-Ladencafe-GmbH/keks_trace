@@ -1,0 +1,129 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-31 08:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "datum",
+  "lagerort",
+  "company",
+  "column_break_1",
+  "datei",
+  "buchung",
+  "section_break_1",
+  "positionen",
+  "amended_from"
+ ],
+ "fields": [
+  {
+   "fieldname": "datum",
+   "fieldtype": "Date",
+   "label": "Verkaufstag",
+   "reqd": 1,
+   "default": "Today",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "lagerort",
+   "fieldtype": "Link",
+   "label": "Lagerort",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Firma",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "datei",
+   "fieldtype": "Attach",
+   "label": "Export der Kasse (CSV oder Excel)",
+   "description": "Spalten mit Artikelname und Anzahl. Danach „Datei einlesen“."
+  },
+  {
+   "fieldname": "buchung",
+   "fieldtype": "Link",
+   "label": "Abbuchung",
+   "options": "Stock Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "positionen",
+   "fieldtype": "Table",
+   "label": "Verkäufe",
+   "options": "Lagerverkauf Position",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Lagerverkauf Abschluss",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-31 08:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Lagerverkauf Abschluss",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "format:LV-{datum}-{##}",
+ "naming_rule": "Expression",
+ "is_submittable": 1,
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "submit": 1,
+   "cancel": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "submit": 1,
+   "cancel": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "submit": 1,
+   "cancel": 1
+  }
+ ],
+ "description": "Tagesverkäufe des Lagerverkaufs: werden nach FEFO von den Losen im Lagerverkauf abgebucht."
+}

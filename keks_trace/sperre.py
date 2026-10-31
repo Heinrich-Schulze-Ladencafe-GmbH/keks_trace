@@ -105,12 +105,14 @@ def rueckruf_sperre(charge: str, grund: str) -> dict:
 			}
 		)
 	from keks_trace.palette import paletten_fuer
+	from keks_trace.trace import lagerverkauf
 
 	return {
 		"vorgang": vorgang,
 		"chargen": gesperrt,
 		"kunden": kunden(betroffen),
 		"paletten": [p for p in paletten_fuer(betroffen) if p.status in ("Offen", "Geschlossen")],
+		"lagerverkauf": [z for z in lagerverkauf(betroffen) if z.bestand > 1e-6],
 	}
 
 

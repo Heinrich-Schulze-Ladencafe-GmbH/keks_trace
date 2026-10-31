@@ -16,6 +16,7 @@ from frappe.utils import cint, flt, formatdate, getdate, now_datetime, nowdate
 
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
+from keks_trace import pruefung
 from keks_trace.install import REWORK_ZIELE
 from keks_trace.utils import allergene, artikel_stufe
 
@@ -97,7 +98,19 @@ def start(station: str) -> dict:
 		"stufen": stufen,
 		"nur_fertigware": stufen == ["Fertigware"],
 		"umlager_ziel": s.umlager_ziel,
+		"pruefungen": pruefung.faellig(s.name),
 	}
+
+
+@frappe.whitelist()
+def pruefungen_faellig(station: str) -> list[dict]:
+	return pruefung.faellig(_station(station).name)
+
+
+@frappe.whitelist()
+def pruefung_erfassen(station: str, pruefplan: str, eingabe, bemerkung: str | None = None) -> dict:
+	s = _station(station)
+	return pruefung.erfassen(s.name, pruefplan, eingabe, bemerkung)
 
 
 @frappe.whitelist()
@@ -154,6 +167,7 @@ def rezept(artikel: str, menge: float | None = None) -> dict:
 		"rework_moeglich": artikel_stufe(artikel) in REWORK_ZIELE,
 		"ausgabe_silo": silos.get(artikel),
 		"einheiten": paletten.einheiten(artikel) if artikel_stufe(artikel) == "Fertigware" else [],
+		"pruefungen": [pruefung.beschreibung(p) for p in pruefung.fuer_artikel(pruefung.HERSTELLEN, artikel)],
 	}
 
 
@@ -184,6 +198,9 @@ def wareneingang_artikel() -> list[dict]:
 	)
 	for a in artikel:
 		a["silo"] = silos.get(a["artikel"])
+		a["pruefungen"] = [
+			pruefung.beschreibung(p) for p in pruefung.fuer_artikel(pruefung.WARENEINGANG, a["artikel"])
+		]
 	return artikel
 
 
@@ -627,6 +644,7 @@ def herstellen(
 	anzahl: float | None = None,
 	einheit: str | None = None,
 	kundenauftrag: str | None = None,
+	pruefwerte=None,
 ) -> dict:
 	"""Fertigung buchen: Zutaten (gescannt) -> neue Charge des Ziels, optional in einen Behälter.
 
@@ -635,10 +653,12 @@ def herstellen(
 	s = _station(station)
 	r = rezept(ziel)
 	_darf(s, "herstellen")
+	pruefung.pruefe_station_frei(s.name)
 	if r["stufe"] not in s.stufen_liste():
 		_fehler(_("{0} wird nicht an der Station {1} hergestellt.").format(r["name"], s.name))
 	erlaubt = {z["artikel"] for z in r["zutaten"]}
 	eingaenge = [_zeile(z["code"], z["menge"], ziel, erlaubt) for z in _liste(zeilen)]
+	pruef_ergebnisse = pruefung.bei_buchung(pruefung.HERSTELLEN, ziel, pruefwerte, s.name)
 	if not eingaenge:
 		_fehler(_("Keine Zutaten gescannt."))
 
@@ -700,7 +720,8 @@ def herstellen(
 			s.name, "Verpackung", "Stock Entry", se.name,
 		)  # fmt: skip
 
-	hinweise = list(se.flags.kt_fifo_warnungen or [])
+	hinweise = pruefung.nach_buchung(pruef_ergebnisse, s.name, charge, se.name)
+	hinweise += list(se.flags.kt_fifo_warnungen or [])
 	if se.flags.kt_fehlende_zutaten:
 		hinweise.append(_("Laut Rezept nicht gescannt: {0}").format(", ".join(se.flags.kt_fehlende_zutaten)))
 	b = frappe.db.get_value("Batch", charge, ["expiry_date", "kt_status", "kt_los"], as_dict=True)
@@ -796,6 +817,7 @@ def wareneingang(
 	silo: str | None = None,
 	gebinde: int | None = None,
 	gebindeart: str | None = None,
+	pruefwerte=None,
 ) -> dict:
 	"""Wareneingang mit Lieferantencharge, ins Rohstofflager oder direkt ins Silo.
 
@@ -813,6 +835,31 @@ def wareneingang(
 		_fehler(_("Bitte die Charge des Lieferanten scannen oder eingeben."))
 	if frappe.get_cached_value("Item", artikel, "has_expiry_date") and not mhd:
 		_fehler(_("Bitte das MHD eingeben."))
+
+	pruef_ergebnisse = pruefung.bei_buchung(pruefung.WARENEINGANG, artikel, pruefwerte, s.name)
+	abgelehnt = pruefung.verweigert(pruef_ergebnisse)
+	if abgelehnt:
+		# Annahme verweigern: nichts buchen, aber die Prüfung protokollieren
+		for p, ok, felder in pruef_ergebnisse:
+			pruefung.protokoll(
+				p, ok, felder, station=s.name,
+				folge=_("Annahme verweigert") if not ok else None,
+				bemerkung=_("Lieferantencharge {0}, {1} {2}").format(lieferantencharge, menge, artikel),
+			)  # fmt: skip
+		return {
+			"abgelehnt": True,
+			"name": frappe.get_cached_value("Item", artikel, "item_name"),
+			"gruende": [
+				_("{0}: gemessen {1} {2}, erlaubt {3}").format(
+					p.titel,
+					pruefung._zahl(f["wert"]) if "wert" in f else "-",
+					f.get("einheit") or "",
+					f.get("grenzwert"),
+				)
+				for p, _ok, f in abgelehnt
+			],
+			"korrektur": [p.korrekturmassnahme for p, _ok, _f in abgelehnt if p.korrekturmassnahme],
+		}
 
 	if silo:
 		silo_doc = frappe.get_cached_doc("Silo", silo)
@@ -862,18 +909,20 @@ def wareneingang(
 	)
 	se.insert()
 	se.submit()
+	pruef_hinweise = pruefung.nach_buchung(pruef_ergebnisse, s.name, charge, se.name)
 	b = frappe.db.get_value("Batch", charge, ["kt_status", "kt_sperrgrund", "expiry_date"], as_dict=True)
 	return {
 		"charge": charge,
 		"name": frappe.get_cached_value("Item", artikel, "item_name"),
 		"menge": flt(menge * (len(codes) or 1), 3),
 		"gebinde": codes,
+		"pruef_hinweise": pruef_hinweise,
 		"lager": silo or lager,
 		"mhd": formatdate(b.expiry_date) if b.expiry_date else None,
 		"gesperrt": b.kt_status == "Gesperrt",
 		"sperrgrund": b.kt_sperrgrund,
 		"buchung": se.name,
-		"hinweise": _meldungen(),
+		"hinweise": pruef_hinweise + _meldungen(),
 	}
 
 

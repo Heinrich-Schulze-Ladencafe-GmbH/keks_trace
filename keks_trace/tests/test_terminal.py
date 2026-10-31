@@ -8,7 +8,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_months, flt, getdate, nowdate
 
-from keks_trace import demo, los, palette, sperre, terminal
+from keks_trace import demo, los, palette, pruefung, sperre, terminal
 from keks_trace.terminal import TerminalFehler
 
 
@@ -30,7 +30,11 @@ class TestTerminal(IntegrationTestCase):
 		mhd = add_days(nowdate(), 200)
 		for artikel, menge in (("KT-MEHL", 500), ("KT-ZUCKER", 300)):
 			terminal.wareneingang("Lager", artikel, f"L{cls.h}-{artikel}", menge, mhd, silo=cls.silo[artikel])
-		cls.butter = terminal.wareneingang("Lager", "KT-BUTTER", f"BU{cls.h}", 100, add_days(nowdate(), 30))
+		cls.butter = terminal.wareneingang(
+			"Lager", "KT-BUTTER", f"BU{cls.h}", 100, add_days(nowdate(), 30),
+			pruefwerte={"Temperatur Kühlware Wareneingang": {"wert": 4}},
+		)  # fmt: skip
+		demo.metalldetektor_ok("Verpackung")
 		cls.nuss = terminal.wareneingang("Lager", "KT-HASELNUSS", f"HN{cls.h}", 50, mhd)["charge"]
 
 	def _grundteig(self, behaelter=None):
@@ -471,3 +475,137 @@ class TestTerminal(IntegrationTestCase):
 			)
 		with self.assertRaisesRegex(TerminalFehler, "nicht freigeschaltet"):
 			terminal.umlagern("Versand", code=e["charge"], anzahl=1, einheit="Karton")
+
+	# ------------------------------------------------------------------ Prüfungen (CP/CCP)
+	def test_20_ueberfaellige_ccp_sperrt_station(self):
+		with self.assertRaisesRegex(pruefung.PruefFehler, "Metalldetektor Herzenboden"):
+			pruefung.pruefe_station_frei("Herzen Verpackung")
+		demo.metalldetektor_ok("Herzen Verpackung")
+		pruefung.pruefe_station_frei("Herzen Verpackung")
+		f = {x["titel"]: x for x in terminal.pruefungen_faellig("Herzen Verpackung")}
+		self.assertFalse(f["Metalldetektor Herzenboden"]["faellig"])
+
+	def test_21_metalldetektor_nicht_bestanden_sperrt_lose(self):
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
+		demo.metalldetektor_ok("Verpackung")
+		e = self._verpacken(5)
+		koerper = {k: True for k in frappe.get_doc("Pruefplan", "Metalldetektor Verpackung").koerper()}
+		koerper["Edelstahl 2,5 mm"] = False
+		with self.assertRaisesRegex(pruefung.PruefFehler, "Korrekturmaßnahme"):
+			terminal.pruefung_erfassen("Verpackung", "Metalldetektor Verpackung", {"koerper": koerper})
+		r = terminal.pruefung_erfassen(
+			"Verpackung", "Metalldetektor Verpackung", {"koerper": koerper}, "Detektor neu eingestellt"
+		)
+		self.assertFalse(r["ok"])
+		self.assertIn(e["charge"], r["gesperrt"])
+		self.assertEqual(frappe.db.get_value("Batch", e["charge"], "kt_status"), "Gesperrt")
+		self.assertEqual(
+			frappe.db.get_value("Pruefung", r["pruefung"], ["ergebnis", "lenkung"]), ("Abweichung", "CCP")
+		)
+		# Bis zur bestandenen Prüfung ist die Verpackung gesperrt
+		with self.assertRaises(pruefung.PruefFehler):
+			self._verpacken(1)
+		demo.metalldetektor_ok("Verpackung")
+		self.assertTrue(self._verpacken(1)["charge"])
+
+	def test_22_brix_beim_herstellen(self):
+		zucker = self.silo["KT-ZUCKER"]
+		with self.assertRaisesRegex(pruefung.PruefFehler, "Messwert"):
+			terminal.herstellen("Backstube", "KT-SIRUP", [{"code": zucker, "menge": 6}], ausbringung=10)
+		schlecht = terminal.herstellen(
+			"Backstube", "KT-SIRUP", [{"code": zucker, "menge": 6}], ausbringung=10,
+			pruefwerte={"Brix Invertzuckersirup": {"wert": "78,5"}},
+		)  # fmt: skip
+		self.assertTrue(schlecht["gesperrt"])
+		self.assertTrue(any("Brix" in h for h in schlecht["hinweise"]))
+		gut = terminal.herstellen(
+			"Backstube", "KT-SIRUP", [{"code": zucker, "menge": 6}], ausbringung=10,
+			pruefwerte={"Brix Invertzuckersirup": {"wert": 82}},
+		)  # fmt: skip
+		self.assertFalse(gut["gesperrt"])
+		self.assertEqual(
+			frappe.db.get_value("Pruefung", {"charge": gut["charge"]}, ["ergebnis", "wert"]), ("OK", 82)
+		)
+
+	def test_23_kuehlware_annahme_verweigert(self):
+		vorher = frappe.db.count("Batch", {"item": "KT-BUTTER"})
+		r = terminal.wareneingang(
+			"Lager", "KT-BUTTER", f"BUW{self.h}", 25, add_days(nowdate(), 30),
+			pruefwerte={"Temperatur Kühlware Wareneingang": {"wert": 9}},
+		)  # fmt: skip
+		self.assertTrue(r["abgelehnt"])
+		self.assertEqual(frappe.db.count("Batch", {"item": "KT-BUTTER"}), vorher)
+		p = frappe.get_last_doc("Pruefung", filters={"pruefplan": "Temperatur Kühlware Wareneingang"})
+		self.assertEqual((p.ergebnis, p.folge, p.wert), ("Abweichung", "Annahme verweigert", 9))
+		ok = terminal.wareneingang(
+			"Lager", "KT-BUTTER", f"BUW{self.h}", 25, add_days(nowdate(), 30),
+			pruefwerte={"Temperatur Kühlware Wareneingang": {"wert": 5}},
+		)  # fmt: skip
+		self.assertTrue(ok["charge"])
+
+	def test_24_lagerverkauf_tagesabschluss(self):
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
+		demo.metalldetektor_ok("Verpackung")
+		e = self._verpacken(10)
+		terminal.umlagern("Lagerverkauf", code=e["charge"], anzahl=10, einheit="Karton")
+		# Lose aus früheren Tests (z.B. test_19) im Lagerverkauf ausblenden, damit FEFO nur dieses Los nimmt
+		from keks_trace.keks_trace.doctype.lagerverkauf_abschluss.lagerverkauf_abschluss import _lose_fefo
+
+		andere = [c for c, _m in _lose_fefo("KT-FW-KAKAO-NOUGAT", self.ctx.verkauf) if c != e["charge"]]
+		for c in andere:
+			frappe.db.set_value("Batch", c, "kt_status", "Gesperrt")
+		self.addCleanup(lambda: [frappe.db.set_value("Batch", c, "kt_status", "Freigegeben") for c in andere])
+		inhalt = "Artikel;Menge\nKakao Nougat Keks 200g;20\nKakao Nougat Keks 200g;4\n"
+		datei = frappe.get_doc(
+			{"doctype": "File", "file_name": f"kasse-{self.h}.csv", "content": inhalt, "is_private": 1}
+		).insert()
+		lv = frappe.get_doc(
+			{
+				"doctype": "Lagerverkauf Abschluss",
+				"datum": nowdate(),
+				"lagerort": self.ctx.verkauf,
+				"company": self.ctx.company,
+				"datei": datei.file_url,
+				"positionen": [{"kassenname": "Platzhalter", "menge": 1}],
+			}
+		).insert()
+		from keks_trace.keks_trace.doctype.lagerverkauf_abschluss.lagerverkauf_abschluss import einlesen
+
+		r = einlesen(lv.name)
+		self.assertEqual((r["positionen"], r["unbekannt"]), (1, 1))
+		lv.reload()
+		p = lv.positionen[0]
+		self.assertEqual((p.kassenname, p.menge), ("Kakao Nougat Keks 200g", 24))
+		self.assertIn("KT-FW-KAKAO-NOUGAT", p.vorschlag or "")
+		with self.assertRaisesRegex(frappe.ValidationError, "zuordnen"):
+			lv.submit()
+		lv.reload()
+		p = lv.positionen[0]
+		p.artikel, p.einheit = "KT-FW-KAKAO-NOUGAT", "Beutel"
+		lv.save()
+		lv.submit()
+		# 24 Beutel à 0,2 kg = 4,8 kg aus dem Lagerverkauf
+		self.assertAlmostEqual(terminal.charge_lager(e["charge"]).get(self.ctx.verkauf), 24 - 4.8)
+		self.assertEqual(
+			frappe.db.get_value("Kassenartikel", "Kakao Nougat Keks 200g", "artikel"), "KT-FW-KAKAO-NOUGAT"
+		)
+		from keks_trace.trace import lagerverkauf
+
+		z = lagerverkauf([e["charge"]])[0]
+		self.assertAlmostEqual((z.verkauft, z.bestand), (4.8, 19.2))
+		from keks_trace.bilanz import mengenbilanz
+
+		self.assertIn("Lagerverkauf (Endverbraucher)", str(mengenbilanz(e["charge"])))
+		# Zweiter Tag: Name ist bekannt
+		lv2 = frappe.get_doc(
+			{
+				"doctype": "Lagerverkauf Abschluss",
+				"datum": nowdate(),
+				"lagerort": self.ctx.verkauf,
+				"company": self.ctx.company,
+				"positionen": [{"kassenname": "Kakao Nougat Keks 200g", "menge": 100}],
+			}
+		).insert()
+		self.assertEqual(lv2.positionen[0].artikel, "KT-FW-KAKAO-NOUGAT")
+		with self.assertRaisesRegex(frappe.ValidationError, "nicht genug"):
+			lv2.submit()

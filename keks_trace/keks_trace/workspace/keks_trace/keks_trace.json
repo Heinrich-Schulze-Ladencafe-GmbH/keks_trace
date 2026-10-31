@@ -1,7 +1,7 @@
 {
  "app": "keks_trace",
  "charts": [],
- "content": "[{\"id\": \"kt_h1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Keks Trace</b></span>\", \"col\": 12}}, {\"id\": \"kt_s0\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Terminal\", \"col\": 4}}, {\"id\": \"kt_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Mengenbilanz\", \"col\": 4}}, {\"id\": \"kt_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgungstest\", \"col\": 4}}, {\"id\": \"kt_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen\", \"col\": 4}}, {\"id\": \"kt_s5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen Sperre\", \"col\": 4}}, {\"id\": \"kt_sp\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"kt_c0\", \"type\": \"card\", \"data\": {\"card_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Chargen und Sperren\", \"col\": 4}}, {\"id\": \"kt_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Silos und Behälter\", \"col\": 4}}, {\"id\": \"kt_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Einstellungen\", \"col\": 4}}]",
+ "content": "[{\"id\": \"kt_h1\", \"type\": \"header\", \"data\": {\"text\": \"<span class=\\\"h4\\\"><b>Keks Trace</b></span>\", \"col\": 12}}, {\"id\": \"kt_s0\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Terminal\", \"col\": 4}}, {\"id\": \"kt_s1\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_s2\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Mengenbilanz\", \"col\": 4}}, {\"id\": \"kt_s3\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Rückverfolgungstest\", \"col\": 4}}, {\"id\": \"kt_s4\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen\", \"col\": 4}}, {\"id\": \"kt_s5\", \"type\": \"shortcut\", \"data\": {\"shortcut_name\": \"Chargen Sperre\", \"col\": 4}}, {\"id\": \"kt_sp\", \"type\": \"spacer\", \"data\": {\"col\": 12}}, {\"id\": \"kt_c0\", \"type\": \"card\", \"data\": {\"card_name\": \"Rückverfolgung\", \"col\": 4}}, {\"id\": \"kt_c1\", \"type\": \"card\", \"data\": {\"card_name\": \"Chargen und Sperren\", \"col\": 4}}, {\"id\": \"kt_c_pruef\", \"type\": \"card\", \"data\": {\"card_name\": \"Prüfungen (HACCP)\", \"col\": 4}}, {\"id\": \"kt_c2\", \"type\": \"card\", \"data\": {\"card_name\": \"Silos und Behälter\", \"col\": 4}}, {\"id\": \"kt_c3\", \"type\": \"card\", \"data\": {\"card_name\": \"Einstellungen\", \"col\": 4}}]",
  "creation": "2026-10-30 21:00:00.000000",
  "custom_blocks": [],
  "docstatus": 0,
@@ -108,6 +108,54 @@
    "link_type": "DocType",
    "onboard": 0,
    "type": "Link"
+  },
+  {
+   "type": "Card Break",
+   "label": "Prüfungen (HACCP)",
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_count": 4,
+   "onboard": 0
+  },
+  {
+   "type": "Link",
+   "label": "Prüfung",
+   "link_type": "DocType",
+   "link_to": "Pruefung",
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_count": 0,
+   "onboard": 0
+  },
+  {
+   "type": "Link",
+   "label": "Prüfplan",
+   "link_type": "DocType",
+   "link_to": "Pruefplan",
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_count": 0,
+   "onboard": 0
+  },
+  {
+   "type": "Link",
+   "label": "Palette",
+   "link_type": "DocType",
+   "link_to": "Palette",
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_count": 0,
+   "onboard": 0
+  },
+  {
+   "type": "Link",
+   "label": "Paletten Bewegung",
+   "link_type": "DocType",
+   "link_to": "Paletten Bewegung",
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_count": 0,
+   "onboard": 0
   },
   {
    "hidden": 0,

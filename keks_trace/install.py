@@ -242,10 +242,11 @@ def _einheiten():
 
 
 def _buchungsarten():
-	if not frappe.db.exists("Stock Entry Type", "Silo Differenz"):
-		frappe.get_doc(
-			{"doctype": "Stock Entry Type", "name": "Silo Differenz", "purpose": "Material Issue"}
-		).insert(ignore_permissions=True)
+	for name in ("Silo Differenz", "Abverkauf Lagerverkauf"):
+		if not frappe.db.exists("Stock Entry Type", name):
+			frappe.get_doc({"doctype": "Stock Entry Type", "name": name, "purpose": "Material Issue"}).insert(
+				ignore_permissions=True
+			)
 
 
 def _aenderungsprotokoll():

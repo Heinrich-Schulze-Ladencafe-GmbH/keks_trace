@@ -59,6 +59,30 @@ def rueckwaerts(charge: str) -> list[dict]:
 	return _mit_details(frappe.db.sql(_RUECKWAERTS, {"charge": charge, "max_tiefe": MAX_TIEFE}, as_dict=True))
 
 
+def lagerverkauf(chargen: list[str]) -> list[dict]:
+	"""Je Charge: an Endverbraucher verkauft und noch vorrätig im Lagerverkauf (Ziel-Lagerorte der Stationen)."""
+	lager = [
+		z for z in frappe.get_all("Terminal Station", filters={"f_umlagern": 1}, pluck="umlager_ziel") if z
+	]
+	if not chargen or not lager:
+		return []
+	zeilen = frappe.db.sql(
+		"""
+		select sbe.batch_no as charge, sbe.warehouse as lagerort,
+			sum(sbe.qty) as bestand,
+			sum(if(se.stock_entry_type = 'Abverkauf Lagerverkauf', -sbe.qty, 0)) as verkauft
+		from `tabSerial and Batch Entry` sbe
+		join `tabSerial and Batch Bundle` sbb on sbb.name = sbe.parent
+		left join `tabStock Entry` se on se.name = sbb.voucher_no and sbb.voucher_type = 'Stock Entry'
+		where sbe.batch_no in %(c)s and sbe.warehouse in %(l)s and sbb.is_cancelled = 0 and sbb.docstatus = 1
+		group by sbe.batch_no, sbe.warehouse
+		""",
+		{"c": tuple(chargen), "l": tuple(set(lager))},
+		as_dict=True,
+	)
+	return [z for z in zeilen if flt(z.bestand) > 1e-6 or flt(z.verkauft) > 1e-6]
+
+
 def kunden(chargen: list[str]) -> list[dict]:
 	"""Lieferungen (Lieferscheine) an Kunden, die eine der Chargen enthalten."""
 	if not chargen:
@@ -109,6 +133,7 @@ def rueckverfolgung(charge: str, richtung: str = "Vorwärts") -> dict:
 		"chargen": chargen,
 		"kunden": kunden(alle),
 		"paletten": paletten_fuer(alle),
+		"lagerverkauf": lagerverkauf(alle),
 	}
 
 

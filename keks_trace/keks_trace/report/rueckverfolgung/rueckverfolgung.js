@@ -49,12 +49,14 @@ frappe.query_reports["Rueckverfolgung"] = {
 								const e = r.message || {};
 								const kunden = [...new Set((e.kunden || []).map((k) => `${k.kundenname || k.kunde} (${k.lieferschein})`))];
 								const paletten = (e.paletten || []).map((p) => p.palette);
+								const laden = (e.lagerverkauf || []).map((z) => `${z.charge}: ${Math.round(z.bestand * 1000) / 1000} kg`);
 								frappe.msgprint({
 									title: __("Rückruf {0}", [e.vorgang]),
 									indicator: "red",
 									message: `<p>${__("Gesperrt")}: ${(e.chargen || []).length} ${__("Chargen")}</p>` +
 										`<p><b>${__("Betroffene Kunden")}:</b><br>${kunden.join("<br>") || "-"}</p>` +
-										`<p><b>${__("Paletten noch im Lager")}:</b><br>${paletten.join("<br>") || "-"}</p>`,
+										`<p><b>${__("Paletten noch im Lager")}:</b><br>${paletten.join("<br>") || "-"}</p>` +
+										`<p><b>${__("Noch im Lagerverkauf (aus dem Regal nehmen)")}:</b><br>${laden.join("<br>") || "-"}</p>`,
 								});
 								report.refresh();
 							},

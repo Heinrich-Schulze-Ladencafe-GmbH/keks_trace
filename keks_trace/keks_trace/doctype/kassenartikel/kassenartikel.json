@@ -1,0 +1,90 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-31 08:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "kassenname",
+  "artikel",
+  "einheit",
+  "aktiv"
+ ],
+ "fields": [
+  {
+   "fieldname": "kassenname",
+   "fieldtype": "Data",
+   "label": "Name in der Kasse",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "artikel",
+   "fieldtype": "Link",
+   "label": "Artikel",
+   "options": "Item",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "einheit",
+   "fieldtype": "Link",
+   "label": "Einheit",
+   "options": "UOM",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Wie die Kasse zählt, z. B. Beutel oder Eimer."
+  },
+  {
+   "fieldname": "aktiv",
+   "fieldtype": "Check",
+   "label": "Aktiv",
+   "default": "1"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-31 08:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Kassenartikel",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "field:kassenname",
+ "naming_rule": "By fieldname",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1
+  }
+ ],
+ "description": "Zuordnung: Artikelname in der Kasse des Lagerverkaufs → Artikel und Einheit in ERPNext."
+}

@@ -299,6 +299,7 @@ def durchspielen():
 		ziel_behaelter=tb2,
 	)  # fmt: skip
 	herstellen("Backstube", "5888-LOSE", [(tb2, tv["menge"])], ziel_behaelter=kl)
+	demo.metalldetektor_ok("Verpackung")  # stündliche Prüfungen der Verpackung (CCP)
 	p = terminal.palette_neu("Verpackung")["nve"]
 	fw = herstellen(
 		"Verpackung", "17846",

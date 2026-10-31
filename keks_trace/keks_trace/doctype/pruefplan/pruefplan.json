@@ -1,0 +1,211 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-10-31 07:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "titel",
+  "lenkung",
+  "aktiv",
+  "column_break_1",
+  "ausloeser",
+  "intervall_minuten",
+  "sperrt_wenn_faellig",
+  "section_break_1",
+  "stationen",
+  "artikel",
+  "section_break_2",
+  "art",
+  "frage",
+  "einheit",
+  "min_wert",
+  "max_wert",
+  "pruefkoerper",
+  "column_break_2",
+  "bei_abweichung",
+  "korrekturmassnahme",
+  "dokument"
+ ],
+ "fields": [
+  {
+   "fieldname": "titel",
+   "fieldtype": "Data",
+   "label": "Prüfung",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "bold": 1
+  },
+  {
+   "fieldname": "lenkung",
+   "fieldtype": "Select",
+   "label": "Lenkungspunkt",
+   "options": "CCP\nCP\nGHP",
+   "default": "CP",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "aktiv",
+   "fieldtype": "Check",
+   "label": "Aktiv",
+   "default": "1"
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "ausloeser",
+   "fieldtype": "Select",
+   "label": "Wann",
+   "options": "Regelmäßig an der Station\nBeim Herstellen\nBeim Wareneingang",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "intervall_minuten",
+   "fieldtype": "Int",
+   "label": "Alle … Minuten",
+   "default": "60",
+   "depends_on": "eval:doc.ausloeser=='Regelmäßig an der Station'"
+  },
+  {
+   "fieldname": "sperrt_wenn_faellig",
+   "fieldtype": "Check",
+   "label": "Buchen an der Station sperren, solange die Prüfung überfällig ist",
+   "depends_on": "eval:doc.ausloeser=='Regelmäßig an der Station'"
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break",
+   "label": "Wo / wofür"
+  },
+  {
+   "fieldname": "stationen",
+   "fieldtype": "Table MultiSelect",
+   "label": "Stationen",
+   "options": "Pruefplan Station",
+   "description": "Bei „Regelmäßig“: an diesen Terminals. Leer = alle Stationen mit Herstellen."
+  },
+  {
+   "fieldname": "artikel",
+   "fieldtype": "Table MultiSelect",
+   "label": "Artikel",
+   "options": "Pruefplan Artikel",
+   "description": "Bei „Beim Herstellen“ / „Beim Wareneingang“: nur für diese Artikel. Leer = alle."
+  },
+  {
+   "fieldname": "section_break_2",
+   "fieldtype": "Section Break",
+   "label": "Was wird geprüft"
+  },
+  {
+   "fieldname": "art",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Messwert\nJa/Nein\nPrüfkörper",
+   "reqd": 1,
+   "default": "Messwert"
+  },
+  {
+   "fieldname": "frage",
+   "fieldtype": "Data",
+   "label": "Frage am Terminal",
+   "description": "Z. B. „Brix-Wert der Kochung“ oder „Etiketten richtig (Stichprobe)?“"
+  },
+  {
+   "fieldname": "einheit",
+   "fieldtype": "Data",
+   "label": "Einheit",
+   "depends_on": "eval:doc.art=='Messwert'",
+   "description": "Z. B. °C, °Brix, g"
+  },
+  {
+   "fieldname": "min_wert",
+   "fieldtype": "Data",
+   "label": "Mindestens",
+   "depends_on": "eval:doc.art=='Messwert'",
+   "description": "Leer = keine Grenze. Dezimalzahl mit Komma oder Punkt."
+  },
+  {
+   "fieldname": "max_wert",
+   "fieldtype": "Data",
+   "label": "Höchstens",
+   "depends_on": "eval:doc.art=='Messwert'",
+   "description": "Leer = keine Grenze. Dezimalzahl mit Komma oder Punkt."
+  },
+  {
+   "fieldname": "pruefkoerper",
+   "fieldtype": "Small Text",
+   "label": "Prüfkörper (einer pro Zeile)",
+   "depends_on": "eval:doc.art=='Prüfkörper'",
+   "description": "Z. B. Fe 2,5 mm / Bronze 2,5 mm / Messing 2,5 mm / Edelstahl 2,5 mm. Jeder muss erkannt werden."
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bei_abweichung",
+   "fieldtype": "Select",
+   "label": "Bei Abweichung",
+   "options": "Sperren\nAnnahme verweigern\nNur dokumentieren",
+   "default": "Sperren",
+   "description": "Sperren: bei „Beim Herstellen“ die neue Charge, bei „Regelmäßig“ alle Chargen der Station seit der letzten bestandenen Prüfung."
+  },
+  {
+   "fieldname": "korrekturmassnahme",
+   "fieldtype": "Small Text",
+   "label": "Korrekturmaßnahme (Anweisung)"
+  },
+  {
+   "fieldname": "dokument",
+   "fieldtype": "Data",
+   "label": "Zugehöriges Dokument",
+   "description": "Z. B. FO 3.10.12 Prüfprotokoll"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-10-31 07:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Pruefplan",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "field:titel",
+ "naming_rule": "By fieldname",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "print": 1
+  }
+ ],
+ "description": "Prüfplan aus der HACCP: was wann wo geprüft wird und was bei Abweichung passiert."
+}
