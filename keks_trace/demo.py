@@ -293,7 +293,27 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 			}
 		).insert()
 
-	for station in ("Backstube", "Verpackung", "Lager", "Versand"):
+	verkauf = f"Lagerverkauf - {abbr}"
+	if not frappe.db.exists("Warehouse", verkauf):
+		frappe.get_doc(
+			{
+				"doctype": "Warehouse",
+				"warehouse_name": "Lagerverkauf",
+				"company": company,
+				"parent_warehouse": frappe.db.get_value(
+					"Warehouse", {"company": company, "is_group": 1, "parent_warehouse": ["in", ["", None]]}
+				),
+			}
+		).insert()
+	for station in (
+		"Backstube",
+		"Verpackung",
+		"Lager",
+		"Versand",
+		"Herzen Garnieren",
+		"Herzen Verpackung",
+		"Lagerverkauf",
+	):
 		if not frappe.db.exists("Terminal Station", station):
 			frappe.get_doc(
 				{
@@ -304,8 +324,12 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 					"rohstofflager": f"Stores - {abbr}",
 					"produktionslager": f"Work In Progress - {abbr}",
 					"fertiglager": f"Finished Goods - {abbr}",
+					"umlager_ziel": verkauf if station in ("Lager", "Lagerverkauf") else None,
 				}
 			).insert()
+	for station in ("Lager", "Lagerverkauf"):
+		if not frappe.db.get_value("Terminal Station", station, "umlager_ziel"):
+			frappe.db.set_value("Terminal Station", station, "umlager_ziel", verkauf)
 
 	return frappe._dict(
 		company=company,
@@ -314,6 +338,7 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 		fertig=f"Finished Goods - {abbr}",
 		lieferant=lieferant,
 		kunde=kunde,
+		verkauf=verkauf,
 		silo_lager={},
 		abbr=abbr,
 		wurzel=wurzel,

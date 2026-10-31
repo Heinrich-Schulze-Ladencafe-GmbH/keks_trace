@@ -380,35 +380,24 @@
 		} catch (e) { meldung("rot", e.message); }
 	}
 
-	const MENUE = {
-		Backstube: [
-			["herstellen", "Herstellen", "Grundteig, Veredelung, Backen, Füllen, Sirup"],
-			["rework", "Rework / Bruch", "Teigreste und Bruch in Rework-Behälter"],
-			["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"],
-			["info", "Info-Scan", "Was ist in diesem Behälter?"],
-		],
-		Verpackung: [
-			["herstellen", "Verpacken", "Lose Ware + Folie → Los mit MHD, auf Palette"],
-			["paletten", "Paletten", "Neue Palette, Etikett, laden, schließen"],
-			["rework", "Packbruch", "Bruch in Rework-Behälter"],
-			["info", "Info-Scan", "Kiste, Los oder Palette prüfen"],
-		],
-		Lager: [
-			["wareneingang", "Wareneingang", "Anlieferung buchen, auch ins Silo"],
-			["paletten", "Paletten", "Anbrechen, umpacken, Etikett"],
-			["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"],
-			["info", "Info-Scan", "Charge, Behälter, Silo oder Palette"],
-		],
-		Versand: [
-			["lieferung", "Lieferung", "Paletten und Kartons an einen Kunden"],
-			["paletten", "Paletten", "Kommissionieren auf Versandpalette"],
-			["info", "Info-Scan", "Los oder Palette prüfen"],
-		],
-	};
+	// Knöpfe aus den Funktionen der Station (in ERPNext unter Terminal Station einstellbar)
+	function menue() {
+		const f = zustand.funktionen || [];
+		const fw = zustand.nur_fertigware;
+		const m = [];
+		if (f.includes("herstellen")) m.push(["herstellen", fw ? "Verpacken" : "Herstellen", fw ? "Los mit MHD, nach Kundenauftrag, auf Palette" : (zustand.stufen || []).join(", ")]);
+		if (f.includes("wareneingang")) m.push(["wareneingang", "Wareneingang", "Anlieferung buchen, ins Silo oder als Gebinde"]);
+		if (f.includes("lieferung")) m.push(["lieferung", "Lieferung", "Paletten und Kartons an einen Kunden"]);
+		if (f.includes("umlagern")) m.push(["umlagern", "Umlagern", zustand.umlager_ziel ? "nach " + zustand.umlager_ziel : "Ziel-Lagerort fehlt noch"]);
+		if (f.includes("paletten")) m.push(["paletten", "Paletten", "Neue Palette, Etikett, anbrechen, umpacken"]);
+		if (f.includes("rework")) m.push(["rework", fw ? "Packbruch" : "Rework / Bruch", "In einen Rework-Behälter"]);
+		if (f.includes("silo")) m.push(["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"]);
+		m.push(["info", "Info-Scan", "Charge, Behälter, Silo oder Palette"]);
+		return m;
+	}
 
 	function startseite() {
-		const menue = MENUE[zustand.typ] || [];
-		app.innerHTML = kopf(zustand.station) + `<div class="raster">${menue
+		app.innerHTML = kopf(zustand.station) + `<div class="raster">${menue()
 			.map(([a, t, u]) => `<button class="knopf ${a === "info" ? "" : "blau"}" data-a="${a}">${esc(t)}<small>${esc(u)}</small></button>`)
 			.join("")}</div>`;
 		aktionen((a) => {
@@ -419,6 +408,7 @@
 			if (a === "wareneingang") return wareneingangStart();
 			if (a === "lieferung") return lieferungStart();
 			if (a === "paletten") return palettenStart();
+			if (a === "umlagern") return umlagernStart();
 			beiAllgemein(a);
 		});
 	}
@@ -436,7 +426,7 @@
 	let ansatz;
 	let auftragsListe = [];
 	async function herstellenStart() {
-		const verpackung = zustand.typ === "Verpackung";
+		const verpackung = zustand.nur_fertigware;
 		app.innerHTML = kopf(verpackung ? "Verpacken" : "Herstellen", true) +
 			(verpackung ? `<p>Kundenaufträge</p><div class="raster" id="auftraege">Lädt …</div><p style="margin-top:22px">Ohne Auftrag</p>` : `<p>Was wird hergestellt?</p>`) +
 			`<div class="raster" id="liste">Lädt …</div>`;
@@ -653,7 +643,7 @@
 
 	// ------------------------------------------------------------------ Rework / Bruch
 	async function reworkStart() {
-		app.innerHTML = kopf(zustand.typ === "Verpackung" ? "Packbruch" : "Rework / Bruch", true) + `<p>In welchen Rework-Behälter?</p><div class="raster" id="liste">Lädt …</div>`;
+		app.innerHTML = kopf(zustand.nur_fertigware ? "Packbruch" : "Rework / Bruch", true) + `<p>In welchen Rework-Behälter?</p><div class="raster" id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
 			const liste = await api("rework_artikel");
@@ -1004,6 +994,52 @@
 		});
 	}
 
+	// ------------------------------------------------------------------ Umlagern
+	let umgelagert = [];
+	function umlagernStart(hinweis) {
+		app.innerHTML = kopf("Umlagern nach " + (zustand.umlager_ziel || "?"), true) +
+			textFeld("scan", "Palette oder Los scannen") +
+			(umgelagert.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Heute hier umgelagert</div>${umgelagert.map((x) =>
+				`<div class="zeile"><div>${esc(x.name)}<br><span class="fehlt" style="font-size:16px">Los ${esc(x.charge)}</span></div><div class="rechts">${esc(stk(x.anzahl, x.einheit))}</div></div>`).join("")}</div>` : "");
+		if (hinweis) meldung("gruen", hinweis);
+		aktionen(beiAllgemein);
+		const buchen = async (args) => {
+			try {
+				const e = await api("umlagern", { station: zustand.station, ...args });
+				umgelagert = e.positionen.concat(umgelagert).slice(0, 12);
+				umlagernStart("Umgelagert: " + e.positionen.map((x) => stk(x.anzahl, x.einheit)).join(", ") + " nach " + e.nach);
+			} catch (err) { umlagernStart(); meldung("rot", err.message); }
+		};
+		enter("scan", async (v) => {
+			if (!v) return;
+			try {
+				const i = await api("info", { code: v });
+				if (i.typ === "palette") {
+					const p = i;
+					app.innerHTML = kopf("Palette …" + p.nve.slice(-6), true) +
+						`<div class="panel"><div class="nve">${esc(p.nve)} ${statusMarke(p.status)}<br><small>${esc(p.kartons || "")}</small></div></div>` +
+						`<div class="reihe"><button class="knopf gruen" data-a="ganz">Ganze Palette umlagern</button></div><p class="fehlt">Oder Position antippen für einzelne Kartons.</p>` +
+						positionenHtml(p, "pos");
+					aktionen((a, d) => {
+						if (a === "zurueck") return umlagernStart();
+						if (a === "ganz") return buchen({ palette: p.nve, ganz: 1 });
+						if (a === "pos") {
+							const pos = p.positionen[+d.i];
+							return anzahlAbfragen("Von Palette …" + p.nve.slice(-6), `${esc(pos.name)} · Los ${esc(pos.charge)}`,
+								[{ einheit: pos.einheit, faktor: 1 }], { einheit: pos.einheit }, (n) => buchen({ palette: p.nve, charge: pos.charge, anzahl: n, einheit: pos.einheit }), umlagernStart);
+						}
+						beiAllgemein(a);
+					});
+					return;
+				}
+				if (i.typ !== "charge") throw new Error("Bitte eine Palette oder ein Los scannen.");
+				const einheiten = await api("einheiten", { artikel: i.artikel });
+				anzahlAbfragen("Los " + i.charge, esc(i.artikelname), einheiten, null, (n, e) => buchen({ code: i.charge, anzahl: n, einheit: e }), umlagernStart);
+			} catch (e) { meldung("rot", e.message); }
+		});
+		fokus("scan");
+	}
+
 	// ------------------------------------------------------------------ Silo leer
 	async function siloLeer() {
 		app.innerHTML = kopf("Silo leer melden", true) + `<p>Welches Silo oder welcher Tank ist leer?</p><div class="raster" id="liste">Lädt …</div>`;
@@ -1079,6 +1115,10 @@
 			const s = await api("start", { station });
 			zustand.station = s.station;
 			zustand.typ = s.typ;
+			zustand.funktionen = s.funktionen;
+			zustand.stufen = s.stufen;
+			zustand.nur_fertigware = s.nur_fertigware;
+			zustand.umlager_ziel = s.umlager_ziel;
 			startseite();
 		} catch (e) {
 			speichern("kt_station", "");

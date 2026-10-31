@@ -430,3 +430,44 @@ class TestTerminal(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("Palette", p, "status"), "Versendet")
 		so.reload()
 		self.assertAlmostEqual(so.items[0].delivered_qty, 1)
+
+	# ------------------------------------------------------------------ Stationen und Umlagern
+	def test_18_stationen_einstellbar(self):
+		self.assertEqual(terminal.start("Versand")["funktionen"], ["paletten", "lieferung"])
+		self.assertTrue(terminal.start("Herzen Verpackung")["nur_fertigware"])
+		# Serverseitig gesperrt, nicht nur ausgeblendet
+		with self.assertRaisesRegex(TerminalFehler, "nicht freigeschaltet"):
+			terminal.wareneingang("Versand", "KT-MEHL", "X", 1, nowdate())
+		with self.assertRaisesRegex(TerminalFehler, "nicht freigeschaltet"):
+			terminal.silo_leer("Verpackung", self.silo["KT-ZUCKER"])
+		s = frappe.get_doc(
+			{
+				"doctype": "Terminal Station",
+				"station_name": f"Test {self.h}",
+				"typ": "Herzen Garnieren",
+				"company": self.ctx.company,
+			}
+		).insert()
+		self.assertEqual((s.f_herstellen, s.f_rework, s.f_lieferung), (1, 1, 0))
+		self.assertEqual(s.stufen_liste(), ["Halbfabrikat", "Ware lose"])
+		with self.assertRaises(frappe.ValidationError):
+			s.stufen = "Quatsch"
+			s.save()
+
+	def test_19_umlagern_lagerverkauf(self):
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
+		lp = terminal.palette_neu("Verpackung")["nve"]
+		e = self._verpacken(20, lp)
+		u = terminal.umlagern("Lagerverkauf", palette=lp, charge=e["charge"], anzahl=5, einheit="Karton")
+		self.assertEqual(u["nach"], self.ctx.verkauf)
+		self.assertAlmostEqual(terminal.charge_lager(e["charge"]).get(self.ctx.verkauf), 12)
+		self.assertEqual(terminal.palette_info(lp)["positionen"][0]["anzahl"], 15)
+		# Aus dem Lagerverkauf wird nicht an Kunden geliefert und nicht nochmal umgelagert
+		terminal.umlagern("Lagerverkauf", palette=lp, ganz=1)
+		self.assertEqual(frappe.db.get_value("Palette", lp, "status"), "Leer")
+		with self.assertRaises(TerminalFehler):
+			terminal.lieferung(
+				"Versand", self.ctx.kunde, [{"code": e["charge"], "anzahl": 1, "einheit": "Karton"}]
+			)
+		with self.assertRaisesRegex(TerminalFehler, "nicht freigeschaltet"):
+			terminal.umlagern("Versand", code=e["charge"], anzahl=1, einheit="Karton")

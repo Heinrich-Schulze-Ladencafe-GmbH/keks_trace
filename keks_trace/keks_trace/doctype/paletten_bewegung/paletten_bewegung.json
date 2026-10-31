@@ -45,7 +45,7 @@
    "fieldname": "art",
    "fieldtype": "Select",
    "label": "Art",
-   "options": "Verpackung\nBeladen\nUmpacken\nLieferung\nStorno Lieferung\nKorrektur",
+   "options": "Verpackung\nBeladen\nUmpacken\nLieferung\nUmlagerung\nStorno Lieferung\nUmlagerung\nKorrektur",
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1

@@ -225,6 +225,7 @@ def after_migrate():
 	_aenderungsprotokoll()
 	_buchungsarten()
 	_einheiten()
+	_stationen_vorbelegen()
 	_genauigkeit()
 
 
@@ -275,6 +276,19 @@ def _genauigkeit():
 				make_property_setter(
 					doctype, feld, "precision", "6", "Select", validate_fields_for_doctype=False
 				)
+
+
+def _stationen_vorbelegen():
+	"""Bestehende Stationen ohne Funktionen bekommen die Vorlage ihres Typs (Update auf einstellbare Stationen)."""
+	if not frappe.db.has_column("Terminal Station", "f_herstellen"):
+		return
+	from keks_trace.keks_trace.doctype.terminal_station.terminal_station import FUNKTIONEN, vorbelegen
+
+	for name in frappe.get_all("Terminal Station", pluck="name"):
+		s = frappe.get_doc("Terminal Station", name)
+		if not any(s.get(f) for f in FUNKTIONEN):
+			vorbelegen(s)
+			s.save(ignore_permissions=True)
 
 
 def _lager_einstellungen():

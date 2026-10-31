@@ -14,7 +14,19 @@
   "column_break_1",
   "rohstofflager",
   "produktionslager",
-  "fertiglager"
+  "fertiglager",
+  "section_funktionen",
+  "f_herstellen",
+  "f_rework",
+  "f_silo",
+  "f_wareneingang",
+  "column_break_f",
+  "f_paletten",
+  "f_lieferung",
+  "f_umlagern",
+  "umlager_ziel",
+  "section_stufen",
+  "stufen"
  ],
  "fields": [
   {
@@ -31,8 +43,8 @@
    "label": "Typ",
    "reqd": 1,
    "in_list_view": 1,
-   "options": "Backstube\nVerpackung\nLager\nVersand",
-   "description": "Bestimmt, welche Abläufe am Terminal angeboten werden."
+   "options": "Backstube\nVerpackung\nLager\nVersand\nHerzen Garnieren\nHerzen Verpackung\nLagerverkauf\nIndividuell",
+   "description": "Vorlage für die Knöpfe. Bei einer neuen Station werden die Funktionen unten passend vorbelegt und können angepasst werden."
   },
   {
    "fieldname": "company",
@@ -68,6 +80,70 @@
    "fieldtype": "Link",
    "options": "Warehouse",
    "label": "Fertigwarenlager (Verpacken, Versand)"
+  },
+  {
+   "fieldname": "section_funktionen",
+   "fieldtype": "Section Break",
+   "label": "Funktionen am Terminal"
+  },
+  {
+   "fieldname": "f_herstellen",
+   "fieldtype": "Check",
+   "label": "Herstellen / Verpacken"
+  },
+  {
+   "fieldname": "f_rework",
+   "fieldtype": "Check",
+   "label": "Rework / Bruch"
+  },
+  {
+   "fieldname": "f_silo",
+   "fieldtype": "Check",
+   "label": "Silo leer melden"
+  },
+  {
+   "fieldname": "f_wareneingang",
+   "fieldtype": "Check",
+   "label": "Wareneingang"
+  },
+  {
+   "fieldname": "column_break_f",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "f_paletten",
+   "fieldtype": "Check",
+   "label": "Paletten"
+  },
+  {
+   "fieldname": "f_lieferung",
+   "fieldtype": "Check",
+   "label": "Lieferung"
+  },
+  {
+   "fieldname": "f_umlagern",
+   "fieldtype": "Check",
+   "label": "Umlagern"
+  },
+  {
+   "fieldname": "umlager_ziel",
+   "fieldtype": "Link",
+   "options": "Warehouse",
+   "label": "Umlagern nach",
+   "depends_on": "f_umlagern",
+   "description": "Z. B. Lagerverkauf. Ware wird per Scan aus dem Fertigwarenlager hierher umgelagert."
+  },
+  {
+   "fieldname": "section_stufen",
+   "fieldtype": "Section Break",
+   "label": "Was hier hergestellt wird",
+   "depends_on": "f_herstellen"
+  },
+  {
+   "fieldname": "stufen",
+   "fieldtype": "Small Text",
+   "label": "Chargenstufen (eine pro Zeile)",
+   "description": "Z. B. Grundteig, Teig veredelt, Backware, Ware lose, Halbfabrikat, Fertigware. Leer = Vorgabe des Typs."
   }
  ],
  "index_web_pages_for_search": 0,
