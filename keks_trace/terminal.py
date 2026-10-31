@@ -111,6 +111,7 @@ def start(station: str) -> dict:
 		"funktionen": s.funktionen(),
 		"stufen": stufen,
 		"nur_fertigware": stufen == ["Fertigware"],
+		"vorschlagen": bool(s.zutaten_vorschlagen),
 		"umlager_ziel": s.umlager_ziel,
 		"vorraete": bool(s.f_silo and _vorraete()),
 		"linie": s.linie,
@@ -366,12 +367,22 @@ def vorraete(station: str) -> list[dict]:
 
 @frappe.whitelist()
 def lager_chargen(station: str, artikel: str) -> list[dict]:
+	"""Chargen eines Artikels mit Bestand im Lager, ältestes MHD zuerst (zum Antippen ohne Scanner)."""
+	_station(station)
+	return _lager_chargen(artikel)
+
+
+def _lager_chargen(artikel: str) -> list[dict]:
 	"""Chargen eines Artikels mit Bestand im Lager (nicht im Vorrat/Silo/Lagerverkauf), ältestes MHD zuerst.
 
 	Zum Antippen ohne Scanner.
 	"""
-	_station(station)
-	aus = list(set(frappe.get_all("Silo", pluck="warehouse")) | _verkaufslager()) or [""]
+	# nicht aus Silo/Vorrat, Lagerverkauf oder von einer Linie (das gehört dem Produktionsauftrag)
+	aus = list(
+		set(frappe.get_all("Silo", pluck="warehouse"))
+		| _verkaufslager()
+		| set(frappe.get_all("Linie", pluck="lagerort"))
+	) or [""]
 	zeilen = frappe.db.sql(
 		"""
 		select sbe.batch_no as charge, sum(sbe.qty) as menge, b.expiry_date as mhd
@@ -841,6 +852,60 @@ def _zeile(code, menge, ziel=None, erlaubt=None):
 		"rework": ist_rework,
 		"max_anteil": max_anteil,
 	}
+
+
+def _quellen(artikel: str) -> list[dict]:
+	"""Wo liegt ein Artikel (ohne Silo/Vorrat/Lagerverkauf)? Behälter einzeln, älteste Ware zuerst."""
+	ergebnis = []
+	for c in _lager_chargen(artikel):
+		rest = c["menge"]
+		for t in frappe.get_all(
+			"Produkttraeger", {"status": "Belegt", "charge": c["charge"]}, ["code", "menge"], order_by="code"
+		):
+			m = min(flt(t.menge), rest)
+			if m > EPS:
+				ergebnis.append({**c, "code": t.code, "behaelter": t.code, "menge": flt(m, 3)})
+				rest -= m
+		if rest > EPS:
+			ergebnis.append({**c, "code": c["charge"], "behaelter": None, "menge": flt(rest, 3)})
+	return ergebnis
+
+
+@frappe.whitelist()
+def auswahl(station: str, artikel: str) -> list[dict]:
+	"""Zum Selbst-Auswählen ohne Scanner: Behälter und Chargen eines Artikels mit Menge und MHD."""
+	_station(station)
+	return _quellen(artikel)
+
+
+@frappe.whitelist()
+def vorschlag(station: str, ziel: str, menge: float) -> dict:
+	"""Zutaten für die Sollmenge vorschlagen statt scannen: Vorrat am Tisch, Behälter (Silo/Tank) und
+	sonst die älteste Ware zuerst, über mehrere Chargen bzw. Kisten verteilt. Jede Zeile ist geprüft."""
+	s = _station(station)
+	r = rezept(ziel, menge, s.name)
+	erlaubt = {z["artikel"] for z in r["zutaten"]}
+	zeilen, hinweise = [], []
+	for z in r["zutaten"]:
+		quellen = [{"code": z["silo"], "menge": z["menge"]}] if z["silo"] else _quellen(z["artikel"])
+		offen = z["menge"]
+		for q in quellen:
+			if offen <= EPS:
+				break
+			m = min(offen, q["menge"])
+			try:
+				zeilen.append(_zeile(q["code"], m, ziel, erlaubt))
+				offen -= m
+			except frappe.ValidationError as e:
+				hinweise.append(f"{z['name']}: {frappe.utils.strip_html(str(e))}")
+				if z["silo"]:
+					break
+		if offen > EPS:
+			hinweise.append(
+				_("{0}: es fehlen {1}.").format(z["name"], paletten._n(flt(offen, 3), z["einheit"]))
+			)
+	frappe.local.message_log = []
+	return {"zeilen": zeilen, "hinweise": hinweise}
 
 
 @frappe.whitelist()

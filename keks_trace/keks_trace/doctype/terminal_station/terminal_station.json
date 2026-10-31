@@ -28,6 +28,7 @@
   "f_linie",
   "f_packstation",
   "f_palette_fertig",
+  "zutaten_vorschlagen",
   "section_stufen",
   "stufen",
   "section_linie",
@@ -184,6 +185,12 @@
    "label": "Aktueller Produktionsauftrag",
    "options": "Produktionsauftrag",
    "read_only": 1
+  },
+  {
+   "fieldname": "zutaten_vorschlagen",
+   "fieldtype": "Check",
+   "label": "Zutaten vorschlagen statt scannen",
+   "description": "Beim Herstellen/Verpacken füllt das Terminal Ware und Packmittel selbst aus (älteste zuerst, Vorrat am Tisch, Behälter); der Mitarbeiter ändert nur, wenn es nicht passt. Gescannt wird nur in der Backstube (Rohstoffe, Teige) und bei Paletten und Kartons."
   }
  ],
  "index_web_pages_for_search": 0,

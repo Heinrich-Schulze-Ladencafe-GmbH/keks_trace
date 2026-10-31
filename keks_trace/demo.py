@@ -367,6 +367,10 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 	frappe.db.set_value(
 		"Terminal Station", "Backstube", "f_wareneingang", 1
 	)  # Anlieferung direkt in die Backstube
+	# Gescannt wird nur in der Backstube (Rohstoffe, Teige) und bei Paletten/Kartons; sonst schlägt das Terminal vor
+	for station in ("Verpackung", "Herzen Garnieren", "Herzen Verpackung"):
+		if frappe.db.exists("Terminal Station", station):
+			frappe.db.set_value("Terminal Station", station, "zutaten_vorschlagen", 1)
 	if not frappe.db.get_value("Terminal Station", "Lagerverkauf", "umlager_ziel"):
 		frappe.db.set_value("Terminal Station", "Lagerverkauf", "umlager_ziel", verkauf)
 	# Am Lager wird das Ziel beim Umlagern gewählt: Fertigwarenlager, Außenlager oder Lagerverkauf

@@ -576,6 +576,29 @@ class TestTerminal(IntegrationTestCase):
 		with self.assertRaisesRegex(TerminalFehler, "nur"):
 			terminal.umlagern("Lagerverkauf", code=e["charge"], anzahl=5, einheit="Karton", nach=fertig)
 
+	def test_19g_verpacken_ohne_scannen(self):
+		"""Verpackung scannt nicht: das Terminal schlägt lose Ware und Folie vor, älteste zuerst."""
+		alt = demo.neue_charge("KT-WL-KAKAO-NOUGAT", f"WLV{_hash()}", add_days(nowdate(), -20))
+		demo.buchen(
+			self.ctx, "Material Receipt", nowdate(), "05:00:00", ausgaenge=[("KT-WL-KAKAO-NOUGAT", alt, 30)]
+		)
+		sperre.freigeben(alt, "Test")
+		fol = demo.neue_charge("KT-FOLIE", f"FOLV{_hash()}")
+		demo.buchen(self.ctx, "Material Receipt", nowdate(), "05:00:00", ausgaenge=[("KT-FOLIE", fol, 5)])
+		self.assertTrue(frappe.db.get_value("Terminal Station", "Verpackung", "zutaten_vorschlagen"))
+		v = terminal.vorschlag("Verpackung", "KT-FW-KAKAO-NOUGAT", 12)
+		artikel = {z["artikel"] for z in v["zeilen"]}
+		self.assertEqual(artikel, {"KT-WL-KAKAO-NOUGAT", "KT-FOLIE"})
+		self.assertAlmostEqual(
+			sum(z["menge"] for z in v["zeilen"] if z["artikel"] == "KT-WL-KAKAO-NOUGAT"), 12
+		)
+		self.assertIn(alt, {q["charge"] for q in terminal.auswahl("Verpackung", "KT-WL-KAKAO-NOUGAT")})
+		e = terminal.herstellen(
+			"Verpackung", "KT-FW-KAKAO-NOUGAT", [{"code": z["code"], "menge": z["menge"]} for z in v["zeilen"]],
+			anzahl=5, einheit="Karton",
+		)  # fmt: skip
+		self.assertTrue(e["charge"])
+
 	def test_19e_kopfdaten_statusleiste(self):
 		d = terminal.kopfdaten("Herzen Verpackung")
 		self.assertTrue(d["zeit"] and d["datum_text"] and d["kw"])

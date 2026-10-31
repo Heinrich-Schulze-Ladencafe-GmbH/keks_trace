@@ -859,14 +859,21 @@
 		if (soll <= 0) return meldung("rot", "Bitte eine Sollmenge eingeben.");
 		try {
 			ansatz = { rezept: await api("rezept", { artikel, menge: soll, station: zustand.station }), zeilen: [], offen: null, einheit, auftrag };
-			// Vorrat am Tisch (Folie, Etikett, Schleife ...): ohne Scan, Menge laut Rezept
-			const fehlt = [];
-			for (const z of ansatz.rezept.zutaten.filter((x) => x.vorrat)) {
-				try { ansatz.zeilen.push(await api("pruefe_zeile", { station: zustand.station, ziel: artikel, code: z.vorrat, menge: z.menge })); }
-				catch (e) { fehlt.push(z.vorrat + ": " + e.message); }
+			let fehlt = [];
+			if (zustand.vorschlagen) {
+				// Hier wird nicht gescannt: das Terminal füllt alles aus, älteste Ware zuerst
+				const v = await api("vorschlag", { station: zustand.station, ziel: artikel, menge: soll });
+				ansatz.zeilen = v.zeilen;
+				fehlt = v.hinweise;
+			} else {
+				// Vorrat am Tisch (Folie, Etikett, Schleife ...): ohne Scan, Menge laut Rezept
+				for (const z of ansatz.rezept.zutaten.filter((x) => x.vorrat)) {
+					try { ansatz.zeilen.push(await api("pruefe_zeile", { station: zustand.station, ziel: artikel, code: z.vorrat, menge: z.menge })); }
+					catch (e) { fehlt.push(z.vorrat + ": " + e.message); }
+				}
 			}
 			ansatzZeigen();
-			if (fehlt.length) meldung("orange", "Vorrat fehlt – erst Karton anbrechen", fehlt.join(" · "));
+			if (fehlt.length) meldung("orange", "Bitte prüfen", fehlt.join(" · "));
 		} catch (e) { meldung("rot", e.message); }
 	}
 
@@ -881,7 +888,8 @@
 			const fertig = ist >= z.menge * 0.98;
 			return `<div class="zeile"><div><span class="${fertig ? "ok" : ""}">${fertig ? "✔" : "○"} ${esc(z.name)}</span>
 				${z.vorrat ? ` <span class="fehlt" style="font-size:16px">aus ${esc(z.vorrat)}</span>`
-					: z.silo ? ` <button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>` : ""}</div>
+					: z.silo ? (fertig ? ` <span class="fehlt" style="font-size:16px">aus ${esc(z.silo)}</span>` : ` <button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>`)
+					: ` <button class="knopf klein" data-a="auswahl" data-artikel="${esc(z.artikel)}">${fertig ? "ändern" : "Wählen"}</button>`}</div>
 				<div class="rechts ${fertig ? "ok" : "fehlt"}">${esc(mg(ist, z.einheit))} / ${esc(mg(z.menge, z.einheit))}</div></div>`;
 		}).join("");
 		const extra = ansatz.zeilen.filter((z) => z.rework).map((z) => `<div class="zeile"><div class="ok">✔ Rework: ${esc(z.name)}</div><div class="rechts">${esc(mg(z.menge, z.einheit))}</div></div>`).join("");
@@ -898,13 +906,14 @@
 			<div class="panel">${zutaten}${extra}</div>
 			${ansatz.offen
 				? zahlFeld("scan", `Menge (${esc(ein(ansatz.offen.einheit))}) für ${esc(ansatz.offen.anzeige)}`, ansatz.offen.vorschlag) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
-				: textFeld("scan", "Gebinde, Behälter oder Silo scannen" + (r.rework_moeglich ? " – auch Rework-Behälter" : ""))}
-			${ansatz.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Gescannt</div>${liste}</div>
+				: textFeld("scan", (zustand.vorschlagen ? "Vom Terminal ausgefüllt – „ändern“ zum Selbst-Auswählen; Scannen geht auch" : "Gebinde, Behälter oder Silo scannen") + (r.rework_moeglich ? " – auch Rework-Behälter" : ""))}
+			${ansatz.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">${zustand.vorschlagen ? "Wird verbraucht" : "Gescannt"}</div>${liste}</div>
 			<div class="reihe"><button class="knopf gruen" data-a="abschluss">Weiter zum Buchen</button></div>` : ""}
 			${au || pa ? `<div class="reiter"><button class="an" type="button">Registrierungen</button></div><div class="panel" style="margin-top:0" id="registrierungen">Lädt …</div>` : ""}`;
 		if (au || pa) registrierungenLaden(au ? { kundenauftrag: au.auftrag } : { produktionsauftrag: pa.auftrag });
 		aktionen((a, d) => {
 			if (a === "silo-zutat") return codeGescannt(d.silo);
+			if (a === "auswahl") return auswahlZeigen(d.artikel);
 			if (a === "weg") { ansatz.zeilen.splice(+d.i, 1); return ansatzZeigen(); }
 			if (a === "abbrechen") { ansatz.offen = null; return ansatzZeigen(); }
 			if (a === "abschluss") return ansatzAbschluss();
@@ -913,6 +922,33 @@
 		enter("scan", (v) => (ansatz.offen ? mengeEingegeben(v) : codeGescannt(v)));
 		fokus("scan");
 		if (ansatz.offen) setTimeout(() => document.getElementById("scan").select(), 40);
+	}
+
+	// Selbst auswählen (ohne Scanner): Kisten/Chargen eines Artikels antippen; ersetzt den Vorschlag
+	async function auswahlZeigen(artikel) {
+		const z = ansatz.rezept.zutaten.find((x) => x.artikel === artikel);
+		app.innerHTML = kopf(z.name + ": woher?", true) + `<p>Antippen, was genommen wird (älteste zuerst). Gebraucht: ${esc(mg(z.menge, z.einheit))}</p><div id="quellen">Lädt …</div>`;
+		aktionen((a) => (a === "zurueck" ? ansatzZeigen() : beiAllgemein(a)));
+		try {
+			const liste = await api("auswahl", { station: zustand.station, artikel });
+			const el = document.getElementById("quellen");
+			if (!liste.length) { el.innerHTML = `<p class="fehlt">Nichts im Lager.</p>`; return; }
+			el.innerHTML = tabelle([["Kiste / Charge", (q) => q.behaelter ? "Kiste " + q.behaelter : q.charge], ["Charge", "charge"], ["Menge", (q) => mg(q.menge, z.einheit), 1], ["MHD", (q) => q.mhd || ""]], liste, "quelle");
+			aktionen(async (a, d) => {
+				if (a === "zurueck") return ansatzZeigen();
+				if (a !== "quelle") return beiAllgemein(a);
+				const q = liste[+d.i];
+				// erste Wahl ersetzt den Vorschlag, weitere Wahlen ergänzen (wenn eine Kiste nicht reicht)
+				if (!ansatz.gewaehlt) ansatz.gewaehlt = {};
+				if (!ansatz.gewaehlt[artikel]) { ansatz.zeilen = ansatz.zeilen.filter((x) => x.artikel !== artikel); ansatz.gewaehlt[artikel] = true; }
+				const fehlt = rund(z.menge - gescannt(artikel));
+				if (fehlt <= 0) return ansatzZeigen();
+				try {
+					ansatz.zeilen.push(await api("pruefe_zeile", { station: zustand.station, ziel: ansatz.rezept.artikel, code: q.code, menge: Math.min(fehlt, q.menge) }));
+					ansatzZeigen();
+				} catch (e) { meldung("rot", e.message); }
+			});
+		} catch (e) { meldung("rot", e.message); }
 	}
 
 	async function registrierungenLaden(args) {
@@ -1641,6 +1677,7 @@
 			zustand.stufen = s.stufen;
 			zustand.nur_fertigware = s.nur_fertigware;
 			zustand.umlager_ziel = s.umlager_ziel;
+			zustand.vorschlagen = s.vorschlagen;
 			umlagerNach = null;
 			zustand.vorraete = s.vorraete;
 			startseite();

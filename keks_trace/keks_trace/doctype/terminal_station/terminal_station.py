@@ -21,6 +21,9 @@ VORLAGEN = {
 	"Paletten-Terminal": ({"f_palette_fertig", "f_paletten"}, ["Fertigware"]),
 	"Individuell": (set(), []),
 }
+# Hier wird nicht gescannt: das Terminal schlägt Ware und Packmittel vor (Scannen nur Backstube, Paletten, Kartons)
+VORSCHLAGEN = {"Verpackung", "Herzen Garnieren", "Herzen Verpackung"}
+
 FUNKTIONEN = (
 	"f_herstellen",
 	"f_rework",
@@ -41,6 +44,7 @@ def vorbelegen(doc):
 		doc.set(f, 1 if f in funktionen else 0)
 	if not (doc.stufen or "").strip():
 		doc.stufen = "\n".join(stufen)
+	doc.zutaten_vorschlagen = 1 if doc.typ in VORSCHLAGEN else 0
 
 
 class TerminalStation(Document):
