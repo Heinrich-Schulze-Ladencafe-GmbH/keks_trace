@@ -16,7 +16,7 @@ class TestHerzen(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.ctx = demo_herzen.anlegen()
+		cls.ctx = demo_herzen.anlegen(vorrat=0)
 		cls.h = _hash()
 		mhd = add_days(nowdate(), 300)
 		cls.zucker = terminal.wareneingang("Lager", "HZ-PUDERZUCKER", f"PZ{cls.h}", 50, mhd)["charge"]
@@ -121,3 +121,11 @@ class TestHerzen(IntegrationTestCase):
 		self.assertTrue(all("Stk/h" in p.engpass for p in pa))
 		r = terminal.rezept("HZ-18", station="Herzen Verpackung")
 		self.assertEqual(r["einheit"], "Nos")
+
+	def test_durchlauf_alle_abteilungen(self):
+		"""Ein Herz vom Wareneingang bis zum Kunden, danach Rückverfolgung in beide Richtungen."""
+		d = demo_herzen.durchlauf("12", 20)
+		self.assertEqual(len(d["protokoll"]), 11)
+		self.assertTrue(frappe.db.exists("Delivery Note", d["lieferschein"]))
+		kette = {z["charge"] for z in rueckwaerts(d["charge"])}
+		self.assertIn(d["puderzucker"], kette)

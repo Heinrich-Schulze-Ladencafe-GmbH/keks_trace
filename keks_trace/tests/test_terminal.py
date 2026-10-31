@@ -558,6 +558,7 @@ class TestTerminal(IntegrationTestCase):
 
 	# ------------------------------------------------------------------ Prüfungen (CP/CCP)
 	def test_20_ueberfaellige_ccp_sperrt_station(self):
+		demo.pruefungen_altern("Metalldetektor Herzenboden")
 		with self.assertRaisesRegex(pruefung.PruefFehler, "Metalldetektor Herzenboden"):
 			pruefung.pruefe_station_frei("Herzen Verpackung")
 		demo.metalldetektor_ok("Herzen Verpackung")

@@ -312,27 +312,32 @@ def vorraete(station: str) -> list[dict]:
 
 @frappe.whitelist()
 def lager_chargen(station: str, artikel: str) -> list[dict]:
-	"""Chargen eines Artikels im Lager (nicht im Vorrat), ältestes MHD zuerst: zum Antippen ohne Scanner."""
+	"""Chargen eines Artikels mit Bestand im Lager (nicht im Vorrat/Silo/Lagerverkauf), ältestes MHD zuerst.
+
+	Zum Antippen ohne Scanner.
+	"""
 	_station(station)
-	vorrat_lager = set(frappe.get_all("Silo", pluck="warehouse")) | _verkaufslager()
-	ergebnis = []
-	for b in frappe.get_all(
-		"Batch",
-		filters={"item": artikel, "disabled": 0, "kt_status": ["!=", "Gesperrt"]},
-		fields=["name", "expiry_date", "creation"],
-		order_by="expiry_date asc, creation asc",
-		limit=50,
-	):
-		menge = sum(m for w, m in charge_lager(b.name).items() if w not in vorrat_lager)
-		if menge > EPS:
-			ergebnis.append(
-				{
-					"charge": b.name,
-					"menge": flt(menge, 3),
-					"mhd": formatdate(b.expiry_date) if b.expiry_date else None,
-				}
-			)
-	return ergebnis[:12]
+	aus = list(set(frappe.get_all("Silo", pluck="warehouse")) | _verkaufslager()) or [""]
+	zeilen = frappe.db.sql(
+		"""
+		select sbe.batch_no as charge, sum(sbe.qty) as menge, b.expiry_date as mhd
+		from `tabSerial and Batch Entry` sbe
+		join `tabSerial and Batch Bundle` sbb on sbb.name = sbe.parent
+		join `tabBatch` b on b.name = sbe.batch_no
+		where b.item = %(artikel)s and sbb.is_cancelled = 0 and sbb.docstatus = 1
+			and ifnull(b.kt_status, '') != 'Gesperrt' and sbe.warehouse not in %(aus)s
+		group by sbe.batch_no, b.expiry_date, b.creation
+		having sum(sbe.qty) > 0.000001
+		order by b.expiry_date is null, b.expiry_date, b.creation
+		limit 12
+		""",
+		{"artikel": artikel, "aus": tuple(aus)},
+		as_dict=True,
+	)
+	return [
+		{"charge": z.charge, "menge": flt(z.menge, 3), "mhd": formatdate(z.mhd) if z.mhd else None}
+		for z in zeilen
+	]
 
 
 @frappe.whitelist()

@@ -359,6 +359,17 @@ MHD-Begrenzung durch die Füllung (MHD = MHD des Nougats statt Backtag + 270 Tag
 
 > Nur auf einem Testsystem ausführen. Die Demo bucht echte Lagerbewegungen.
 
+### Herzen-Demo ohne viel Klicken
+
+```bash
+# Linie, Artikel, Behälter, drei Kundenaufträge in Stück (einer mit MHD höchstens 6 Monate)
+# und Vorrat: Puderzucker, Eiweiß, Packmittel (je ein Karton angebrochen), Zuckerguss im Behälter,
+# 200 Rohlinge und 200 garnierte Herzen je Größe. Füllt bei jedem Lauf nur auf, was fehlt.
+bench --site keks.localhost execute keks_trace.demo_herzen.anlegen
+# Ein Herz durch alle Abteilungen bis zum Lieferschein, mit Protokoll und Rückverfolgung
+bench --site keks.localhost execute keks_trace.demo_herzen.durchlauf --kwargs "{'groesse': '18', 'stueck': 100}"
+```
+
 ## Einkauf: Kontrakte und Reichweite
 
 Eingekauft wird nach Auftragslage und Börse, nicht nach Bestellvorschlag. ERPNext-Standard deckt das ab:

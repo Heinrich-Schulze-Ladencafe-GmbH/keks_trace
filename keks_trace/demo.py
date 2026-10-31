@@ -1005,3 +1005,12 @@ def lagerware() -> dict:
 	for e in ergebnis:
 		print(f"Los {e['los']} ({e['charge']}): {e['kartons']} Karton")
 	return {"lose": ergebnis}
+
+
+def pruefungen_altern(*plaene):
+	"""Frühere Prüfungen dieser Pläne zurückdatieren, damit der Test nicht von der Uhrzeit abhängt
+	(eine OK-Prüfung aus einem Lauf vor wenigen Minuten wäre sonst noch gültig)."""
+	frappe.db.sql(
+		"update `tabPruefung` set zeitpunkt = date_sub(zeitpunkt, interval 2 day) where pruefplan in %(p)s",
+		{"p": tuple(plaene)},
+	)

@@ -76,6 +76,7 @@ class TestLinie(IntegrationTestCase):
 		linienbuchung.waehlen("Paletten-Terminal", self.pa.name)
 		nve = terminal.palette_neu("Paletten-Terminal")["nve"]
 		# Metallcheck der Anlage (InoTec) ist fällig: erst prüfen, dann buchen
+		demo.pruefungen_altern("Metallcheck InoTec", "Metallcheck Thürlings")
 		faellig = [f["titel"] for f in pruefung.faellig("Paletten-Terminal") if f["faellig"]]
 		self.assertIn("Metallcheck InoTec", faellig)
 		self.assertNotIn("Metallcheck Thürlings", faellig)
