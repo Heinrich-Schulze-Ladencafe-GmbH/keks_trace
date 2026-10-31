@@ -843,18 +843,24 @@
 		});
 		enter("aus", () => fokus(document.getElementById("scan") ? "scan" : "aus"));
 		enter("scan", () => {});
-		if (fertigware) {
-			api("vorschau", { station: zustand.station, ziel: r.artikel, zeilen: ansatz.zeilen.map((z) => ({ code: z.code, menge: z.menge })) })
+		const vorschauLaden = () => api("vorschau", { station: zustand.station, ziel: r.artikel, zeilen: ansatz.zeilen.map((z) => ({ code: z.code, menge: z.menge })),
+				kundenauftrag: ansatz.auftrag ? ansatz.auftrag.auftrag : null, mhd: ansatz.mhd || null })
 				.then((v) => {
 					const el = document.getElementById("vorschau");
 					if (!el || !v || !(v.los || v.mhd)) return;
 					el.innerHTML = `<div class="panel"><div class="fehlt" style="font-size:16px">Am Beuteldrucker einstellen</div>
 						<div class="gross">${v.los ? "Los " + esc(v.los) : ""}${v.mhd ? " · MHD " + esc(v.mhd) : ""}</div>
+						${v.mhd_gekuerzt ? `<div class="fehlt" style="font-size:16px">Gekürzt für Kunde/Auftrag, möglich wäre ${esc(v.mhd_voll)}</div>` : ""}
+						<div class="reihe"><input type="date" id="mhd-wahl" value="${esc(ansatz.mhd || v.mhd_iso || "")}" style="font-size:20px;padding:8px">
+						<button class="knopf" id="mhd-setzen">MHD kürzen</button>${ansatz.mhd ? `<button class="knopf" id="mhd-weg">Volles MHD</button>` : ""}</div>
 						${v.kennzeichen && v.kennzeichen.length ? `<div>${kennzeichenMarken(v.kennzeichen)}${v.oeko_nr ? ` <b>${esc(v.oeko_nr)}</b>` : ""}</div>` : ""}
 						${v.los_vorhanden ? `<div class="fehlt" style="font-size:16px">Los von heute läuft schon, diese Ware kommt dazu.</div>` : ""}</div>` +
 						(v.mhd_sinkt ? `<div class="meldung orange">MHD sinkt von ${esc(v.mhd_bisher)} auf ${esc(v.mhd)}: Drucker umstellen, gedruckte Beutel prüfen.</div>` : "");
+					document.getElementById("mhd-setzen").onclick = () => { ansatz.mhd = document.getElementById("mhd-wahl").value || null; vorschauLaden(); };
+					const weg = document.getElementById("mhd-weg");
+					if (weg) weg.onclick = () => { ansatz.mhd = null; vorschauLaden(); };
 				}).catch(() => {});
-		}
+		if (fertigware) vorschauLaden();
 		fokus("aus");
 		setTimeout(() => { const f = document.getElementById("aus"); if (f) f.select(); }, 40);
 	}
@@ -875,6 +881,7 @@
 				ziel_behaelter: ziel ? ziel.value.trim() || null : null,
 				kundenauftrag: ansatz.auftrag ? ansatz.auftrag.auftrag : null,
 				pruefwerte: pruefWerte(ansatz.rezept.pruefungen, "ph"),
+				mhd: ansatz.mhd || null,
 			});
 			const zeilen = [
 				e.los ? "Los: " + e.los + (e.los !== e.charge ? " (" + e.charge + ")" : "") : "Neue Charge: " + e.charge,

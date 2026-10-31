@@ -409,15 +409,19 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 			).format(pa.name)
 		)
 
+	vorgabe = los_modul.mhd_vorgabe(pa.kundenauftrag, nowdate())
 	if los_modul.format_() == "JWWT":
-		charge, _los, _neu = los_modul.tages_charge(pa.artikel, nowdate())
+		charge, _los, _neu = los_modul.tages_charge(pa.artikel, nowdate(), vorgabe)
 	else:
 		charge = (
 			pa.los
 			if pa.los and getdate(frappe.db.get_value("Batch", pa.los, "creation")) == getdate()
 			else None
 		)
-		charge = charge or terminal._neue_charge(pa.artikel, getdate(nowdate()))
+		if not charge:
+			charge = terminal._neue_charge(pa.artikel, getdate(nowdate()))
+			if vorgabe:
+				frappe.db.set_value("Batch", charge, "kt_mhd_vorgabe", vorgabe)
 	jetzt = now_datetime()
 	ausgabe = terminal._se_zeile(
 		{"artikel": pa.artikel, "charge": charge, "menge": kg}, t_warehouse=linie.fertiglager

@@ -476,6 +476,54 @@ class TestTerminal(IntegrationTestCase):
 		with self.assertRaisesRegex(TerminalFehler, "nicht freigeschaltet"):
 			terminal.umlagern("Versand", code=e["charge"], anzahl=1, einheit="Karton")
 
+	def test_19c_mhd_je_kunde_und_auftrag(self):
+		"""Langes MHD möglich, aber für Kunde/Auftrag kürzer; am Terminal nur kürzer, nie länger."""
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
+		voll = getdate(frappe.db.get_value("Batch", self._verpacken(2)["charge"], "expiry_date"))
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "JWWT")
+		frappe.db.set_value("Customer", self.ctx.kunde, "kt_mhd_monate", 1)
+		self.addCleanup(frappe.db.set_value, "Customer", self.ctx.kunde, "kt_mhd_monate", 0)
+		so = frappe.get_doc(
+			{"doctype": "Sales Order", "customer": self.ctx.kunde, "company": self.ctx.company,
+			 "transaction_date": nowdate(), "delivery_date": add_days(nowdate(), 3),
+			 "items": [{"item_code": "KT-FW-KAKAO-NOUGAT", "qty": 30, "uom": "Karton", "conversion_factor": 2.4,
+			            "rate": 10, "warehouse": self.ctx.fertig}]}
+		).insert()  # fmt: skip
+		so.submit()
+		wl = demo.neue_charge("KT-WL-KAKAO-NOUGAT", f"WLM{_hash()}", nowdate())
+		demo.buchen(
+			self.ctx, "Material Receipt", nowdate(), "05:00:00", ausgaenge=[("KT-WL-KAKAO-NOUGAT", wl, 60)]
+		)
+		sperre.freigeben(wl, "Test")
+		fol = demo.neue_charge("KT-FOLIE", f"FOLM{_hash()}")
+		demo.buchen(self.ctx, "Material Receipt", nowdate(), "05:00:00", ausgaenge=[("KT-FOLIE", fol, 5)])
+		zeilen = [{"code": wl, "menge": 4.8}, {"code": fol, "menge": 0.1}]
+		v = terminal.vorschau("Verpackung", "KT-FW-KAKAO-NOUGAT", zeilen, kundenauftrag=so.name)
+		self.assertTrue(v["mhd_gekuerzt"])
+		e = terminal.herstellen("Verpackung", "KT-FW-KAKAO-NOUGAT", zeilen, anzahl=2, einheit="Karton",
+								kundenauftrag=so.name)  # fmt: skip
+		kunde_mhd = getdate(frappe.db.get_value("Batch", e["charge"], "expiry_date"))
+		self.assertEqual(kunde_mhd, getdate(add_months(nowdate(), 1)))
+		self.assertLess(kunde_mhd, voll)
+		self.assertIn("-M", e["charge"])  # eigene Charge je MHD, gleiches Los
+		self.assertEqual(e["los"], frappe.db.get_value("Batch", e["charge"], "kt_los"))
+		# Wert am Auftrag hat Vorrang vor dem Kunden
+		so.db_set("kt_mhd_monate", 2)
+		self.assertEqual(getdate(terminal.vorschau("Verpackung", "KT-FW-KAKAO-NOUGAT", zeilen,
+			kundenauftrag=so.name)["mhd_iso"]), getdate(add_months(nowdate(), 2)))  # fmt: skip
+		# Am Terminal von Hand kürzer
+		h = terminal.herstellen("Verpackung", "KT-FW-KAKAO-NOUGAT", zeilen, anzahl=2, einheit="Karton",
+								mhd=add_days(nowdate(), 20))  # fmt: skip
+		self.assertEqual(
+			getdate(frappe.db.get_value("Batch", h["charge"], "expiry_date")),
+			getdate(add_days(nowdate(), 20)),
+		)
+		# Länger als möglich geht nicht: MHD bleibt, Hinweis
+		lang = terminal.herstellen("Verpackung", "KT-FW-KAKAO-NOUGAT", zeilen, anzahl=2, einheit="Karton",
+								   mhd=str(add_days(voll, 100)))  # fmt: skip
+		self.assertEqual(getdate(frappe.db.get_value("Batch", lang["charge"], "expiry_date")), voll)
+		self.assertTrue(any("geht nicht" in x for x in lang["hinweise"]))
+
 	def test_19b_umlagern_zwischen_lagern(self):
 		"""Mehrere Lager: am Lager wird das Ziel gewählt, z. B. Außenlager und später Lagerverkauf."""
 		abbr = frappe.get_cached_value("Company", self.ctx.company, "abbr")

@@ -210,5 +210,8 @@ def daten_berechnen(out_item, eingaenge, buchungstag, out_charge=None, ohne_bele
 		verfall = getdate(add_months(basis, monate)) if monate else getdate(add_days(basis, tage))
 		if werte["kt_komponenten_mhd"]:
 			verfall = min(verfall, werte["kt_komponenten_mhd"])
+		vorgabe = frappe.db.get_value("Batch", out_charge, "kt_mhd_vorgabe") if out_charge else None
+		if vorgabe:  # Kunde/Auftrag will ein kürzeres MHD
+			verfall = min(verfall, getdate(vorgabe))
 		werte["expiry_date"] = verfall
 	return werte

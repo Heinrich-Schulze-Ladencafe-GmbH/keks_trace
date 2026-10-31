@@ -140,6 +140,14 @@ CUSTOM_FIELDS = {
 	],
 	"Batch": [
 		{
+			"fieldname": "kt_mhd_vorgabe",
+			"label": "MHD gekürzt auf",
+			"fieldtype": "Date",
+			"read_only": 1,
+			"insert_after": "expiry_date",
+			"description": "Kürzeres MHD für Kunde/Auftrag oder am Terminal gekürzt. Das MHD ist das Frühere aus diesem Wert und der Berechnung.",
+		},
+		{
 			"fieldname": "kt_los",
 			"label": "Los (Aufdruck)",
 			"fieldtype": "Data",
@@ -226,6 +234,24 @@ CUSTOM_FIELDS = {
 			"fieldtype": "Check",
 			"insert_after": "kt_umlagerziel",
 			"description": "Ware hier ist für den Lagerverkauf: daraus wird nicht an Kunden geliefert und nicht weiter umgelagert.",
+		},
+	],
+	"Customer": [
+		{
+			"fieldname": "kt_mhd_monate",
+			"label": "MHD auf dem Etikett höchstens (Monate)",
+			"fieldtype": "Int",
+			"insert_after": "customer_group",
+			"description": "Leer = volles MHD. Gezählt ab dem Verpackungstag; nie länger als laut Rohstoffen und Haltbarkeit.",
+		},
+	],
+	"Sales Order": [
+		{
+			"fieldname": "kt_mhd_monate",
+			"label": "MHD auf dem Etikett höchstens (Monate)",
+			"fieldtype": "Int",
+			"insert_after": "po_no",
+			"description": "Nur für diesen Auftrag. Leer = Wert am Kunden.",
 		},
 	],
 	"Supplier": [

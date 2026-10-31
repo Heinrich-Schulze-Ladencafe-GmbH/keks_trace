@@ -644,7 +644,9 @@ def _meldungen():
 
 
 @frappe.whitelist()
-def vorschau(station: str, ziel: str, zeilen) -> dict:
+def vorschau(
+	station: str, ziel: str, zeilen, kundenauftrag: str | None = None, mhd: str | None = None
+) -> dict:
 	"""Los und MHD, bevor gebucht wird (zum Einstellen des Beuteldruckers)."""
 	from keks_trace.genealogie import daten_berechnen
 
@@ -657,13 +659,17 @@ def vorschau(station: str, ziel: str, zeilen) -> dict:
 		if r.get("charge") and r["typ"] != "silo":
 			eingaenge.append((r["charge"], r["artikel"], flt(z.get("menge"))))
 	charge, los = None, None
+	vorgabe = los_modul.mhd_vorgabe(kundenauftrag, nowdate(), mhd)
 	if los_modul.format_() == "JWWT":
 		los = los_modul.jwwt(nowdate())
 		name = f"{ziel}-{getdate(nowdate()).isocalendar()[0]}-{los}"
+		if vorgabe:
+			name += "-M" + getdate(vorgabe).strftime("%y%m%d")
 		charge = name if frappe.db.exists("Batch", name) else None
 	werte = daten_berechnen(ziel, eingaenge, nowdate(), charge, "-")
+	voll = werte.get("expiry_date")
 	vorher = frappe.db.get_value("Batch", charge, "expiry_date") if charge else None
-	mhd = werte.get("expiry_date")
+	mhd = min(voll, vorgabe) if voll and vorgabe else voll
 	ziel_k = kennzeichnung.artikel_kennzeichen(ziel)
 	return {
 		"kennzeichen": [k for k in kennzeichnung.ALLE if k in ziel_k],
@@ -675,6 +681,9 @@ def vorschau(station: str, ziel: str, zeilen) -> dict:
 		"mhd": formatdate(mhd) if mhd else None,
 		"mhd_sinkt": bool(vorher and mhd and getdate(mhd) < getdate(vorher)),
 		"mhd_bisher": formatdate(vorher) if vorher else None,
+		"mhd_voll": formatdate(voll) if voll else None,
+		"mhd_gekuerzt": bool(vorgabe and voll and vorgabe < getdate(voll)),
+		"mhd_iso": str(mhd) if mhd else None,
 	}
 
 
@@ -689,6 +698,7 @@ def herstellen(
 	einheit: str | None = None,
 	kundenauftrag: str | None = None,
 	pruefwerte=None,
+	mhd: str | None = None,
 ) -> dict:
 	"""Fertigung buchen: Zutaten (gescannt) -> neue Charge des Ziels, optional in einen Behälter.
 
@@ -738,10 +748,13 @@ def herstellen(
 		ziel_lager = frappe.get_cached_value("Linie", s.linie, "lagerort")
 		behaelter = None
 
+	vorgabe = los_modul.mhd_vorgabe(kundenauftrag, nowdate(), mhd) if r["stufe"] == "Fertigware" else None
 	if r["stufe"] == "Fertigware" and los_modul.format_() == "JWWT":
-		charge, _los, _neu = los_modul.tages_charge(ziel, nowdate())
+		charge, _los, _neu = los_modul.tages_charge(ziel, nowdate(), vorgabe)
 	else:
 		charge = _neue_charge(ziel, getdate(nowdate()))
+		if vorgabe:
+			frappe.db.set_value("Batch", charge, "kt_mhd_vorgabe", vorgabe)
 	jetzt = now_datetime()
 	ausgabe = _se_zeile(
 		{"artikel": ziel, "charge": charge, "menge": ausbringung, "behaelter": behaelter},
@@ -782,6 +795,11 @@ def herstellen(
 
 	hinweise = pruefung.nach_buchung(pruef_ergebnisse, s.name, charge, se.name)
 	hinweise += list(se.flags.kt_fifo_warnungen or [])
+	verfall = frappe.db.get_value("Batch", charge, "expiry_date")
+	if mhd and verfall and getdate(verfall) < getdate(mhd):
+		hinweise.append(
+			_("MHD {0} geht nicht, laut Rohstoffen nur bis {1}.").format(formatdate(mhd), formatdate(verfall))
+		)
 	if se.flags.kt_fehlende_zutaten:
 		hinweise.append(_("Laut Rezept nicht gescannt: {0}").format(", ".join(se.flags.kt_fehlende_zutaten)))
 	b = frappe.db.get_value(
