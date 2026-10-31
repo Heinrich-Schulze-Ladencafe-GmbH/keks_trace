@@ -79,3 +79,23 @@ class TestHerzen(IntegrationTestCase):
 		# Versand sieht weiterhin alle Aufträge
 		alle = terminal.auftraege("Versand")
 		self.assertIsInstance(alle, list)
+
+	def test_kundenauftrag_und_planung_in_stueck(self):
+		"""Der Kunde bestellt Herzen in Stück; Planung und Terminal rechnen in Stück."""
+		from keks_trace import planung
+
+		kg_h, engpass, anlage = planung.leistung("HZ-18")
+		self.assertEqual((kg_h, engpass, anlage), (800, "Garnieren", "Kalfass"))  # 25/min = 1.500/h
+		self.assertIn("Stk/h", frappe.db.get_value("Item", "HZ-18", "kt_engpass"))
+		auftraege = {a["artikel"]: a for a in terminal.auftraege("Herzen Verpackung")}
+		self.assertIn("HZ-18", auftraege)
+		self.assertIn("Stk", auftraege["HZ-18"]["offen_text"] + " Stk")
+		pa = frappe.get_all(
+			"Produktionsauftrag",
+			{"linie": demo_herzen.LINIE, "artikel": "HZ-18"},
+			["menge_kg", "dauer_stunden", "engpass"],
+		)
+		self.assertTrue(pa)
+		self.assertTrue(all("Stk/h" in p.engpass for p in pa))
+		r = terminal.rezept("HZ-18", station="Herzen Verpackung")
+		self.assertEqual(r["einheit"], "Nos")

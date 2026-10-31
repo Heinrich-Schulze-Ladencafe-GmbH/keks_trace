@@ -30,15 +30,16 @@
    "fieldname": "einheit",
    "fieldtype": "Select",
    "label": "Einheit",
-   "options": "kg/h\nBeutel/min\nKarton/h",
+   "options": "kg/h\nBeutel/min\nKarton/h\nStück/h\nStück/min",
    "default": "kg/h",
    "reqd": 1,
-   "in_list_view": 1
+   "in_list_view": 1,
+   "description": "kg/h, Beutel/min, Karton/h für Ware in kg; Stück/h, Stück/min für Ware in Stück (z. B. Herzen)."
   },
   {
    "fieldname": "kg_h",
    "fieldtype": "Float",
-   "label": "= kg/h",
+   "label": "= je Stunde (Lagereinheit)",
    "read_only": 1,
    "in_list_view": 1
   }

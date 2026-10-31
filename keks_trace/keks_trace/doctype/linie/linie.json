@@ -52,7 +52,7 @@
    "reqd": 1,
    "default": "8",
    "in_list_view": 1,
-   "description": "Wie lange die Linie an einem Arbeitstag produziert. Die Menge pro Tag ergibt sich aus der Leistung des Produkts (kg/h am Artikel)."
+   "description": "Wie lange die Linie an einem Arbeitstag produziert. Die Menge pro Tag ergibt sich aus der Leistung des Produkts am Artikel (kg/h oder Stück/h)."
   },
   {
    "fieldname": "umruestzeit_minuten",

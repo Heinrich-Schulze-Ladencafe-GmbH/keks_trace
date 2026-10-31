@@ -32,12 +32,11 @@ def execute(filters=None):
 		tage[tag] = _belegt(f.linie, tag)[0]
 	for a in auftraege:
 		daten.append({**a, "auslastung": flt(tage[a.datum] / laufzeit * 100, 0) if laufzeit else None})
-	kg = sum(flt(a.menge_kg) for a in auftraege)
 	return (
 		_spalten(),
 		daten,
-		_("{0} Aufträge an {1} Tagen, {2} kg · Laufzeit {3} h pro Tag").format(
-			len(auftraege), len(tage), f"{flt(kg, 0):,.0f}".replace(",", "."), f"{laufzeit:g}"
+		_("{0} Aufträge an {1} Tagen · Laufzeit {2} h pro Tag").format(
+			len(auftraege), len(tage), f"{laufzeit:g}"
 		)
 		+ (_(" · erster Tag {0}").format(formatdate(min(tage))) if tage else ""),
 	)
@@ -58,7 +57,7 @@ def _spalten():
 		{"fieldname": "artikelname", "label": _("Artikel"), "fieldtype": "Data", "width": 180},
 		{"fieldname": "menge", "label": _("Menge"), "fieldtype": "Float", "width": 80},
 		{"fieldname": "einheit", "label": _("Einheit"), "fieldtype": "Data", "width": 70},
-		{"fieldname": "menge_kg", "label": _("kg"), "fieldtype": "Float", "width": 80},
+		{"fieldname": "menge_kg", "label": _("Lagereinheit"), "fieldtype": "Float", "width": 95},
 		{
 			"fieldname": "dauer_stunden",
 			"label": _("Stunden"),
@@ -71,5 +70,5 @@ def _spalten():
 		{"fieldname": "verpackungsanlage", "label": _("Verpackung"), "fieldtype": "Data", "width": 100},
 		{"fieldname": "kunde", "label": _("Kunde"), "fieldtype": "Link", "options": "Customer", "width": 140},
 		{"fieldname": "liefertermin", "label": _("Liefertermin"), "fieldtype": "Date", "width": 100},
-		{"fieldname": "gebucht_kg", "label": _("Gebucht kg"), "fieldtype": "Float", "width": 90},
+		{"fieldname": "gebucht_kg", "label": _("Gebucht"), "fieldtype": "Float", "width": 90},
 	]

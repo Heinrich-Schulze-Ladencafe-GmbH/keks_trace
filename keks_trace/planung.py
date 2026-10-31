@@ -31,16 +31,29 @@ MINDESTLAUF_H = 0.5  # kürzer wird ein Auftrag am Tagesende nicht angefangen
 # ---------------------------------------------------------------------------
 
 
+def einheit_text(artikel) -> str:
+	"""Lagereinheit des Artikels für Texte: kg bei Teig und Lebkuchen, Stk bei Herzen."""
+	uom = frappe.get_cached_value("Item", artikel, "stock_uom")
+	return {"Kg": "kg", "Nos": "Stk"}.get(uom, uom)
+
+
 def _kg_h(artikel, zeile) -> float:
+	"""Leistung umgerechnet in Lagereinheit je Stunde (kg/h bei Lebkuchen, Stück/h bei Herzen)."""
 	if zeile.einheit == "Beutel/min":
 		return flt(zeile.leistung) * 60 * palette.faktor(artikel, "Beutel")
 	if zeile.einheit == "Karton/h":
 		return flt(zeile.leistung) * palette.faktor(artikel, "Karton")
+	if zeile.einheit == "Stück/min":
+		return flt(zeile.leistung) * 60 * palette.faktor(artikel, "Nos")
+	if zeile.einheit == "Stück/h":
+		return flt(zeile.leistung) * palette.faktor(artikel, "Nos")
 	return flt(zeile.leistung)
 
 
 def leistung(artikel: str, anlage: str | None = None) -> tuple[float, str | None, str | None]:
-	"""(kg/h, Engpass, gewählte Verpackungsanlage). Ohne Anlage: die schnellste mögliche."""
+	"""(Leistung in Lagereinheit je Stunde, Engpass, gewählte Verpackungsanlage).
+
+	Ohne Anlage: die schnellste mögliche."""
 	zeilen = frappe.get_all(
 		"Artikel Linienleistung",
 		filters={"parent": artikel, "parenttype": "Item"},
@@ -73,7 +86,7 @@ def _engpass(artikel, zeilen, anlage=None):
 
 
 def item_validate(doc, method=None):
-	"""Leistung je Abschnitt in kg/h umrechnen, Engpass am Artikel speichern."""
+	"""Leistung je Abschnitt in Lagereinheit je Stunde umrechnen, Engpass am Artikel speichern."""
 	if not doc.get("kt_linienleistung"):
 		return
 	for z in doc.kt_linienleistung:
@@ -81,7 +94,8 @@ def item_validate(doc, method=None):
 	kg, name, anlage = _engpass(doc.name, doc.kt_linienleistung)
 	doc.kt_leistung_kg_h = kg
 	doc.kt_engpass = (
-		f"{name} ({flt(kg, 1):g} kg/h)" + (f", Verpackung {anlage}" if anlage and anlage != name else "")
+		f"{name} ({flt(kg, 1):g} {einheit_text(doc.name)}/h)"
+		+ (f", Verpackung {anlage}" if anlage and anlage != name else "")
 		if name
 		else None
 	)

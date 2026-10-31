@@ -9,11 +9,18 @@ Gezählt wird in Stück; jede Größe ist ein eigener Artikel mit eigener Rezept
 """
 
 import frappe
+from frappe.utils import add_days, nowdate
 
 from keks_trace import demo, pilot
 
 # Größe: (Teig je Rohling kg, Glasur je Herz kg) - Platzhalter
 GROESSEN = {"12": (0.05, 0.01), "18": (0.12, 0.02), "25": (0.25, 0.04)}
+
+# Leistung je Größe in Stück: Garnieren (Stück/h), Kalfass (Stück/min) - Platzhalter
+LEISTUNG = {"12": (1200, 30), "18": (800, 25), "25": (500, 20)}
+
+# Demo-Kundenauftrag: der Kunde bestellt Herzen in Stück
+AUFTRAG = {"12": 3000, "18": 2000, "25": 1000}
 
 ROHSTOFFE = {
 	"HZ-PUDERZUCKER": ("Puderzucker", 730),
@@ -80,6 +87,10 @@ def _linie(ctx):
 				"fertiglager": ctx.fertig,
 			}
 		).insert()
+	if not frappe.db.exists("Linienabschnitt", "Garnieren"):
+		frappe.get_doc(
+			{"doctype": "Linienabschnitt", "abschnitt_name": "Garnieren", "art": "Prozess", "linie": LINIE}
+		).insert()
 	if not frappe.db.exists("Linienabschnitt", "Kalfass"):
 		frappe.get_doc(
 			{
@@ -120,5 +131,49 @@ def anlegen() -> frappe._dict:
 			ctx.company, f"HZ-{g}", 1,
 			[(f"HZ-GARNIERT-{g}", 1), ("HZ-FOLIE", 1), ("HZ-ETIKETT", 1), ("HZ-SCHLEIFE", 1)],
 		)  # fmt: skip
+	for g, (garnieren, kalfass) in LEISTUNG.items():
+		item = frappe.get_doc("Item", f"HZ-{g}")
+		if not item.get("kt_linienleistung"):
+			item.append(
+				"kt_linienleistung", {"abschnitt": "Garnieren", "leistung": garnieren, "einheit": "Stück/h"}
+			)
+			item.append(
+				"kt_linienleistung", {"abschnitt": "Kalfass", "leistung": kalfass, "einheit": "Stück/min"}
+			)
+			item.save()
+	auftrag = kundenauftrag(ctx)
+	if not frappe.db.exists("Produktionsauftrag", {"linie": LINIE}):
+		from keks_trace import planung
+
+		planung.vorschlag(LINIE, ab=nowdate())
 	frappe.db.commit()
+	ctx.herz_auftrag = auftrag
 	return ctx
+
+
+def kundenauftrag(ctx) -> str:
+	"""Der Kunde bestellt Herzen in Stück (Demo)."""
+	offen = frappe.db.get_value(
+		"Sales Order", {"po_no": "DEMO-HERZEN", "docstatus": 1, "status": ["not in", ["Completed", "Closed"]]}
+	)
+	if offen:
+		return offen
+	termin = add_days(nowdate(), 21)
+	so = frappe.get_doc(
+		{
+			"doctype": "Sales Order",
+			"customer": ctx.kunde,
+			"company": ctx.company,
+			"po_no": "DEMO-HERZEN",
+			"transaction_date": nowdate(),
+			"delivery_date": termin,
+			"items": [
+				{"item_code": f"HZ-{g}", "qty": n, "uom": "Nos", "conversion_factor": 1, "rate": 1.5,
+				 "warehouse": ctx.fertig, "delivery_date": termin}
+				for g, n in AUFTRAG.items()
+			],
+		}
+	)  # fmt: skip
+	so.insert()
+	so.submit()
+	return so.name

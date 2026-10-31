@@ -92,11 +92,11 @@ CUSTOM_FIELDS = {
 			"fieldtype": "Table",
 			"options": "Artikel Linienleistung",
 			"insert_after": "kt_mhd_bezug",
-			"description": "Fertigware: Geschwindigkeit je Abschnitt (Füllen, Glasieren, Trocknen, Schokoladenkühlung, Band, Verpackungsanlagen). Der langsamste bestimmt das Tempo.",
+			"description": "Fertigware: Geschwindigkeit je Abschnitt (Füllen, Glasieren, Trocknen, Schokoladenkühlung, Band, Verpackungsanlagen), in kg/h, Beutel/min, Karton/h oder bei Stückware in Stück/h, Stück/min. Der langsamste bestimmt das Tempo.",
 		},
 		{
 			"fieldname": "kt_leistung_kg_h",
-			"label": "Leistung auf der Linie (kg/h)",
+			"label": "Leistung auf der Linie (Lagereinheit je Stunde)",
 			"fieldtype": "Float",
 			"read_only": 1,
 			"insert_after": "kt_linienleistung",

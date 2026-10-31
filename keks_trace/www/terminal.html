@@ -328,10 +328,10 @@
 		scanPuffer.zeit = jetzt;
 	}, true);
 
-	function einheitWahl(einheiten, aktiv) {
+	function einheitWahl(einheiten, aktiv, basis) {
 		if (!einheiten || einheiten.length < 2) return "";
 		return `<div class="einheiten">${einheiten.map((e) =>
-			`<button type="button" data-a="einheit" data-e="${esc(e.einheit)}" class="${e.einheit === aktiv ? "an" : ""}">${esc(e.einheit)}${e.faktor !== 1 ? ` <small>(${esc(String(rund(e.faktor)).replace(".", ","))} kg)</small>` : ""}</button>`).join("")}</div>`;
+			`<button type="button" data-a="einheit" data-e="${esc(e.einheit)}" class="${e.einheit === aktiv ? "an" : ""}">${esc(ein(e.einheit))}${e.faktor !== 1 ? ` <small>(${esc(String(rund(e.faktor)).replace(".", ","))} ${esc(ein(basis))})</small>` : ""}</button>`).join("")}</div>`;
 	}
 	function einheitSetzen(einheit) {
 		app.querySelectorAll('[data-a="einheit"]').forEach((b) => b.classList.toggle("an", b.dataset.e === einheit));
@@ -554,7 +554,7 @@
 		try { i = await api("linie_info", { station: zustand.station }); } catch (e) { return meldung("rot", e.message); }
 		if (!i || !i.auftrag || i.status !== "Läuft") return auftragWaehlen("An die Linie", linieStart);
 		const zutaten = i.zutaten.filter((z) => z.stufe !== "Packmittel").map((z) => `<div class="zeile"><div>${esc(z.name)}</div>
-			<div class="rechts ${z.auf_linie > 0 ? "ok" : "fehlt"}">${esc(mg(z.auf_linie, z.einheit))} auf der Linie${z.reicht_fuer_kg != null ? " · reicht für " + esc(kg(z.reicht_fuer_kg)) : ""}</div></div>`).join("");
+			<div class="rechts ${z.auf_linie > 0 ? "ok" : "fehlt"}">${esc(mg(z.auf_linie, z.einheit))} auf der Linie${z.reicht_fuer != null ? " · reicht für " + esc(mg(z.reicht_fuer, i.lagereinheit)) : ""}</div></div>`).join("");
 		const kuebel = i.kuebel.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Nächste Kübel (ältester zuerst)</div>
 			<div class="gross">${i.kuebel.map((k) => esc(k.code)).join(" · ")}</div>
 			<div class="fehlt" style="font-size:16px">${i.kuebel.map((k) => esc(k.code + ": " + k.name + (k.datum ? " vom " + k.datum : "") + ", " + kg(k.menge))).join("<br>")}</div></div>` : "";
@@ -603,7 +603,7 @@
 		if (!i || !i.auftrag || i.status !== "Läuft") return auftragWaehlen("Palette fertig", paletteFertigStart);
 		const einheiten = (i.einheiten || []).filter((e) => e.einheit !== "Palette" && e.einheit !== "Lage");
 		let einheit = (einheiten.find((e) => e.einheit === "Karton") || einheiten[0] || { einheit: "Kg" }).einheit;
-		app.innerHTML = kopf("Palette fertig", true) + auftragKopf(i) + einheitWahl(einheiten, einheit) +
+		app.innerHTML = kopf("Palette fertig", true) + auftragKopf(i) + einheitWahl(einheiten, einheit, i.lagereinheit) +
 			zahlFeld("anzahl", `Wie viele <span id="einheit-text">${esc(einheit)}</span> auf der Palette?`) +
 			textFeld("scan", "Palette scannen (leer = neue Palette)") +
 			`<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button><button class="knopf" data-a="beenden">Auftrag beenden</button></div>`;
@@ -620,7 +620,7 @@
 				const e = await api("linie_palette", { station: zustand.station, anzahl: zahl(document.getElementById("anzahl").value), einheit, palette });
 				etikettDrucken(e.palette);
 				ergebnis(e.name, [
-					"Los: " + e.los, "Menge: " + stk(e.anzahl, e.einheit) + " (" + kg(e.menge) + ")", "Palette: " + e.palette,
+					"Los: " + e.los, "Menge: " + stk(e.anzahl, ein(e.einheit)) + (e.einheit !== i.lagereinheit ? " (" + mg(e.menge, i.lagereinheit) + ")" : ""), "Palette: " + e.palette,
 					e.mhd ? "MHD: " + e.mhd : "", e.kennzeichen ? "Kennzeichen: " + e.kennzeichen : "",
 					"Auftrag gesamt: " + e.gebucht_text, "Verbraucht: " + e.verbraucht.map((v) => v.name + " " + v.charge).join(", "),
 				].filter(Boolean), e.hinweise, `<button class="knopf" data-a="etikett">Palettenlabel nochmal</button><button class="knopf" data-a="weiter">Nächste Palette</button>`)((a2) => {
@@ -702,8 +702,8 @@
 			}
 			app.innerHTML = kopf(r.name, true) +
 				(auftrag ? `<div class="panel">Für Auftrag <b>${esc(auftrag.auftrag)}</b> · ${esc(auftrag.kundenname)}<br><span class="fehlt">bestellt ${esc(auftrag.menge_text)}, schon verpackt ${esc(auftrag.verpackt_text)}, offen ${esc(auftrag.offen_text)}</span></div>` : "") +
-				(zaehlen ? einheitWahl(r.einheiten, einheit) : "") +
-				zahlFeld("soll", zaehlen ? `Soll – wie viele <span id="einheit-text">${esc(einheit)}</span>?` : `Sollmenge (kg) – laut Rezept ${esc(kg(r.sollmenge))}`, vorschlag);
+				(zaehlen ? einheitWahl(r.einheiten, einheit, r.einheit) : "") +
+				zahlFeld("soll", zaehlen ? `Soll – wie viele <span id="einheit-text">${esc(ein(einheit))}</span>?` : `Sollmenge (${esc(ein(r.einheit))}) – laut Rezept ${esc(mg(r.sollmenge, r.einheit))}`, vorschlag);
 			const weiter = () => {
 				const n = zahl(document.getElementById("soll").value);
 				ansatzStarten(artikel, zaehlen ? n * faktorVon(r.einheiten, einheit) : n, einheit, auftrag);
@@ -738,10 +738,10 @@
 				${z.silo ? ` <button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>` : ""}</div>
 				<div class="rechts ${fertig ? "ok" : "fehlt"}">${esc(mg(ist, z.einheit))} / ${esc(mg(z.menge, z.einheit))}</div></div>`;
 		}).join("");
-		const extra = ansatz.zeilen.filter((z) => z.rework).map((z) => `<div class="zeile"><div class="ok">✔ Rework: ${esc(z.name)}</div><div class="rechts">${esc(kg(z.menge))}</div></div>`).join("");
+		const extra = ansatz.zeilen.filter((z) => z.rework).map((z) => `<div class="zeile"><div class="ok">✔ Rework: ${esc(z.name)}</div><div class="rechts">${esc(mg(z.menge, z.einheit))}</div></div>`).join("");
 		const liste = ansatz.zeilen.map((z, i) => `<div class="zeile"><div>${esc(z.name)}<br><span class="fehlt" style="font-size:16px">${esc(z.silo || z.behaelter || z.charge)}</span></div>
 			<div class="rechts">${esc(mg(z.menge, z.einheit))} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("");
-		app.innerHTML = kopf(r.name + " · " + kg(r.sollmenge), true) + `
+		app.innerHTML = kopf(r.name + " · " + mg(r.sollmenge, r.einheit), true) + `
 			${r.kennzeichen && r.kennzeichen.length ? `<div class="panel">${kennzeichenMarken(r.kennzeichen)} <span class="fehlt" style="font-size:16px">Nur Zutaten mit diesem Kennzeichen werden angenommen.</span></div>` : ""}
 			${r.umstellung_bio ? `<div class="meldung orange">Umstellung auf Bio: hier wurde zuletzt konventionell produziert. Vor dem Buchen Reinigung bzw. Spülcharge bestätigen.</div>` : ""}
 			<div class="panel">${zutaten}${extra}</div>
@@ -802,10 +802,10 @@
 		const vorschlag = zaehlen ? Math.floor(kgVorschlag / faktorVon(r.einheiten, einheit) + 1e-6) : kgVorschlag;
 		const fertigware = r.stufe === "Fertigware";
 		app.innerHTML = kopf(r.name, true) + `
-			<div class="panel"><div class="zeile"><div>Eingewogen</div><div class="rechts">${esc(kg(summe))}</div></div></div>
-			${zaehlen ? einheitWahl(r.einheiten, einheit) : ""}
+			<div class="panel"><div class="zeile"><div>${r.einheit === "Kg" ? "Eingewogen" : "Eingesetzt"}</div><div class="rechts">${esc(mg(summe, r.einheit))}</div></div></div>
+			${zaehlen ? einheitWahl(r.einheiten, einheit, r.einheit) : ""}
 			<div id="vorschau"></div>
-			${zahlFeld("aus", zaehlen ? `Ausbringung – wie viele <span id="einheit-text">${esc(einheit)}</span>?` : "Ausbringung (kg)" + (r.ausbeute < 0.999 || r.ausbeute > 1.001 ? " – Vorschlag laut Rezept" : ""), vorschlag)}
+			${zahlFeld("aus", zaehlen ? `Ausbringung – wie viele <span id="einheit-text">${esc(einheit)}</span>?` : "Ausbringung (" + ein(r.einheit) + ")" + (r.ausbeute < 0.999 || r.ausbeute > 1.001 ? " – Vorschlag laut Rezept" : ""), vorschlag)}
 			${r.ausgabe_silo ? `<p class="fehlt">Geht in ${esc(r.ausgabe_silo)}.</p>`
 				: fertigware ? textFeld("scan", "Palette scannen (optional)") + `<div class="reihe"><button class="knopf" data-a="neue-palette">+ Neue Palette (Etikett drucken)</button></div>`
 				: textFeld("scan", "Zielbehälter / Kiste scannen (optional)")}
@@ -863,7 +863,7 @@
 			});
 			const zeilen = [
 				e.los ? "Los: " + e.los + (e.los !== e.charge ? " (" + e.charge + ")" : "") : "Neue Charge: " + e.charge,
-				e.anzahl ? "Menge: " + stk(e.anzahl, e.einheit) + " (" + kg(e.menge) + ")" : "Menge: " + kg(e.menge),
+				e.anzahl ? "Menge: " + stk(e.anzahl, ein(e.einheit)) + " (" + mg(e.menge, ansatz.rezept.einheit) + ")" : "Menge: " + mg(e.menge, ansatz.rezept.einheit),
 				e.behaelter ? "Behälter: " + e.behaelter : "",
 				e.palette ? "Auf Palette: " + e.palette : "",
 				e.kundenauftrag ? "Kundenauftrag: " + e.kundenauftrag : "",
@@ -1007,7 +1007,7 @@
 	function anzahlAbfragen(titel, unterzeile, einheiten, start, fertig, zurueck) {
 		let einheit = start && start.einheit ? start.einheit : einheiten[0].einheit;
 		app.innerHTML = kopf(titel, true) + (unterzeile ? `<div class="panel">${unterzeile}</div>` : "") +
-			einheitWahl(einheiten, einheit) +
+			einheitWahl(einheiten, einheit, i.lagereinheit) +
 			zahlFeld("anzahl", `Wie viele <span id="einheit-text">${esc(einheit)}</span>?`, start && start.anzahl != null ? rund(start.anzahl) : "");
 		aktionen((a, d) => {
 			if (a === "einheit") { einheit = d.e; einheitSetzen(einheit); document.getElementById("einheit-text").textContent = einheit; return fokus("anzahl"); }

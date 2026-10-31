@@ -25,7 +25,9 @@ class Produktionsauftrag(Document):
 				)
 			)
 		self.verpackungsanlage = self.verpackungsanlage or anlage
-		self.engpass = f"{engpass} ({flt(kg_h, 1):g} kg/h)"
+		from keks_trace.planung import einheit_text
+
+		self.engpass = f"{engpass} ({flt(kg_h, 1):g} {einheit_text(self.artikel)}/h)"
 		self.dauer_stunden = flt(self.menge_kg / kg_h, 2)
 		if self.kundenauftrag:
 			self.liefertermin = frappe.db.get_value("Sales Order", self.kundenauftrag, "delivery_date")

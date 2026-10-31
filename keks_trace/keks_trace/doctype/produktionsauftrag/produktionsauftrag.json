@@ -111,9 +111,10 @@
   {
    "fieldname": "menge_kg",
    "fieldtype": "Float",
-   "label": "Menge (kg)",
+   "label": "Menge in Lagereinheit",
    "read_only": 1,
-   "in_list_view": 1
+   "in_list_view": 1,
+   "description": "kg bei Lebkuchen, Stück bei Herzen."
   },
   {
    "fieldname": "section_kunde",

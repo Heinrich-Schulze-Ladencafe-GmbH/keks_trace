@@ -172,7 +172,7 @@ def info(auftrag: str) -> dict:
 				"einheit": frappe.get_cached_value("Item", artikel, "stock_uom"),
 				"auf_linie": flt(je_artikel.get(artikel), 3),
 				"bedarf_rest": flt(je * rest_kg, 3),
-				"reicht_fuer_kg": flt(je_artikel.get(artikel, 0) / je, 1) if je else None,
+				"reicht_fuer": flt(je_artikel.get(artikel, 0) / je, 1) if je else None,
 			}
 		)
 	beutel = paletten.faktor(pa.artikel, "Beutel") if _hat(pa.artikel, "Beutel") else None
@@ -189,6 +189,7 @@ def info(auftrag: str) -> dict:
 		"gebucht_text": _menge_text(pa.artikel, pa.gebucht_kg),
 		"offen_text": _menge_text(pa.artikel, rest_kg),
 		"gebucht_kg": flt(pa.gebucht_kg, 3),
+		"lagereinheit": frappe.get_cached_value("Item", pa.artikel, "stock_uom"),
 		"menge_kg": flt(pa.menge_kg, 3),
 		"verpackungsanlage": pa.verpackungsanlage,
 		"engpass": pa.engpass,
