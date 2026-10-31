@@ -386,14 +386,16 @@
 		const f = zustand.funktionen || [];
 		const fw = zustand.nur_fertigware;
 		const m = [];
-		if (f.includes("herstellen")) m.push(["herstellen", fw ? "Verpacken" : "Herstellen", fw ? "Los mit MHD, nach Kundenauftrag, auf Palette" : (zustand.stufen || []).join(", ")]);
+		const kneter = f.includes("herstellen") && f.includes("linie");
+		if (kneter) m.push(["herstellen", "Kneten", "Grundteig-Kübel und Zutaten → Teig direkt in den Former"]);
+		else if (f.includes("herstellen")) m.push(["herstellen", fw ? "Verpacken" : "Herstellen", fw ? "Los mit MHD, nach Kundenauftrag, auf Palette" : (zustand.stufen || []).join(", ")]);
 		if (f.includes("wareneingang")) m.push(["wareneingang", "Wareneingang", "Anlieferung buchen, ins Silo oder als Gebinde"]);
 		if (f.includes("lieferung")) m.push(["lieferung", "Lieferung", "Paletten und Kartons an einen Kunden"]);
 		if (f.includes("umlagern")) m.push(["umlagern", "Umlagern", zustand.umlager_ziel ? "nach " + zustand.umlager_ziel : "Ziel-Lagerort fehlt noch"]);
 		if (f.includes("paletten")) m.push(["paletten", "Paletten", "Neue Palette, Etikett, anbrechen, umpacken"]);
 		if (f.includes("rework")) m.push(["rework", fw ? "Packbruch" : "Rework / Bruch", "In einen Rework-Behälter"]);
 		if (f.includes("silo")) m.push(["silo", "Silo leer melden", "Silo oder Tank ist leergefahren"]);
-		if (f.includes("linie")) m.push(["linie", "An die Linie", "Kübel einkippen, Füllung, Glasur, Schokolade nachfüllen"]);
+		if (f.includes("linie") && !kneter) m.push(["linie", "An die Linie", "Kübel einkippen, Füllung, Glasur, Schokolade nachfüllen"]);
 		if (f.includes("packstation")) m.push(["packstation", "Packstation", "Auftrag, Anlage, Los, MHD, Kartonlabel"]);
 		if (f.includes("palette_fertig")) m.push(["palette_fertig", "Palette fertig", "Kartons zählen, buchen, Palettenlabel"]);
 		m.push(["info", "Info-Scan", "Charge, Behälter, Silo oder Palette"]);
@@ -662,7 +664,15 @@
 	let auftragsListe = [];
 	async function herstellenStart() {
 		const verpackung = zustand.nur_fertigware;
-		app.innerHTML = kopf(verpackung ? "Verpacken" : "Herstellen", true) +
+		if ((zustand.funktionen || []).includes("linie")) {
+			// Kneter an der Linie: erst den laufenden Produktionsauftrag wählen
+			let i;
+			try { i = await api("linie_info", { station: zustand.station }); } catch (e) { return meldung("rot", e.message); }
+			if (!i || !i.auftrag || i.status !== "Läuft") return auftragWaehlen("Kneten", herstellenStart);
+			zustand.linienAuftrag = i;
+		} else zustand.linienAuftrag = null;
+		const la = zustand.linienAuftrag;
+		app.innerHTML = kopf(la ? "Kneten" : verpackung ? "Verpacken" : "Herstellen", true) + (la ? auftragKopf(la) : "") +
 			(verpackung ? `<p>Kundenaufträge</p><div class="raster" id="auftraege">Lädt …</div><p style="margin-top:22px">Ohne Auftrag</p>` : `<p>Was wird hergestellt?</p>`) +
 			`<div class="raster" id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
@@ -683,6 +693,7 @@
 				? liste.map((r) => `<button class="knopf" data-a="rezept" data-artikel="${esc(r.artikel)}">${esc(r.name)}<small>${esc(r.stufe)} · ${esc(r.artikel)}</small></button>`).join("")
 				: "Keine Rezepte für diese Station.";
 			aktionen((a, d) => {
+				if (a === "pa-wechseln") return auftragWaehlen("Kneten", herstellenStart);
 				if (a === "rezept") return rezeptMenge(d.artikel);
 				if (a === "auftrag") { const z = auftragsListe[+d.i]; return rezeptMenge(z.artikel, z); }
 				beiAllgemein(a);
@@ -744,6 +755,8 @@
 		app.innerHTML = kopf(r.name + " · " + mg(r.sollmenge, r.einheit), true) + `
 			${r.kennzeichen && r.kennzeichen.length ? `<div class="panel">${kennzeichenMarken(r.kennzeichen)} <span class="fehlt" style="font-size:16px">Nur Zutaten mit diesem Kennzeichen werden angenommen.</span></div>` : ""}
 			${r.umstellung_bio ? `<div class="meldung orange">Umstellung auf Bio: hier wurde zuletzt konventionell produziert. Vor dem Buchen Reinigung bzw. Spülcharge bestätigen.</div>` : ""}
+			${r.kuebel && r.kuebel.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Grundteig-Kübel (ältester zuerst)</div><div class="gross">${r.kuebel.map((k) => esc(k.code)).join(" · ")}</div>
+				<div class="fehlt" style="font-size:16px">${r.kuebel.map((k) => esc(k.code + ": " + k.name + (k.datum ? " vom " + k.datum : "") + ", " + mg(k.menge, "Kg"))).join("<br>")}</div></div>` : ""}
 			<div class="panel">${zutaten}${extra}</div>
 			${ansatz.offen
 				? zahlFeld("scan", `Menge (${esc(ein(ansatz.offen.einheit))}) für ${esc(ansatz.offen.anzeige)}`, ansatz.offen.vorschlag) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
@@ -773,6 +786,8 @@
 		if (ziel != null && info.inhalt != null && info.typ !== "silo") ziel = Math.min(ziel, info.inhalt);
 		const anzeige = (info.artikelname || code) + (info.typ === "silo" ? "" : " · " + code);
 		ansatz.offen = { code, anzeige, einheit: passende ? passende.einheit : null, vorschlag: ziel && ziel > 0 ? rund(ziel) : "" };
+		// Grundteig-Kübel kommt immer ganz in den Kneter: keine Mengenabfrage
+		if (info.typ === "behaelter" && passende && passende.stufe === "Grundteig" && info.inhalt > 0) return mengeEingegeben(String(info.inhalt));
 		ansatzZeigen();
 	}
 

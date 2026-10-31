@@ -188,3 +188,43 @@ class TestLinie(IntegrationTestCase):
 		self.assertEqual(frappe.db.count("Produktionsauftrag", {"kt_so_detail": so.items[0].name}), len(pas))
 		bedarf = {b["artikel"]: b for b in planung.teigbedarf(linie, 500)}
 		self.assertIn("5888", bedarf)
+
+	def test_06_kneter_teig_direkt_auf_die_linie(self):
+		"""Ein oder zwei Grundteig-Kübel + Zutaten in den Kneter; der Teig geht direkt in den Former."""
+		from keks_trace.trace import rueckwaerts
+
+		kuebel = []
+		for i in (1, 2):
+			code = demo.neuer_traeger(f"TGK{i}-{self.h}", "Teigbehälter")
+			c = demo.neue_charge("5812", f"T5812-{i}-{self.h}", add_days(nowdate(), -40 * i))
+			demo.buchen(self.ctx, "Material Receipt", add_days(nowdate(), -40 * i), "04:00:00",
+						ausgaenge=[("5812", c, 200, code)])  # fmt: skip
+			kuebel.append((code, c))
+		abc = terminal.wareneingang("Lager", "4150", f"ABC{self.h}", 20, add_days(nowdate(), 300))["charge"]
+		pa = frappe.get_doc(
+			{"doctype": "Produktionsauftrag", "linie": demo_linie.LINIE, "datum": nowdate(), "artikel": "17846",
+			 "menge": 20, "einheit": "Karton", "status": "Freigegeben"}
+		).insert()  # fmt: skip
+		frappe.db.set_value("Terminal Station", "Kneter", "aktueller_auftrag", None)
+		with self.assertRaisesRegex(LinienFehler, "Produktionsauftrag wählen"):
+			terminal.herstellen("Kneter", "5888", [{"code": kuebel[0][0], "menge": 200}])
+		linienbuchung.waehlen("Kneter", pa.name)
+		r = terminal.rezept("5888", station="Kneter")
+		self.assertTrue(r["kuebel"])  # Vorschlag Grundteig-Kübel, ältester zuerst
+		e = terminal.herstellen(
+			"Kneter", "5888",
+			[{"code": kuebel[0][0], "menge": 200}, {"code": kuebel[1][0], "menge": 200}, {"code": abc, "menge": 2}],
+		)  # fmt: skip
+		self.assertIsNone(e["behaelter"])
+		auf_linie = {z["charge"]: z["menge"] for z in linienbuchung.bestand(pa.name)}
+		self.assertIn(e["charge"], auf_linie)  # Teig liegt beim Auftrag auf der Linie
+		for code, _c in kuebel:
+			self.assertEqual(frappe.db.get_value("Produkttraeger", code, "status"), "Frei")
+		linienbuchung.waehlen("Paletten-Terminal", pa.name)
+		demo_linie.metallcheck_ok("Paletten-Terminal")
+		p = terminal.linie_palette("Paletten-Terminal", 10, "Karton")
+		kette = {z["charge"] for z in rueckwaerts(p["charge"])}
+		self.assertIn(e["charge"], kette)
+		for _code, c in kuebel:
+			self.assertIn(c, kette)
+		linienbuchung.beenden("Paletten-Terminal", pa.name)

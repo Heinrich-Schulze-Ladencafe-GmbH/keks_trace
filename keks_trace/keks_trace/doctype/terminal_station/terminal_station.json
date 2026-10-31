@@ -49,7 +49,7 @@
    "label": "Typ",
    "reqd": 1,
    "in_list_view": 1,
-   "options": "Backstube\nVerpackung\nLager\nVersand\nHerzen Garnieren\nHerzen Verpackung\nLagerverkauf\nIndividuell\nFormer\nNachfüllen\nPackstation\nPaletten-Terminal",
+   "options": "Backstube\nVerpackung\nLager\nVersand\nHerzen Garnieren\nHerzen Verpackung\nLagerverkauf\nIndividuell\nKneter\nFormer\nNachfüllen\nPackstation\nPaletten-Terminal",
    "description": "Vorlage für die Knöpfe. Bei einer neuen Station werden die Funktionen unten passend vorbelegt und können angepasst werden."
   },
   {

@@ -175,8 +175,16 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 		"einheiten": paletten.einheiten(artikel) if artikel_stufe(artikel) == "Fertigware" else [],
 		"pruefungen": [pruefung.beschreibung(p) for p in pruefung.fuer_herstellen(artikel, station)],
 		"kennzeichen": sorted(kennzeichnung.artikel_kennzeichen(artikel), key=kennzeichnung.ALLE.index),
+		"kuebel": _kuebel_fuer(zutaten),
 		"umstellung_bio": bool(station and kennzeichnung.umstellung_noetig(station, artikel)),
 	}
+
+
+def _kuebel_fuer(zutaten) -> list[dict]:
+	"""Älteste belegte Kübel mit dem Grundteig des Rezepts (Vorschlag am Kneter bzw. bei der Veredelung)."""
+	from keks_trace.linienbuchung import kuebel_vorschlag
+
+	return kuebel_vorschlag([z["artikel"] for z in zutaten if z["stufe"] == "Grundteig"])
 
 
 @frappe.whitelist()
@@ -719,6 +727,17 @@ def herstellen(
 	if palette:
 		paletten._offen(palette)
 
+	# Kneter an der Linie: der veredelte Teig geht direkt in den Former, also auf die Linie zum laufenden Auftrag
+	linien_auftrag, ziel_lager = None, None
+	if s.f_linie:
+		from keks_trace import linienbuchung
+
+		linien_auftrag = linienbuchung._laufender(s)
+		if ziel not in linienbuchung.linienrezept(linien_auftrag.artikel):
+			_fehler(_("{0} gehört nicht zu {1}.").format(r["name"], linien_auftrag.artikelname))
+		ziel_lager = frappe.get_cached_value("Linie", s.linie, "lagerort")
+		behaelter = None
+
 	if r["stufe"] == "Fertigware" and los_modul.format_() == "JWWT":
 		charge, _los, _neu = los_modul.tages_charge(ziel, nowdate())
 	else:
@@ -726,7 +745,7 @@ def herstellen(
 	jetzt = now_datetime()
 	ausgabe = _se_zeile(
 		{"artikel": ziel, "charge": charge, "menge": ausbringung, "behaelter": behaelter},
-		t_warehouse=_ziel_lager(s, ziel),
+		t_warehouse=ziel_lager or _ziel_lager(s, ziel),
 	)
 	ausgabe["is_finished_item"] = 1
 	se = frappe.get_doc(
@@ -740,6 +759,7 @@ def herstellen(
 			"posting_time": jetzt.time().strftime("%H:%M:%S"),
 			"kt_station": s.name,
 			"kt_kundenauftrag": kundenauftrag,
+			"kt_produktionsauftrag": linien_auftrag.name if linien_auftrag else None,
 			"items": [_se_zeile(z, s_warehouse=z["lager"]) for z in eingaenge] + [ausgabe],
 		}
 	)

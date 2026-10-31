@@ -405,7 +405,7 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 	if not any(artikel_stufe(a) != "Packmittel" for a, _c, _m in zeilen):
 		_fehler(
 			_(
-				"Für Auftrag {0} ist noch nichts auf der Linie gebucht. Erst am Former die Kübel scannen."
+				"Für Auftrag {0} ist noch nichts auf der Linie gebucht. Erst am Kneter die Kübel scannen."
 			).format(pa.name)
 		)
 

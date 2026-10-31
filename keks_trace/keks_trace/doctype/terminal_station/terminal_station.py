@@ -15,6 +15,7 @@ VORLAGEN = {
 	"Herzen Verpackung": ({"f_herstellen", "f_paletten", "f_rework"}, ["Fertigware"]),
 	"Lagerverkauf": ({"f_umlagern"}, []),
 	"Former": ({"f_linie"}, []),
+	"Kneter": ({"f_herstellen", "f_linie"}, ["Teig veredelt"]),
 	"Nachfüllen": ({"f_linie"}, []),
 	"Packstation": ({"f_packstation"}, []),
 	"Paletten-Terminal": ({"f_palette_fertig", "f_paletten"}, ["Fertigware"]),

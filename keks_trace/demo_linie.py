@@ -57,6 +57,7 @@ LEISTUNG = {
 }
 
 STATIONEN = [
+	("Kneter", "Kneter"),
 	("Former", "Former"),
 	("Nachfüllen Füllung", "Nachfüllen"),
 	("Nachfüllen Glasur", "Nachfüllen"),
@@ -122,7 +123,7 @@ def stammdaten() -> frappe._dict:
 					"reihenfolge": i,
 				}
 			).insert()
-	for artikel in ("17846", "17847", "5888-LOSE"):
+	for artikel in ("17846", "17847", "5888-LOSE", "5888"):
 		frappe.db.set_value("Item", artikel, "kt_linie", LINIE)
 	for anlage in METALLCHECK_ANLAGEN:
 		titel = f"Metallcheck {anlage}"
@@ -218,10 +219,13 @@ def grossauftraege(ctx) -> list[str]:
 	return namen
 
 
-def kuebel_fuellen(ctx, anzahl: int = 6):
-	"""Anfangsbestand: veredelter Honigteig 5888 in Kübeln, unterschiedlich alt (für „ältester zuerst“)."""
+def kuebel_fuellen(ctx, anzahl: int = 8):
+	"""Anfangsbestand: Grundteig Honig 5812 in Kübeln, unterschiedlich alt (Lagerteig, bis 1 Jahr).
+
+	Am Kneter kommen ein oder zwei Kübel ganz hinein, der älteste wird vorgeschlagen.
+	"""
 	belegt = frappe.db.count(
-		"Produkttraeger", {"status": "Belegt", "artikel": "5888", "code": ["like", "K-%"]}
+		"Produkttraeger", {"status": "Belegt", "artikel": "5812", "code": ["like", "K-%"]}
 	)
 	frei = frappe.get_all(
 		"Produkttraeger",
@@ -231,12 +235,12 @@ def kuebel_fuellen(ctx, anzahl: int = 6):
 	)
 	fehlen = max(anzahl - belegt, 0)  # erneuter Lauf füllt nur auf
 	for i, code in enumerate(frei[:fehlen]):
-		tag = add_days(nowdate(), -(fehlen - i) // 3)
-		name = f"5888-{getdate(tag).strftime('%y%m%d')}-{code}"
+		tag = add_days(nowdate(), -20 * (fehlen - i))
+		name = f"5812-{getdate(tag).strftime('%y%m%d')}-{code}"
 		if frappe.db.exists("Batch", name):
 			name += "-" + frappe.generate_hash(length=3).upper()
-		charge = demo.neue_charge("5888", name, tag)
-		demo.buchen(ctx, "Material Receipt", tag, "05:00:00", ausgaenge=[("5888", charge, 200, code)])
+		charge = demo.neue_charge("5812", name, tag)
+		demo.buchen(ctx, "Material Receipt", tag, "05:00:00", ausgaenge=[("5812", charge, 200, code)])
 
 
 @frappe.whitelist()
