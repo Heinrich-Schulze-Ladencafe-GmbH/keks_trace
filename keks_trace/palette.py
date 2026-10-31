@@ -73,7 +73,7 @@ def zerlegen(artikel: str, menge: float) -> str:
 	stufen = [e for e in einheiten(artikel, alle=True) if e["einheit"] != "Lage"]
 	if menge <= EPS:
 		zaehl = [e["einheit"] for e in stufen if e["einheit"] not in NUR_ANZEIGE]
-		return "0 " + zaehl[0]
+		return "0 " + ANZEIGE.get(zaehl[0], zaehl[0])
 	teile = []
 	for i, e in enumerate(stufen):
 		letzte = i == len(stufen) - 1 or (stufen[i + 1]["faktor"] == 1 and e["faktor"] != 1)
@@ -89,13 +89,18 @@ def zerlegen(artikel: str, menge: float) -> str:
 		if menge <= 1e-6:
 			break
 	if not teile:
-		return "0 " + next(e["einheit"] for e in stufen if e["einheit"] not in NUR_ANZEIGE)
+		erste = next(e["einheit"] for e in stufen if e["einheit"] not in NUR_ANZEIGE)
+		return "0 " + ANZEIGE.get(erste, erste)
 	return " + ".join(teile)
+
+
+ANZEIGE = {"Nos": "Stk", "Kg": "kg"}
 
 
 def _n(n, einheit):
 	mehrzahl = {"Palette": "Paletten", "Lage": "Lagen"}
-	text = f"{flt(n, 3):g}".replace(".", ",")
+	einheit = ANZEIGE.get(einheit, einheit)
+	text = f"{flt(n, 3):,.3f}".rstrip("0").rstrip(".").replace(",", "_").replace(".", ",").replace("_", ".")
 	return f"{text} {mehrzahl.get(einheit, einheit) if flt(n) != 1 else einheit}"
 
 
