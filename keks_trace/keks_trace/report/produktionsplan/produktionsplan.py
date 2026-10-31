@@ -45,7 +45,7 @@ def execute(filters=None):
 
 def _spalten():
 	return [
-		{"fieldname": "datum", "label": _("Tag"), "fieldtype": "Date", "width": 100},
+		{"fieldname": "datum", "label": _("Produktionstag"), "fieldtype": "Date", "width": 110},
 		{"fieldname": "reihenfolge", "label": _("Nr."), "fieldtype": "Int", "width": 50},
 		{
 			"fieldname": "name",

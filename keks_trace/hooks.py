@@ -23,6 +23,8 @@ required_apps = ["erpnext"]
 after_install = "keks_trace.install.after_install"
 after_migrate = "keks_trace.install.after_migrate"
 
+doctype_js = {"Batch": "public/js/batch.js"}
+
 doc_events = {
 	"Stock Entry": {
 		# Läuft VOR der ERPNext-Prüfung, damit Bediener klare deutsche Meldungen sehen:
