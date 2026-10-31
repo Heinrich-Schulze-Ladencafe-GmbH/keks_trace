@@ -969,3 +969,39 @@ def _ausgabe(c):
 	for code in (c.tb1, c.tb2, c.tb3, c.tb4, c.rb1, c.rb2, c.kl1, c.kl2, c.kl3):
 		t = frappe.db.get_value("Produkttraeger", code, ["status", "charge", "menge"], as_dict=True)
 		print(f"  {code:<20} {t.status:<8} {t.charge or '':<20} {flt(t.menge):g} kg")
+
+
+@frappe.whitelist()
+def lagerware() -> dict:
+	"""Demo zum Umlagern: Honig Lebkuchen in drei Losen im Fertigwarenlager, eins davon auf einer Palette.
+
+	bench --site keks.localhost execute keks_trace.demo.lagerware
+	"""
+	from frappe.utils import add_days, add_months, getdate, nowdate
+
+	from keks_trace import los as los_modul
+	from keks_trace import palette as paletten
+	from keks_trace import pilot
+
+	ctx = pilot.anlegen()
+	ergebnis = []
+	for tage, kartons, auf_palette in ((60, 30, 0), (30, 42, 42), (7, 25, 0)):
+		tag = getdate(add_days(nowdate(), -tage))
+		los = los_modul.jwwt(tag)
+		name = f"17846-{tag.isocalendar()[0]}-{los}"
+		if not frappe.db.exists("Batch", name):
+			charge = neue_charge("17846", name, tag)
+			frappe.db.set_value(
+				"Batch",
+				charge,
+				{"kt_los": los, "expiry_date": add_months(tag, 9), "kt_status": "Freigegeben"},
+			)
+			buchen(ctx, "Material Receipt", tag, "14:00:00", ausgaenge=[("17846", charge, kartons * 4.0)])
+			if auf_palette:
+				p = paletten.anlegen("Lagerpalette", "Lager")
+				paletten.beladen(p, charge, auf_palette, "Karton", "Lager")
+		ergebnis.append({"los": los, "charge": name, "kartons": kartons})
+	frappe.db.commit()
+	for e in ergebnis:
+		print(f"Los {e['los']} ({e['charge']}): {e['kartons']} Karton")
+	return {"lose": ergebnis}

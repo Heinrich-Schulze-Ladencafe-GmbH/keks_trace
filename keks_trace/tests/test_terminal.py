@@ -524,6 +524,19 @@ class TestTerminal(IntegrationTestCase):
 		self.assertEqual(getdate(frappe.db.get_value("Batch", lang["charge"], "expiry_date")), voll)
 		self.assertTrue(any("geht nicht" in x for x in lang["hinweise"]))
 
+	def test_19d_ohne_scanner_los_buchung_liste(self):
+		"""Ohne Scanner: Buchungsnummer oder aufgedrucktes Los eintippen, oder aus der Liste wählen."""
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
+		e = self._verpacken(6)
+		self.assertEqual(terminal.aufloesen(e["buchung"])["charge"], e["charge"])
+		frappe.db.set_value("Batch", e["charge"], "kt_los", f"X{_hash()}")
+		los = frappe.db.get_value("Batch", e["charge"], "kt_los")
+		self.assertEqual(terminal.aufloesen(los)["charge"], e["charge"])
+		liste = terminal.fertigware_im_lager("Lager")
+		self.assertIn(e["charge"], {z["charge"] for z in liste})
+		u = terminal.umlagern("Lager", code=los, anzahl=2, einheit="Karton", nach=self.ctx.verkauf)
+		self.assertEqual(u["nach"], self.ctx.verkauf)
+
 	def test_19b_umlagern_zwischen_lagern(self):
 		"""Mehrere Lager: am Lager wird das Ziel gewählt, z. B. Außenlager und später Lagerverkauf."""
 		abbr = frappe.get_cached_value("Company", self.ctx.company, "abbr")

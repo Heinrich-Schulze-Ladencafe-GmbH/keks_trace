@@ -202,6 +202,47 @@ def _kuebel_fuer(zutaten) -> list[dict]:
 
 
 @frappe.whitelist()
+def fertigware_im_lager(station: str) -> list[dict]:
+	"""Fertigware mit Bestand im Lager (ohne Lagerverkauf), je Los lose und je Palette: zum Antippen."""
+	_station(station)
+	aus = list(_verkaufslager()) or [""]
+	zeilen = frappe.db.sql(
+		"""
+		select sbe.batch_no as charge, b.item as artikel, b.item_name as name, b.kt_los as los,
+			b.expiry_date as mhd, sum(sbe.qty) as menge
+		from `tabSerial and Batch Entry` sbe
+		join `tabSerial and Batch Bundle` sbb on sbb.name = sbe.parent
+		join `tabBatch` b on b.name = sbe.batch_no
+		where sbb.is_cancelled = 0 and sbb.docstatus = 1 and b.kt_chargen_stufe = 'Fertigware'
+			and ifnull(b.kt_status, '') != 'Gesperrt' and sbe.warehouse not in %(aus)s
+		group by sbe.batch_no, b.item, b.item_name, b.kt_los, b.expiry_date
+		having sum(sbe.qty) > 0.0001
+		order by b.item_name, b.expiry_date, b.creation
+		limit 300
+		""",
+		{"aus": tuple(aus)},
+		as_dict=True,
+	)
+	auf_pal = {}
+	for p in paletten.paletten_fuer([z.charge for z in zeilen]):
+		if p.anzahl_jetzt > EPS and p.status in paletten.AKTIV:
+			auf_pal.setdefault(p.charge, []).append(p)
+	ergebnis = []
+	for z in zeilen:
+		basis = {"artikel": z.artikel, "name": z.name, "charge": z.charge, "los": z.los or z.charge,
+		         "mhd": formatdate(z.mhd) if z.mhd else ""}  # fmt: skip
+		lose = paletten.lose(z.charge)
+		if lose > EPS:
+			ergebnis.append({**basis, "wo": "lose", "menge_text": paletten.zerlegen(z.artikel, lose)})
+		for p in auf_pal.get(z.charge, []):
+			ergebnis.append(
+				{**basis, "wo": "Palette …" + p.palette[-6:], "palette": p.palette,
+				 "menge_text": paletten._n(p.anzahl_jetzt, p.einheit)}
+			)  # fmt: skip
+	return ergebnis
+
+
+@frappe.whitelist()
 def registrierungen(
 	station: str, kundenauftrag: str | None = None, produktionsauftrag: str | None = None, anzahl: int = 30
 ) -> list[dict]:
@@ -550,7 +591,48 @@ def aufloesen(code: str) -> dict:
 			"inhalt": flt(sum(lager.values()), 3),
 		}
 
-	_fehler(_("Code {0} ist unbekannt (kein Behälter, Silo, Palette oder Charge).").format(frappe.bold(code)))
+	# Ohne Scanner: aufgedruckte Los-Nummer oder Buchungsnummer (MAT-STE-...) eingetippt
+	charge = _charge_aus_los_oder_buchung(code)
+	if charge:
+		return aufloesen(charge)
+
+	_fehler(
+		_("Code {0} ist unbekannt (kein Behälter, Silo, Palette, Charge, Los oder Buchungsnummer).").format(
+			frappe.bold(code)
+		)
+	)
+
+
+def _charge_aus_los_oder_buchung(code: str) -> str | None:
+	"""Los-Nummer (Aufdruck) bzw. Buchungsnummer in die Charge übersetzen; bei mehreren: Rückfrage."""
+	if frappe.db.exists("Stock Entry", code):
+		chargen = frappe.get_all(
+			"Stock Entry Detail",
+			filters={"parent": code, "is_finished_item": 1, "batch_no": ["is", "set"]},
+			pluck="batch_no",
+		)
+		if not chargen:
+			_fehler(_("In Buchung {0} ist keine neue Charge entstanden.").format(code))
+		chargen = list(dict.fromkeys(chargen))
+		if len(chargen) > 1:
+			_fehler(_("In Buchung {0} sind mehrere Chargen entstanden: {1}").format(code, ", ".join(chargen)))
+		return chargen[0]
+	chargen = [
+		b.name
+		for b in frappe.get_all("Batch", filters={"kt_los": code}, fields=["name"], order_by="creation desc")
+		if charge_lager(b.name)
+	]
+	if len(chargen) > 1:
+		texte = [
+			f"{c} ({frappe.get_cached_value('Item', frappe.db.get_value('Batch', c, 'item'), 'item_name')})"
+			for c in chargen[:6]
+		]
+		_fehler(
+			_("Los {0} gibt es bei mehreren Artikeln: {1}. Bitte die Charge wählen.").format(
+				code, ", ".join(texte)
+			)
+		)
+	return chargen[0] if chargen else None
 
 
 @frappe.whitelist()
