@@ -181,6 +181,8 @@ def sperrende_faelle(station: str) -> list[str]:
 
 
 def pruefe_station_frei(station: str):
+	if not frappe.db.get_single_value("Keks Trace Einstellungen", "pruefung_sperrt"):
+		return  # vorerst nur Anzeige (rot im Terminal), keine Sperre
 	offen = sperrende_faelle(station)
 	if offen:
 		_fehler(

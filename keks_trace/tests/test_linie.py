@@ -77,6 +77,8 @@ class TestLinie(IntegrationTestCase):
 		nve = terminal.palette_neu("Paletten-Terminal")["nve"]
 		# Metallcheck der Anlage (InoTec) ist fällig: erst prüfen, dann buchen
 		demo.pruefungen_altern("Metallcheck InoTec", "Metallcheck Thürlings")
+		frappe.db.set_single_value("Keks Trace Einstellungen", "pruefung_sperrt", 1)
+		self.addCleanup(frappe.db.set_single_value, "Keks Trace Einstellungen", "pruefung_sperrt", 0)
 		faellig = [f["titel"] for f in pruefung.faellig("Paletten-Terminal") if f["faellig"]]
 		self.assertIn("Metallcheck InoTec", faellig)
 		self.assertNotIn("Metallcheck Thürlings", faellig)

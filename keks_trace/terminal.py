@@ -230,9 +230,17 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 		"stufe": artikel_stufe(artikel),
 		"bom": bom,
 		"sollmenge": flt(menge or b.quantity, 3),
-		# Ausbeute nur über Zutaten in der Einheit des Produkts (kg); Packmittel in Stück zählen nicht
+		# Ausbeute nur über Zutaten in der Einheit des Produkts, ohne Packmittel (Herz in Stück:
+		# 1 garniertes Herz + Folie + Etikett + Schleife = 1 Herz, nicht 4)
 		"ausbeute": flt(b.quantity)
-		/ (sum(flt(z.stock_qty or z.qty) for z in b.items if (z.stock_uom or z.uom) == b.uom) or 1),
+		/ (
+			sum(
+				flt(z.stock_qty or z.qty)
+				for z in b.items
+				if (z.stock_uom or z.uom) == b.uom and artikel_stufe(z.item_code) != "Packmittel"
+			)
+			or 1
+		),
 		"einheit": b.uom,
 		"zutaten": zutaten,
 		"rework_moeglich": artikel_stufe(artikel) in REWORK_ZIELE,
@@ -1090,7 +1098,11 @@ def herstellen(
 	pruef_ergebnisse = pruefung.bei_buchung(pruefung.HERSTELLEN, ziel, pruefwerte, s.name)
 	pruefung.verweigern_herstellen(pruef_ergebnisse, s.name, _("Herstellen {0}").format(r["name"]))
 
-	summe = sum(z["menge"] for z in eingaenge if z.get("einheit", r["einheit"]) == r["einheit"])
+	summe = sum(
+		z["menge"]
+		for z in eingaenge
+		if z.get("einheit", r["einheit"]) == r["einheit"] and artikel_stufe(z["artikel"]) != "Packmittel"
+	)
 	if flt(anzahl) > EPS and einheit:
 		ausbringung = flt(flt(anzahl) * paletten.faktor(ziel, einheit), 6)
 	else:

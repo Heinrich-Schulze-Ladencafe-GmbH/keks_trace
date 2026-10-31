@@ -608,6 +608,8 @@ class TestTerminal(IntegrationTestCase):
 	# ------------------------------------------------------------------ Prüfungen (CP/CCP)
 	def test_20_ueberfaellige_ccp_sperrt_station(self):
 		demo.pruefungen_altern("Metalldetektor Herzenboden")
+		frappe.db.set_single_value("Keks Trace Einstellungen", "pruefung_sperrt", 1)
+		self.addCleanup(frappe.db.set_single_value, "Keks Trace Einstellungen", "pruefung_sperrt", 0)
 		with self.assertRaisesRegex(pruefung.PruefFehler, "Metalldetektor Herzenboden"):
 			pruefung.pruefe_station_frei("Herzen Verpackung")
 		demo.metalldetektor_ok("Herzen Verpackung")
@@ -632,7 +634,9 @@ class TestTerminal(IntegrationTestCase):
 		self.assertEqual(
 			frappe.db.get_value("Pruefung", r["pruefung"], ["ergebnis", "lenkung"]), ("Abweichung", "CCP")
 		)
-		# Bis zur bestandenen Prüfung ist die Verpackung gesperrt
+		# Bis zur bestandenen Prüfung ist die Verpackung gesperrt (wenn die Sperre eingeschaltet ist)
+		frappe.db.set_single_value("Keks Trace Einstellungen", "pruefung_sperrt", 1)
+		self.addCleanup(frappe.db.set_single_value, "Keks Trace Einstellungen", "pruefung_sperrt", 0)
 		with self.assertRaises(pruefung.PruefFehler):
 			self._verpacken(1)
 		demo.metalldetektor_ok("Verpackung")

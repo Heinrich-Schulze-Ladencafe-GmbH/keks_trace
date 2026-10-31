@@ -1019,7 +1019,8 @@
 
 	function ansatzAbschluss() {
 		const r = ansatz.rezept;
-		const summe = ansatz.zeilen.filter((z) => !z.einheit || z.einheit === (r.einheit || "Kg")).reduce((s, z) => s + z.menge, 0);
+		const packmittel = new Set(r.zutaten.filter((z) => z.stufe === "Packmittel").map((z) => z.artikel));
+		const summe = ansatz.zeilen.filter((z) => (!z.einheit || z.einheit === (r.einheit || "Kg")) && !packmittel.has(z.artikel)).reduce((s, z) => s + z.menge, 0);
 		const zaehlen = r.einheiten && r.einheiten.length > 1;
 		let einheit = ansatz.einheit || (zaehlen ? r.einheiten[0].einheit : null);
 		const kgVorschlag = rund(summe * r.ausbeute);

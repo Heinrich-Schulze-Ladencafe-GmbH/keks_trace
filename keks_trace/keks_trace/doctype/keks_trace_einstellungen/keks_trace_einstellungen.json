@@ -16,7 +16,9 @@
   "section_los",
   "los_format",
   "section_bio",
-  "oeko_kontrollnummer"
+  "oeko_kontrollnummer",
+  "section_pruefung",
+  "pruefung_sperrt"
  ],
  "fields": [
   {
@@ -81,6 +83,18 @@
    "fieldtype": "Data",
    "label": "Öko-Kontrollnummer",
    "description": "Code der eigenen Öko-Kontrollstelle, z. B. DE-ÖKO-0xx. Steht auf Etiketten von Bio-Ware."
+  },
+  {
+   "fieldname": "section_pruefung",
+   "fieldtype": "Section Break",
+   "label": "Prüfungen"
+  },
+  {
+   "fieldname": "pruefung_sperrt",
+   "fieldtype": "Check",
+   "label": "Fällige Prüfungen sperren das Buchen",
+   "default": "0",
+   "description": "An: Ist eine Prüfung mit „Sperrt, wenn fällig“ (z. B. Metallcheck) überfällig, kann an der Station nicht gebucht werden, bis sie erfasst ist. Aus: Das Terminal zeigt sie nur rot an."
   }
  ],
  "index_web_pages_for_search": 0,
