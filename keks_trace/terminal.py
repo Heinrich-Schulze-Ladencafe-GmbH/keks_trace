@@ -252,25 +252,29 @@ def _kuebel_fuer(zutaten) -> list[dict]:
 
 
 @frappe.whitelist()
-def fertigware_im_lager(station: str) -> list[dict]:
-	"""Fertigware mit Bestand im Lager (ohne Lagerverkauf), je Los lose und je Palette: zum Antippen."""
+def fertigware_im_lager(station: str, aus_verkauf: int = 0) -> list[dict]:
+	"""Fertigware mit Bestand im Lager (ohne Lagerverkauf), je Los lose und je Palette: zum Antippen.
+
+	aus_verkauf=1: was im Lagerverkauf liegt (für die Rücknahme ins Lager).
+	"""
 	_station(station)
-	aus = list(_verkaufslager()) or [""]
+	verkauf = list(_verkaufslager()) or [""]
+	bedingung = "sbe.warehouse in %(v)s" if cint(aus_verkauf) else "sbe.warehouse not in %(v)s"
 	zeilen = frappe.db.sql(
-		"""
+		f"""
 		select sbe.batch_no as charge, b.item as artikel, b.item_name as name, b.kt_los as los,
 			b.expiry_date as mhd, sum(sbe.qty) as menge
 		from `tabSerial and Batch Entry` sbe
 		join `tabSerial and Batch Bundle` sbb on sbb.name = sbe.parent
 		join `tabBatch` b on b.name = sbe.batch_no
 		where sbb.is_cancelled = 0 and sbb.docstatus = 1 and b.kt_chargen_stufe = 'Fertigware'
-			and ifnull(b.kt_status, '') != 'Gesperrt' and sbe.warehouse not in %(aus)s
+			and ifnull(b.kt_status, '') != 'Gesperrt' and {bedingung}
 		group by sbe.batch_no, b.item, b.item_name, b.kt_los, b.expiry_date
 		having sum(sbe.qty) > 0.0001
 		order by b.item_name, b.expiry_date, b.creation
 		limit 300
 		""",
-		{"aus": tuple(aus)},
+		{"v": tuple(verkauf)},
 		as_dict=True,
 	)
 	auf_pal = {}
@@ -1310,7 +1314,7 @@ def wareneingang(
 	}
 
 
-def _lieferpositionen(z):
+def _lieferpositionen(z, aus_verkauf=False):
 	"""Eine Lieferzeile vom Terminal in Positionen auflösen.
 
 	{"palette": NVE, "ganz": 1}                          ganze Palette
@@ -1327,7 +1331,7 @@ def _lieferpositionen(z):
 		pos = paletten.inhalt(nve)
 		if not pos:
 			_fehler(_("Palette {0} ist leer.").format(nve))
-		return [_lieferposition(p["charge"], p["anzahl"], p["einheit"], nve) for p in pos]
+		return [_lieferposition(p["charge"], p["anzahl"], p["einheit"], nve, aus_verkauf) for p in pos]
 	if z.get("palette"):
 		nve = paletten.finde(z["palette"])
 		pos = paletten._position(nve, z.get("charge"), z.get("einheit")) if nve else None
@@ -1337,10 +1341,10 @@ def _lieferpositionen(z):
 					z["palette"], z.get("charge"), flt(pos["anzahl"]) if pos else 0, z.get("einheit")
 				)
 			)
-		return [_lieferposition(z["charge"], z["anzahl"], z["einheit"], nve)]
+		return [_lieferposition(z["charge"], z["anzahl"], z["einheit"], nve, aus_verkauf)]
 	r = aufloesen(z.get("code"))
 	if r["typ"] == "palette":
-		return _lieferpositionen({"palette": r["palette"], "ganz": 1})
+		return _lieferpositionen({"palette": r["palette"], "ganz": 1}, aus_verkauf)
 	if r["typ"] != "charge":
 		_fehler(_("Bitte ein Los oder eine Palette scannen."))
 	anzahl = flt(z.get("anzahl") if z.get("anzahl") is not None else z.get("menge"))
@@ -1353,7 +1357,7 @@ def _lieferpositionen(z):
 				"Von Los {0} sind nur {1} {2} lose. Der Rest steht auf Paletten: bitte die Palette scannen."
 			).format(r["charge"], paletten._anzahl_text(r["artikel"], frei, einheit), einheit)
 		)
-	return [_lieferposition(r["charge"], anzahl, einheit, None)]
+	return [_lieferposition(r["charge"], anzahl, einheit, None, aus_verkauf)]
 
 
 def _verkaufslager() -> set:
@@ -1372,16 +1376,25 @@ def umlager_ziele(station: str) -> list[dict]:
 		order_by="kt_lagerverkauf desc, warehouse_name",
 	)
 	if s.umlager_ziel:
-		return [
+		fest = [
 			{
 				"name": s.umlager_ziel,
 				"titel": frappe.get_cached_value("Warehouse", s.umlager_ziel, "warehouse_name"),
+				"lagerverkauf": int(s.umlager_ziel in _verkaufslager()),
 			}
+		]
+		if not fest[0]["lagerverkauf"]:
+			return fest
+		# Am Lagerverkauf: auch zurück ins Lager (Rücknahme, z. B. zu viel geholt)
+		return fest + [
+			{"name": z.name, "titel": z.warehouse_name, "lagerverkauf": 0, "zurueck": 1}
+			for z in ziele
+			if not z.kt_lagerverkauf
 		]
 	return [{"name": z.name, "titel": z.warehouse_name, "lagerverkauf": z.kt_lagerverkauf} for z in ziele]
 
 
-def _lieferposition(charge, anzahl, einheit, palette):
+def _lieferposition(charge, anzahl, einheit, palette, aus_verkauf=False):
 	artikel = frappe.db.get_value("Batch", charge, "item")
 	if artikel_stufe(artikel) != "Fertigware":
 		_fehler(_("{0} ist keine Fertigware.").format(frappe.get_cached_value("Item", artikel, "item_name")))
@@ -1389,9 +1402,15 @@ def _lieferposition(charge, anzahl, einheit, palette):
 		_fehler(_("Bitte eine Anzahl größer 0 eingeben."))
 	_pruefe_charge(charge, artikel)
 	f = paletten.faktor(artikel, einheit)
-	lager = {w: m for w, m in charge_lager(charge).items() if w not in _verkaufslager()}
+	verkauf = _verkaufslager()
+	# Rücknahme aus dem Lagerverkauf: nur Bestand dort; sonst nie aus dem Lagerverkauf
+	lager = {w: m for w, m in charge_lager(charge).items() if (w in verkauf) == bool(aus_verkauf)}
 	if not lager:
-		_fehler(_("Los {0} hat keinen Bestand im Lager.").format(charge))
+		_fehler(
+			_("Los {0} hat keinen Bestand im {1}.").format(
+				charge, _("Lagerverkauf") if aus_verkauf else _("Lager")
+			)
+		)
 	if flt(anzahl) * f > max(lager.values()) + 1e-4:
 		_fehler(
 			_("Von Los {0} sind im Lager nur {1} {2}.").format(
@@ -1537,11 +1556,13 @@ def umlagern(
 	s = _station(station)
 	_darf(s, "umlagern")
 	erlaubt = {z["name"] for z in umlager_ziele(s.name)}
-	ziel = s.umlager_ziel or nach
+	ziel = nach or s.umlager_ziel
 	if not ziel:
 		_fehler(_("Bitte wählen, wohin umgelagert wird."))
 	if ziel not in erlaubt:
 		_fehler(_("Nach {0} kann an der Station {1} nicht umgelagert werden.").format(ziel, s.name))
+	verkauf = _verkaufslager()
+	aus_verkauf = ziel not in verkauf and s.umlager_ziel in verkauf
 	positionen = _lieferpositionen(
 		{
 			"code": code,
@@ -1550,7 +1571,8 @@ def umlagern(
 			"palette": palette,
 			"charge": charge,
 			"ganz": cint(ganz),
-		}
+		},
+		aus_verkauf,
 	)
 	for p in positionen:
 		if p["lager"] == ziel:

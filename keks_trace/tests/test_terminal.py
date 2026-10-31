@@ -556,6 +556,26 @@ class TestTerminal(IntegrationTestCase):
 		terminal.umlagern("Lager", code=e["charge"], anzahl=2, einheit="Karton", nach=self.ctx.verkauf)
 		self.assertTrue(terminal.charge_lager(e["charge"]).get(self.ctx.verkauf))
 
+	def test_19f_ruecknahme_aus_dem_lagerverkauf(self):
+		"""Zu viel in den Lagerverkauf geholt: am Lagerverkauf-Terminal zurück ins Lager."""
+		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
+		abbr = frappe.get_cached_value("Company", self.ctx.company, "abbr")
+		fertig = f"Finished Goods - {abbr}"
+		e = self._verpacken(5)
+		terminal.umlagern("Lagerverkauf", code=e["charge"], anzahl=3, einheit="Karton")
+		ziele = terminal.umlager_ziele("Lagerverkauf")
+		self.assertEqual(ziele[0]["name"], self.ctx.verkauf)
+		self.assertIn(fertig, {z["name"] for z in ziele if z.get("zurueck")})
+		self.assertIn(
+			e["charge"], {z["charge"] for z in terminal.fertigware_im_lager("Lagerverkauf", aus_verkauf=1)}
+		)
+		u = terminal.umlagern("Lagerverkauf", code=e["charge"], anzahl=1, einheit="Karton", nach=fertig)
+		self.assertEqual(u["nach"], fertig)
+		lager = terminal.charge_lager(e["charge"])
+		self.assertAlmostEqual(lager[self.ctx.verkauf], 2 * 2.4)
+		with self.assertRaisesRegex(TerminalFehler, "nur"):
+			terminal.umlagern("Lagerverkauf", code=e["charge"], anzahl=5, einheit="Karton", nach=fertig)
+
 	def test_19e_kopfdaten_statusleiste(self):
 		d = terminal.kopfdaten("Herzen Verpackung")
 		self.assertTrue(d["zeit"] and d["datum_text"] and d["kw"])

@@ -515,7 +515,7 @@
 		else if (f.includes("herstellen")) m.push(["herstellen", fw ? "Verpacken" : "Herstellen", fw ? "Los mit MHD, nach Kundenauftrag, auf Palette" : (zustand.stufen || []).join(", ")]);
 		if (f.includes("wareneingang")) m.push(["wareneingang", "Wareneingang", "Anlieferung buchen, ins Silo oder als Gebinde"]);
 		if (f.includes("lieferung")) m.push(["lieferung", "Lieferung", "Paletten und Kartons an einen Kunden"]);
-		if (f.includes("umlagern")) m.push(["umlagern", "Umlagern", zustand.umlager_ziel ? "nach " + zustand.umlager_ziel : "in ein anderes Lager"]);
+		if (f.includes("umlagern")) m.push(["umlagern", "Umlagern", zustand.umlager_ziel ? "in den Lagerverkauf oder zurück ins Lager" : "in ein anderes Lager oder in den Lagerverkauf"]);
 		if (f.includes("paletten")) m.push(["paletten", "Paletten", "Neue Palette, Etikett, anbrechen, umpacken"]);
 		if (f.includes("rework")) m.push(["rework", fw ? "Packbruch" : "Rework / Bruch", "In einen Rework-Behälter"]);
 		if (zustand.vorraete) m.push(["anbrechen", "Karton anbrechen", "Neue Rolle / neuer Karton an den Tisch (Folie, Etikett, Schleife)"]);
@@ -1429,12 +1429,14 @@
 	// ------------------------------------------------------------------ Umlagern
 	let umgelagert = [];
 	let umlagerNach = null;
+	let umlagerZiele = [];
 	async function umlagernStart(hinweis) {
-		if (!zustand.umlager_ziel && !umlagerNach) return umlagerZielWaehlen();
-		const nach = zustand.umlager_ziel || umlagerNach.name;
-		const titel = zustand.umlager_ziel || umlagerNach.titel;
-		app.innerHTML = kopf("Umlagern nach " + titel, true) +
-			(zustand.umlager_ziel ? "" : `<div class="reihe"><button class="knopf" data-a="ziel-wechseln">Anderes Ziel wählen</button></div>`) +
+		if (!umlagerNach) return umlagerZielWaehlen();
+		const nach = umlagerNach.name;
+		const zurueck = !!umlagerNach.zurueck;
+		const titel = (zurueck ? "Zurück ins " : "Umlagern nach ") + umlagerNach.titel;
+		app.innerHTML = kopf(titel, true) +
+			(umlagerZiele.length > 1 ? `<div class="reihe"><button class="knopf" data-a="ziel-wechseln">Anderes Ziel wählen</button></div>` : "") +
 			textFeld("scan", "Palette oder Los scannen – oder Los-Nummer eintippen") +
 			`<div class="reihe"><button class="knopf blau" data-a="liste">Ohne Scanner: aus der Liste wählen</button></div>` +
 			(umgelagert.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Heute hier umgelagert</div>${umgelagert.map((x) =>
@@ -1454,11 +1456,11 @@
 		};
 		// Schritt für Schritt ohne Scanner: Fertigware im Lager antippen (Artikel suchen, Los, lose oder Palette)
 		async function umlagernListe() {
-			app.innerHTML = kopf("Umlagern nach " + titel + ": was?", true) +
+			app.innerHTML = kopf(titel + ": was?", true) +
 				`<p>1. Zeile antippen (oben suchen: Artikel, Los) · 2. Anzahl eingeben · 3. OK</p><div id="ware">Lädt …</div>`;
 			aktionen((a) => (a === "zurueck" ? umlagernStart() : beiAllgemein(a)));
 			try {
-				const liste = await api("fertigware_im_lager", { station: zustand.station });
+				const liste = await api("fertigware_im_lager", { station: zustand.station, aus_verkauf: zurueck ? 1 : 0 });
 				const el = document.getElementById("ware");
 				if (!liste.length) { el.innerHTML = `<p class="fehlt">Keine Fertigware im Lager.</p>`; return; }
 				el.innerHTML = tabelle([["Artikel", "artikel"], ["Bezeichnung", "name"], ["Los", "los"], ["MHD", "mhd"], ["Wo", "wo"], ["Bestand", "menge_text", 1]], liste, "ware");
@@ -1515,9 +1517,11 @@
 		aktionen(beiAllgemein);
 		try {
 			const ziele = await api("umlager_ziele", { station: zustand.station });
+			umlagerZiele = ziele;
 			if (!ziele.length) throw new Error("Es ist noch kein Lagerort als Umlager-Ziel eingerichtet.");
+			if (ziele.length === 1) { umlagerNach = ziele[0]; return umlagernStart(); }
 			document.getElementById("liste").innerHTML = ziele.map((z, i) =>
-				`<button class="knopf${z.lagerverkauf ? " gruen" : ""}" data-a="ziel" data-i="${i}">${esc(z.titel)}${z.lagerverkauf ? "<br><small>Lagerverkauf</small>" : ""}</button>`).join("");
+				`<button class="knopf${z.lagerverkauf ? " gruen" : ""}" data-a="ziel" data-i="${i}">${z.zurueck ? "Zurück ins " : ""}${esc(z.titel)}${z.lagerverkauf ? "<br><small>Lagerverkauf</small>" : z.zurueck ? "<br><small>Rücknahme aus dem Lagerverkauf</small>" : ""}</button>`).join("");
 			aktionen((a, d) => {
 				if (a === "ziel") { umlagerNach = ziele[+d.i]; return umlagernStart(); }
 				beiAllgemein(a);
@@ -1637,6 +1641,7 @@
 			zustand.stufen = s.stufen;
 			zustand.nur_fertigware = s.nur_fertigware;
 			zustand.umlager_ziel = s.umlager_ziel;
+			umlagerNach = null;
 			zustand.vorraete = s.vorraete;
 			startseite();
 		} catch (e) {

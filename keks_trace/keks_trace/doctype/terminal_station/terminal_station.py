@@ -5,7 +5,7 @@ from frappe.model.document import Document
 # Vorlagen je Typ: Funktionen und herstellbare Stufen. Anpassbar an jeder Station.
 VORLAGEN = {
 	"Backstube": (
-		{"f_herstellen", "f_rework", "f_silo"},
+		{"f_herstellen", "f_rework", "f_silo", "f_wareneingang"},
 		["Grundteig", "Teig veredelt", "Backware", "Ware lose", "Halbfabrikat"],
 	),
 	"Verpackung": ({"f_herstellen", "f_paletten", "f_rework"}, ["Fertigware"]),
