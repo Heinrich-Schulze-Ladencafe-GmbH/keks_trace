@@ -437,30 +437,6 @@ PRUEFPLAENE = [
 		"dokument": "3.8.6 MC Herzenboden",
 	},
 	{
-		"titel": "Etikettencheck Verpackung",
-		"lenkung": "CP",
-		"ausloeser": "Regelmäßig an der Station",
-		"intervall_minuten": 60,
-		"stationen": ["Verpackung", "Herzen Verpackung"],
-		"art": "Ja/Nein",
-		"frage": "Etiketten richtig (Artikel, Los, MHD; Rückstellmuster)?",
-		"bei_abweichung": "Sperren",
-		"korrekturmassnahme": "Ware sperren, umetikettieren",
-		"dokument": "1.6.1 FO gesperrte Ware, 3.10.12 Prüfprotokoll",
-	},
-	{
-		"titel": "Gewichtskontrolle VE",
-		"lenkung": "CP",
-		"ausloeser": "Regelmäßig an der Station",
-		"intervall_minuten": 60,
-		"stationen": ["Verpackung", "Herzen Verpackung"],
-		"art": "Ja/Nein",
-		"frage": "Stichprobe: VE-Gewichte nach Vorgabe eingehalten?",
-		"bei_abweichung": "Sperren",
-		"korrekturmassnahme": "Ware sperren, zu leichte Ware aussortieren",
-		"dokument": "3.7.1 Gewichtsprotokoll",
-	},
-	{
 		"titel": "Brix Invertzuckersirup",
 		"lenkung": "CP",
 		"ausloeser": "Beim Herstellen",
@@ -490,7 +466,14 @@ PRUEFPLAENE = [
 ]
 
 
+# Etiketten-, Gewichts- und übrige Pflichtkontrollen laufen auf Papier (alle 20 min), nicht im ERP
+AUF_PAPIER = ["Etikettencheck Verpackung", "Gewichtskontrolle VE"]
+
+
 def _pruefplaene():
+	for titel in AUF_PAPIER:
+		if frappe.db.exists("Pruefplan", titel):
+			frappe.db.set_value("Pruefplan", titel, "aktiv", 0)
 	for p in PRUEFPLAENE:
 		if frappe.db.exists("Pruefplan", p["titel"]):
 			continue
