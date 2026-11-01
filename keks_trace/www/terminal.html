@@ -360,11 +360,21 @@
 	// Buchstaben nur nach Antippen (Scanfelder bekommen den Cursor automatisch, da stört die Tastatur);
 	// Ziffern erscheinen auch automatisch, wenn eine Menge gefragt ist.
 	let angetippt = null;
-	document.addEventListener("pointerdown", (e) => { angetippt = e.target.closest("input[data-art]"); }, true);
+	// Ausblenden erst, wenn der Finger los ist und der Klick durch: sonst wird der Inhalt breiter und der
+	// angetippte Knopf (z. B. „Buchen“) rutscht unter dem Finger weg, der Klick geht ins Leere.
+	let gedrueckt = false, losgelassen = 0, tastenTimer = null;
+	document.addEventListener("pointerdown", (e) => { angetippt = e.target.closest("input[data-art]"); gedrueckt = true; }, true);
+	document.addEventListener("pointerup", () => { gedrueckt = false; losgelassen = performance.now(); }, true);
+	document.addEventListener("pointercancel", () => { gedrueckt = false; losgelassen = performance.now(); }, true);
 	function tastenZeigen() {
 		const f = document.activeElement;
 		let art = f && f.dataset ? f.dataset.art : null;
 		if (art === "text" && angetippt !== f) art = null;
+		clearTimeout(tastenTimer);
+		if (!art && tasten.style.display === "grid" && (gedrueckt || performance.now() - losgelassen < 400)) {
+			tastenTimer = setTimeout(tastenZeigen, 150);
+			return;
+		}
 		if (!art) { tasten.style.display = "none"; app.style.paddingBottom = ""; app.classList.remove("blockrechts"); tastenArt = null; return; }
 		if (art !== tastenArt) {
 			tastenArt = art;

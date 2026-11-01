@@ -12,7 +12,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, get_datetime
 
-from keks_trace.utils import ausgangs_zeilen, eingangs_zeilen, zeilen_chargen, zeilen_menge
+from keks_trace.utils import ausgangs_zeilen, eingangs_zeilen, einstellung, zeilen_chargen, zeilen_menge
 
 TOLERANZ = 0.005  # 0,5 % Wiegetoleranz beim Entnehmen
 
@@ -27,7 +27,7 @@ REINIGUNG_NACH_LEEREN = {
 def status_nach_leeren(traeger) -> str:
 	"""Frei oder Reinigung, je nach Einstellung für die Behälterart."""
 	feld = REINIGUNG_NACH_LEEREN.get(frappe.db.get_value("Produkttraeger", traeger, "typ"))
-	if feld and frappe.db.get_single_value("Keks Trace Einstellungen", feld):
+	if feld and einstellung(feld):
 		return "Reinigung"
 	return "Frei"
 

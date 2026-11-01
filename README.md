@@ -92,6 +92,7 @@ Prüfstellen im Fluss (Scan, Schranke, Nachweis), QS und Behälter-Kreislauf: [d
 | Rezepturtreue (Einwaage) | Am Teigmacher wird die Einwaage je Zutat gegen das Soll geprüft, umgerechnet auf die Sollmenge (halbe Masse = halbe Sollmenge). Außerhalb der Toleranz (je Rezeptzeile oder Standard, mit Mindesttoleranz für kleine Mengen) braucht die Buchung einen Grund; er steht an der Buchung (`Rezept-Abweichung`) |
 | Lagerumschlag (FEFO) | Rohstoff/Packmittel mit späterem MHD gescannt, obwohl ein früheres im Lager liegt: Hinweis beim Scan, Grund beim Buchen (Einstellung), gespeichert an der Buchung (`FEFO-Abweichung`). Bericht **MHD Rohstoffe**: was bald abläuft und was bei normalem Verbrauch voraussichtlich übrig bleibt |
 | Rückverfolgung Lieferant | Die Charge ist die Lieferanten-Charge (keine Zweitnummer). Wareneingang per Scan des GS1-128-Etiketts; offensichtlich falsche Chargen („Präsentkarton“) werden abgewiesen |
+| Durchsicht der Aufzeichnungen | Bericht **QS Tagesliste**: FEFO- und Einwaage-Abweichungen, Prüfungen außerhalb der Grenze und Sperren eines Tages an einer Stelle; offene Freigaben als Zahl. „Tag als durchgesehen bestätigen“ (nur QS) legt ein unveränderbares Protokoll **QS Durchsicht** an (wer, wann, wie viele Einträge) |
 | Reinigung Behälter | Je Behälterart einstellbar: leerer Behälter geht auf „Reinigung“ und wird erst nach der Meldung „gereinigt“ (Info-Scan, mit Zeit und Station) wieder befüllt |
 
 Gebucht wird ausschließlich mit ERPNext-Standardbelegen (Stock Entry „Manufacture“ und „Repack“,
@@ -479,6 +480,7 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_wareneingang_gs1` | GS1-128/EAN lesen (echte Etiketten, Prüfziffer, Datum mit Tag 00, Jahrhundert); Wareneingang per Scan ohne eigenes Etikett, Backstube findet die Charge über das Lieferanten-Etikett; „Präsentkarton“ als Charge abgewiesen; eigenes Karton-Etikett findet das Los |
 | `test_fefo` | Ältere Charge im Lager (ohne gesperrte/abgelaufene); Grund Pflicht/Hinweis/Aus; Grund an der Buchung; Bericht MHD Rohstoffe |
 | `test_rezepttreue` | Halbe Masse in Toleranz; Überdosis und fehlende Zutat brauchen Grund; Toleranz je Rezeptzeile und Mindesttoleranz; Grund an der Buchung |
+| `test_qs_tagesliste` | Alle vier Arten eines Tages; Routinesperre „Freigabe vor Verwendung“ ist keine Abweichung; Durchsicht nur QS, je Tag einmal, nicht in der Zukunft, danach unveränderbar |
 | `test_behaelter` | Behälter nach dem Leeren frei bzw. zur Reinigung (Einstellung); Meldung „gereinigt“ mit Zeit und Station; Anfrage-ID nur für geschützte Buchungen |
 
 Die Tests rollen ihre Daten am Ende zurück.
@@ -502,6 +504,8 @@ Abweichungsmanagement/CAPA, SOPs und Schulungsnachweise.
 - FEFO bei Rohstoffen und Packmitteln: Standard „Grund Pflicht“.
 - Einwaage: Standardtoleranz 5 % je Zutat, mindestens 0,01 kg. TODO(fachlich): Werte je Rezeptzeile mit der
   QS festlegen (Gewürze, Triebmittel enger).
+- Einstellungen werden in Demos und Tests nur im Speicher überschrieben (`utils.einstellungen`), nie in der
+  Datenbank. Nach `bench migrate` den Webserver neu starten bzw. `bench clear-cache`, sonst kennt er neue Felder nicht.
 - Behälter nach dem Leeren zur Reinigung: Standard aus (wie bisher). TODO(fachlich): für welche Behälterarten
   einschalten (Teigkübel, Rework-Behälter, Kisten)?
 

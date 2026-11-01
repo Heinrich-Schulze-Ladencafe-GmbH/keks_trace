@@ -18,6 +18,9 @@ QS_ROLLEN = {"Quality Manager", "System Manager"}
 
 # Diese Buchungsarten verarbeiten oder liefern Ware und sind für gesperrte Chargen verboten.
 GESPERRTE_ZWECKE = ("Manufacture", "Repack", "Material Transfer for Manufacture")
+# Routinesperre neuer Chargen von Artikeln mit „Freigabe vor Verwendung“ (keine Abweichung)
+FREIGABE_VORGANG = "Freigabe vor Verwendung"
+FREIGABE_GRUND = "Freigabe durch die QS ausstehend"
 
 
 # ---------------------------------------------------------------------------
@@ -28,14 +31,14 @@ GESPERRTE_ZWECKE = ("Manufacture", "Repack", "Material Transfer for Manufacture"
 def batch_before_insert(doc, method=None):
 	if frappe.get_cached_value("Item", doc.item, "kt_freigabe_pflicht"):
 		doc.kt_status = "Gesperrt"
-		doc.kt_sperrgrund = _("Freigabe durch die QS ausstehend")
+		doc.kt_sperrgrund = _("Freigabe durch die QS ausstehend")  # = FREIGABE_GRUND
 	elif not doc.get("kt_status"):
 		doc.kt_status = "Freigegeben"
 
 
 def batch_after_insert(doc, method=None):
 	if doc.kt_status == "Gesperrt":
-		_protokoll(doc.name, doc.item, "Sperren", doc.kt_sperrgrund, None)
+		_protokoll(doc.name, doc.item, "Sperren", doc.kt_sperrgrund, FREIGABE_VORGANG)
 
 
 def pruefe_stock_entry(doc):

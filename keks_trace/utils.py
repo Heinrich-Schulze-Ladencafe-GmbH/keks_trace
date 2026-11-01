@@ -6,19 +6,35 @@ import frappe
 from frappe.utils import flt
 
 
-@contextmanager
-def regel_nur_hinweis(feld: str = "fefo_rohstoffe"):
-	"""Eine Prüfregel aus den Keks Trace Einstellungen für einen Ablauf auf „Nur Hinweis“ stellen, danach zurück.
+def einstellung(feld: str):
+	"""Wert aus Keks Trace Einstellungen; eine vorübergehende Überschreibung (einstellungen()) geht vor."""
+	ueber = getattr(frappe.local, "kt_einstellungen", None) or {}
+	if feld in ueber:
+		return ueber[feld]
+	return frappe.db.get_single_value("Keks Trace Einstellungen", feld)
 
-	Für Demos und Tests, die bewusst bestimmte (frische) Chargen nehmen. Die Abweichung steht trotzdem an der
-	Buchung („Ohne Grund (Einstellung: nur Hinweis)“).
+
+@contextmanager
+def einstellungen(**werte):
+	"""Einstellungen nur für diesen Ablauf (im Speicher, nie in der Datenbank) überschreiben.
+
+	Für Demos und Tests: nichts davon kann in den Einstellungen hängen bleiben, auch wenn der Ablauf
+	zwischendurch committet.
 	"""
-	vorher = frappe.db.get_single_value("Keks Trace Einstellungen", feld)
-	frappe.db.set_single_value("Keks Trace Einstellungen", feld, "Nur Hinweis")
+	vorher = dict(getattr(frappe.local, "kt_einstellungen", None) or {})
+	frappe.local.kt_einstellungen = {**vorher, **werte}
 	try:
 		yield
 	finally:
-		frappe.db.set_single_value("Keks Trace Einstellungen", feld, vorher or "Grund Pflicht")
+		frappe.local.kt_einstellungen = vorher
+
+
+def regel_nur_hinweis(feld: str = "fefo_rohstoffe"):
+	"""Eine Prüfregel für einen Ablauf auf „Nur Hinweis“, z. B. Demos, die bewusst frische Chargen nehmen.
+
+	Die Abweichung steht trotzdem an der Buchung („Ohne Grund (Einstellung: nur Hinweis)“).
+	"""
+	return einstellungen(**{feld: "Nur Hinweis"})
 
 
 def zeilen_menge(row) -> float:

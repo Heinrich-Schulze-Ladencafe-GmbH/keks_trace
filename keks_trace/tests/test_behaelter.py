@@ -12,6 +12,12 @@ from frappe.utils import nowdate
 
 from keks_trace import demo, terminal
 from keks_trace.terminal import TerminalFehler
+from keks_trace.utils import einstellungen
+
+
+def _setze(**werte):
+	"""Nur im Speicher (utils.einstellungen), nie in der Datenbank."""
+	frappe.local.kt_einstellungen = {**(getattr(frappe.local, "kt_einstellungen", None) or {}), **werte}
 
 
 def _hash():
@@ -23,12 +29,7 @@ class TestBehaelterReinigung(IntegrationTestCase):
 	def setUpClass(cls):
 		super().setUpClass()
 		cls.ctx = demo.stammdaten()
-		cls.vorher = frappe.db.get_single_value("Keks Trace Einstellungen", "reinigung_teigbehaelter")
-
-	@classmethod
-	def tearDownClass(cls):
-		frappe.db.set_single_value("Keks Trace Einstellungen", "reinigung_teigbehaelter", cls.vorher or 0)
-		super().tearDownClass()
+		cls.enterClassContext(einstellungen())  # Überschreibungen dieser Klasse am Ende verwerfen
 
 	def _fuellen_und_leeren(self):
 		kuebel = demo.neuer_traeger(f"TR-{_hash()}", "Teigbehälter")
@@ -53,13 +54,13 @@ class TestBehaelterReinigung(IntegrationTestCase):
 		return kuebel
 
 	def test_ohne_einstellung_wie_bisher_frei(self):
-		frappe.db.set_single_value("Keks Trace Einstellungen", "reinigung_teigbehaelter", 0)
+		_setze(reinigung_teigbehaelter=0)
 		kuebel = self._fuellen_und_leeren()
 		self.assertEqual(frappe.db.get_value("Produkttraeger", kuebel, "status"), "Frei")
 		self.assertEqual(terminal._ziel_behaelter(kuebel), kuebel)
 
 	def test_mit_einstellung_erst_reinigen(self):
-		frappe.db.set_single_value("Keks Trace Einstellungen", "reinigung_teigbehaelter", 1)
+		_setze(reinigung_teigbehaelter=1)
 		kuebel = self._fuellen_und_leeren()
 		self.assertEqual(frappe.db.get_value("Produkttraeger", kuebel, "status"), "Reinigung")
 		with self.assertRaisesRegex(TerminalFehler, "zur Reinigung"):

@@ -1,0 +1,77 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "format:QSD-{datum}",
+ "creation": "2026-11-01 14:00:00.000000",
+ "description": "Nachweis, dass die QS die Tagesliste (Abweichungen, Sperren, Prüfungen) eines Tages durchgesehen hat. Nicht änderbar.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "datum",
+  "eintraege",
+  "column_break_1",
+  "durchgesehen_von",
+  "zeitpunkt",
+  "section_break_1",
+  "bemerkung"
+ ],
+ "fields": [
+  {
+   "fieldname": "datum",
+   "fieldtype": "Date",
+   "label": "Tag",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "eintraege",
+   "fieldtype": "Int",
+   "label": "Einträge in der Tagesliste",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "durchgesehen_von",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Durchgesehen von",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "zeitpunkt",
+   "fieldtype": "Datetime",
+   "label": "Zeitpunkt"
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-01 14:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "QS Durchsicht",
+ "owner": "Administrator",
+ "permissions": [
+  {"role": "System Manager", "read": 1, "report": 1, "export": 1, "print": 1},
+  {"role": "Quality Manager", "read": 1, "report": 1, "export": 1, "print": 1},
+  {"role": "Stock Manager", "read": 1, "report": 1, "export": 1, "print": 1}
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "naming_rule": "Expression",
+ "in_create": 1
+}

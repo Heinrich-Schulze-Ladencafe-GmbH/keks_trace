@@ -7,6 +7,7 @@ from frappe.utils import add_days, nowdate
 from keks_trace import demo, terminal
 from keks_trace.keks_trace.report.mhd_rohstoffe.mhd_rohstoffe import daten as mhd_daten
 from keks_trace.terminal import TerminalFehler
+from keks_trace.utils import einstellungen
 
 TEST_ARTIKEL = "KT-TEST-FEFO"
 
@@ -16,13 +17,15 @@ def _hash():
 
 
 def _einstellung(feld, wert):
-	frappe.db.set_single_value("Keks Trace Einstellungen", feld, wert)
+	"""Nur im Speicher (utils.einstellungen), nie in der Datenbank: nichts bleibt im Testsystem hängen."""
+	frappe.local.kt_einstellungen = {**(getattr(frappe.local, "kt_einstellungen", None) or {}), feld: wert}
 
 
 class TestFefo(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
+		cls.enterClassContext(einstellungen())  # Überschreibungen dieser Klasse am Ende verwerfen
 		cls.ctx = demo.stammdaten()
 		if not frappe.db.exists("Item", TEST_ARTIKEL):
 			frappe.get_doc(
@@ -30,8 +33,7 @@ class TestFefo(IntegrationTestCase):
 				 "item_group": frappe.db.get_value("Item", "KT-HASELNUSS", "item_group"), "stock_uom": "Kg",
 				 "is_stock_item": 1, "has_batch_no": 1, "has_expiry_date": 1, "kt_chargen_stufe": "Rohstoff"}
 			).insert()  # fmt: skip
-		# Nur Chargen dieses Tests zählen: alte Testbestände des Artikels ausbuchen geht nicht, daher eigener Artikel
-		# je Lauf mit eindeutigen Chargen; ältere Läufe haben MHD weit in der Vergangenheit (s. unten).
+		# Eigener Test-Artikel: Demo-Bestände echter Rohstoffe stören die Erwartungen nicht
 		h = _hash()
 		cls.a = cls._eingang(f"FA{h}", 10)  # frühestes MHD
 		cls.b = cls._eingang(f"FB{h}", 100)
@@ -39,12 +41,6 @@ class TestFefo(IntegrationTestCase):
 		cls.d = cls._eingang(f"FD{h}", 5)  # wird abgelaufen
 		frappe.db.set_value("Batch", cls.c, "kt_status", "Gesperrt")
 		frappe.db.set_value("Batch", cls.d, "expiry_date", add_days(nowdate(), -1))
-		cls.vorher = frappe.db.get_single_value("Keks Trace Einstellungen", "fefo_rohstoffe")
-
-	@classmethod
-	def tearDownClass(cls):
-		_einstellung("fefo_rohstoffe", cls.vorher or "Grund Pflicht")
-		super().tearDownClass()
 
 	@classmethod
 	def _eingang(cls, charge, tage):
@@ -83,29 +79,25 @@ class TestFefo(IntegrationTestCase):
 	def test_herstellen_speichert_grund(self):
 		"""Echte Buchung: Nougat mit jüngerer Haselnuss-Charge, ältere liegt im Lager."""
 		_einstellung("fefo_rohstoffe", "Grund Pflicht")
-		vollst = frappe.db.get_single_value("Keks Trace Einstellungen", "vollstaendigkeit")
 		_einstellung("vollstaendigkeit", "Warnen")
-		try:
-			h = _hash()
-			terminal.wareneingang("Lager", "KT-HASELNUSS", f"HFA{h}", 20, add_days(nowdate(), 1))
-			neu = terminal.wareneingang("Lager", "KT-HASELNUSS", f"HFN{h}", 20, add_days(nowdate(), 800))[
-				"charge"
-			]
-			z = terminal.pruefe_zeile("Backstube", "KT-NOUGAT", neu, 10)
-			self.assertTrue(z["fefo"] and z["fefo_pflicht"])
-			with self.assertRaisesRegex(TerminalFehler, "Älteres MHD"):
-				terminal.herstellen("Backstube", "KT-NOUGAT", [{"code": neu, "menge": 10}])
-			e = terminal.herstellen(
-				"Backstube",
-				"KT-NOUGAT",
-				[{"code": neu, "menge": 10}],
-				fefo_grund="Ältere Charge nicht erreichbar",
-			)
-			text = frappe.db.get_value("Stock Entry", e["buchung"], "kt_fefo_abweichung")
-			self.assertIn("Grund: Ältere Charge nicht erreichbar", text)
-			self.assertIn(neu, text)
-		finally:
-			_einstellung("vollstaendigkeit", vollst or "Warnen")
+		h = _hash()
+		terminal.wareneingang("Lager", "KT-HASELNUSS", f"HFA{h}", 20, add_days(nowdate(), 1))
+		neu = terminal.wareneingang("Lager", "KT-HASELNUSS", f"HFN{h}", 20, add_days(nowdate(), 800))[
+			"charge"
+		]
+		z = terminal.pruefe_zeile("Backstube", "KT-NOUGAT", neu, 10)
+		self.assertTrue(z["fefo"] and z["fefo_pflicht"])
+		with self.assertRaisesRegex(TerminalFehler, "Älteres MHD"):
+			terminal.herstellen("Backstube", "KT-NOUGAT", [{"code": neu, "menge": 10}])
+		e = terminal.herstellen(
+			"Backstube",
+			"KT-NOUGAT",
+			[{"code": neu, "menge": 10}],
+			fefo_grund="Ältere Charge nicht erreichbar",
+		)
+		text = frappe.db.get_value("Stock Entry", e["buchung"], "kt_fefo_abweichung")
+		self.assertIn("Grund: Ältere Charge nicht erreichbar", text)
+		self.assertIn(neu, text)
 
 	def test_bericht_mhd_und_rest(self):
 		"""Bericht: Charge A (MHD in 10 Tagen) ohne Verbrauch bleibt ganz übrig; abgelaufene D erscheint mit Minus-Tagen."""
@@ -116,3 +108,18 @@ class TestFefo(IntegrationTestCase):
 		self.assertAlmostEqual(zeilen[self.a]["uebrig"], 10)  # kein Verbrauch -> alles übrig
 		self.assertLess(zeilen[self.d]["tage_bis_mhd"], 0)
 		self.assertEqual(zeilen[self.c]["status"], "Gesperrt")
+
+
+class TestEinstellungenImSpeicher(IntegrationTestCase):
+	def test_ueberschreibung_nie_in_der_datenbank(self):
+		"""Demos und Tests stellen Regeln nur im Speicher um; die Datenbank bleibt unberührt (auch bei Commit)."""
+		from keks_trace.utils import einstellung, regel_nur_hinweis
+
+		db = frappe.db.get_single_value("Keks Trace Einstellungen", "fefo_rohstoffe")
+		with regel_nur_hinweis("fefo_rohstoffe"):
+			self.assertEqual(einstellung("fefo_rohstoffe"), "Nur Hinweis")
+			self.assertEqual(frappe.db.get_single_value("Keks Trace Einstellungen", "fefo_rohstoffe"), db)
+			with einstellungen(fefo_rohstoffe="Aus"):
+				self.assertEqual(einstellung("fefo_rohstoffe"), "Aus")
+			self.assertEqual(einstellung("fefo_rohstoffe"), "Nur Hinweis")
+		self.assertEqual(einstellung("fefo_rohstoffe"), db)

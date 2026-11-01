@@ -6,19 +6,12 @@ from frappe.utils import add_days, nowdate
 
 from keks_trace import demo, terminal
 from keks_trace.terminal import TerminalFehler
-
-FELDER = (
-	"rezept_abweichung",
-	"rezept_toleranz_prozent",
-	"rezept_toleranz_min",
-	"fefo_rohstoffe",
-	"vollstaendigkeit",
-)
+from keks_trace.utils import einstellungen
 
 
 def _setze(**werte):
-	for k, v in werte.items():
-		frappe.db.set_single_value("Keks Trace Einstellungen", k, v)
+	"""Nur im Speicher (utils.einstellungen), nie in der Datenbank: nichts bleibt im Testsystem hängen."""
+	frappe.local.kt_einstellungen = {**(getattr(frappe.local, "kt_einstellungen", None) or {}), **werte}
 
 
 def _z(artikel, menge):
@@ -29,16 +22,11 @@ class TestRezepttreue(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
+		cls.enterClassContext(einstellungen())  # Überschreibungen dieser Klasse am Ende verwerfen
 		cls.ctx = demo.stammdaten()
-		cls.vorher = {f: frappe.db.get_single_value("Keks Trace Einstellungen", f) for f in FELDER}
 		cls.bom = frappe.db.get_value(
 			"BOM", {"item": "KT-GT-MUERBE", "is_default": 1, "is_active": 1, "docstatus": 1}
 		)
-
-	@classmethod
-	def tearDownClass(cls):
-		_setze(**{k: v for k, v in cls.vorher.items() if v is not None})
-		super().tearDownClass()
 
 	def setUp(self):
 		_setze(rezept_abweichung="Grund Pflicht", rezept_toleranz_prozent=5, rezept_toleranz_min=0.01)

@@ -172,7 +172,27 @@
    "label": "Prüfungen (HACCP)",
    "hidden": 0,
    "is_query_report": 0,
-   "link_count": 3,
+   "link_count": 5,
+   "onboard": 0
+  },
+  {
+   "type": "Link",
+   "label": "QS Tagesliste",
+   "link_type": "Report",
+   "link_to": "QS Tagesliste",
+   "hidden": 0,
+   "is_query_report": 1,
+   "link_count": 0,
+   "onboard": 0
+  },
+  {
+   "type": "Link",
+   "label": "QS Durchsicht",
+   "link_type": "DocType",
+   "link_to": "QS Durchsicht",
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_count": 0,
    "onboard": 0
   },
   {

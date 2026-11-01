@@ -19,7 +19,7 @@ from keks_trace import los as los_modul
 from keks_trace import palette as paletten
 from keks_trace.anfrage import einmalig
 from keks_trace.install import REWORK_ZIELE
-from keks_trace.utils import VERSANDFAEHIG, allergene, artikel_stufe, versandfaehig
+from keks_trace.utils import VERSANDFAEHIG, allergene, artikel_stufe, einstellung, versandfaehig
 
 EPS = 1e-6
 
@@ -268,12 +268,11 @@ REZEPT_STUFEN = ("Grundteig", "Teig veredelt", "Halbfabrikat")
 
 
 def _rezept_modus() -> str:
-	return frappe.db.get_single_value("Keks Trace Einstellungen", "rezept_abweichung") or "Grund Pflicht"
+	return einstellung("rezept_abweichung") or "Grund Pflicht"
 
 
 def _toleranz(bom_zeile, soll: float) -> float:
 	"""Erlaubte Abweichung in der Lagereinheit: % an der Rezeptzeile, sonst Standard; nie unter dem Minimum."""
-	einstellung = lambda feld: frappe.db.get_single_value("Keks Trace Einstellungen", feld)  # noqa: E731
 	prozent = flt(bom_zeile.get("kt_toleranz_prozent")) or flt(einstellung("rezept_toleranz_prozent") or 5)
 	return flt(max(abs(soll) * prozent / 100, flt(einstellung("rezept_toleranz_min") or 0.01)), 4)
 
@@ -1304,7 +1303,7 @@ def _fefo_aeltere(artikel: str, charge: str | None, verwendet=()) -> list[dict]:
 
 
 def _fefo_modus() -> str:
-	return frappe.db.get_single_value("Keks Trace Einstellungen", "fefo_rohstoffe") or "Grund Pflicht"
+	return einstellung("fefo_rohstoffe") or "Grund Pflicht"
 
 
 def _fefo_text(z: dict, aeltere: list[dict]) -> str:

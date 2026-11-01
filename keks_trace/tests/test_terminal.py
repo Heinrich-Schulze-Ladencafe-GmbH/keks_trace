@@ -10,6 +10,7 @@ from frappe.utils import add_days, add_months, flt, getdate, nowdate
 
 from keks_trace import demo, los, palette, pruefung, sperre, terminal
 from keks_trace.terminal import TerminalFehler
+from keks_trace.utils import regel_nur_hinweis
 
 
 def _hash():
@@ -20,6 +21,8 @@ class TestTerminal(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
+		# bewusst frisch angelegte Chargen: FEFO nur als Hinweis (FEFO selbst prüft test_fefo)
+		cls.enterClassContext(regel_nur_hinweis("fefo_rohstoffe"))
 		cls.ctx = demo.stammdaten()
 		cls.h = _hash()
 		cls.silo = demo.silos_anlegen(cls.ctx, "TT" + cls.h)

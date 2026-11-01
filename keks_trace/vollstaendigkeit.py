@@ -8,11 +8,11 @@ Zusätzliche Zutaten (z. B. Rework) sind immer erlaubt.
 import frappe
 from frappe import _
 
-from keks_trace.utils import ausgangs_zeilen, eingangs_zeilen
+from keks_trace.utils import ausgangs_zeilen, eingangs_zeilen, einstellung
 
 
 def modus() -> str:
-	return frappe.db.get_single_value("Keks Trace Einstellungen", "vollstaendigkeit") or "Warnen"
+	return einstellung("vollstaendigkeit") or "Warnen"
 
 
 def pruefe(doc):
