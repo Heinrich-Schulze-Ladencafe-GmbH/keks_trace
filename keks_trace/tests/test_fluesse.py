@@ -181,3 +181,70 @@ class TestFluesse(IntegrationTestCase):
 		demo_herzen.anlegen(vorrat=0)
 		je = demo_herzen.STK_JE_KARTON["9"]
 		self.assertEqual(paletten.zerlegen("HZ-ROHLING-9", 3 * je + 7), "3 Karton + 7 Stk")
+
+	def test_fefo_beim_zufuehren_an_der_linie(self):
+		"""Lücke geschlossen: auch an der Linie braucht eine jüngere Charge einen Grund, wenn eine ältere da ist.
+		Die Linienrezepte der Demo haben nur Packmittel ohne MHD, daher wird „ältere Charge“ hier vorgegeben."""
+		from unittest import mock
+
+		from keks_trace.utils import einstellungen
+
+		pa, _teig = self._auftrag()
+		folie = next(
+			c
+			for c in frappe.get_all(
+				"Batch", {"item": "9101", "disabled": 0}, pluck="name", order_by="creation desc"
+			)
+			if terminal.charge_lager(c)
+		)
+		aelter = [{"charge": "ALT-TEST", "mhd": "01.01.2027", "menge": 5}]
+		with (
+			einstellungen(fefo_rohstoffe="Grund Pflicht"),
+			mock.patch.object(terminal, "_fefo_aeltere", return_value=aelter),
+		):
+			f = terminal.fefo_pruefen("Kneter", folie)
+			self.assertTrue(f["pflicht"] and f["aeltere"])
+			with self.assertRaisesRegex(Exception, "Älteres MHD"):
+				linienbuchung.zufuehren("Kneter", folie, 1)
+			r = linienbuchung.zufuehren("Kneter", folie, 1, fefo_grund="Anweisung QS")
+		text = frappe.db.get_value("Stock Entry", r["buchung"], "kt_fefo_abweichung")
+		self.assertIn("Grund: Anweisung QS", text)
+		self.assertIn("ALT-TEST", text)
+		self.assertEqual(r["auftrag"], pa.name)
+
+	def test_paletten_etikett_nach_entnahme_neu_drucken(self):
+		"""Fotos 1.11.: „30“ auf dem Etikett von Hand zu „29“ korrigiert. Jetzt: das System merkt sich den gedruckten
+		Inhalt, meldet beim Herunternehmen „Etikett neu drucken“, und das Etikett zeigt das Los wie der Karton."""
+		pa, _teig = self._auftrag()
+		terminal.linie_lose(VPC, 5, None, "linienlager")  # 30 kg lose Ware zum Verpacken
+		nve = terminal.palette_neu(VPC)["nve"]
+		v = terminal.vorschlag(VPC, "17846", 24)
+		self.assertFalse(v["hinweise"])
+		e = terminal.herstellen(
+			VPC,
+			"17846",
+			[{"code": z["code"], "menge": z["menge"]} for z in v["zeilen"]],
+			24,
+			nve,
+			6,
+			"Karton",
+		)
+		los = frappe.db.get_value("Batch", e["charge"], "kt_los")
+		self.assertTrue(los)
+		pos = paletten.inhalt(nve)
+		self.assertEqual(pos[0]["los"], los)  # Los wie auf dem Karton, nicht der interne Chargenname
+		et = paletten.etikett(nve)
+		if et["inhalt_text"]:
+			self.assertIn(f"(10) {los}", et["inhalt_text"])
+		self.assertIsNone(paletten.info(nve)["etikett_aktuell"])  # noch nie gedruckt
+		paletten.etikett_gedruckt(nve)
+		self.assertTrue(paletten.info(nve)["etikett_aktuell"])
+		# einen Karton herunternehmen (auf eine andere Palette): Hinweis, Etikett passt nicht mehr
+		frappe.flags.kt_etikett_hinweis = set()
+		ziel = terminal.palette_neu(VPC)["nve"]
+		r = terminal.palette_umpacken(VPC, nve, ziel, e["charge"], 1, "Karton")
+		self.assertTrue(any("Etikett neu drucken" in h for h in r["hinweise"]))
+		self.assertIs(paletten.info(nve)["etikett_aktuell"], False)
+		paletten.etikett_gedruckt(nve)  # neu gedruckt
+		self.assertTrue(paletten.info(nve)["etikett_aktuell"])
+		self.assertEqual(pa.artikel, "17846")

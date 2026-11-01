@@ -15,6 +15,7 @@ import frappe
 from frappe.utils import add_days, nowdate
 
 from keks_trace import demo, pilot, varianten
+from keks_trace.utils import demo_commit
 
 # Größe: (Teig je Rohling kg, Guss-Richtwert je Herz kg) - Demo-Werte. Gleicher Teig für alle Größen; der Guss
 # schwankt mit Schrift und Deko, die Tagesmenge stimmt über „Leer melden“ am Guss-Behälter.
@@ -247,12 +248,12 @@ def anlegen(vorrat: int = 1) -> frappe._dict:
 		"Produktionsauftrag", {"linie": LINIE, "status": ["in", ["Geplant", "Freigegeben"]]}, pluck="name"
 	):
 		frappe.db.set_value("Produktionsauftrag", pa, "status", "Abgebrochen")
-	frappe.db.commit()
+	demo_commit()
 	ctx.herz_auftrag = auftrag
 	ctx.weitere_auftraege = weitere_auftraege(ctx)
 	if int(vorrat):
 		ctx.vorrat = vorrat_anlegen(ctx)
-	frappe.db.commit()
+	demo_commit()
 	return ctx
 
 
@@ -429,7 +430,7 @@ def vorrat_anlegen(ctx=None) -> dict:
 				[{"code": roh, "menge": 100}, {"code": "Zuckerguss Herzenboden", "menge": round(100 * guss, 3)}],
 			)  # fmt: skip
 		ergebnis[f"Gr. {g} {spruch}"] = {"rohlinge": _bestand(rohling(g)), "garniert": _bestand(code)}
-	frappe.db.commit()
+	demo_commit()
 	for name, e in ergebnis.items():
 		print(f"{name}: {e['rohlinge']:.0f} Rohlinge, {e['garniert']:.0f} garniert frei")
 	return ergebnis
@@ -481,7 +482,7 @@ def rohlinge_backen(ctx, groesse: str, kartons: int) -> dict:
 @frappe.whitelist()
 def durchlauf(groesse: str = "9", stueck: int = 100, spruch: str = STANDARD) -> dict:
 	"""Siehe _durchlauf. Die Demo nimmt bewusst frisch angelegte Chargen: FEFO nur als Hinweis."""
-	from keks_trace.utils import regel_nur_hinweis
+	from keks_trace.utils import demo_commit, regel_nur_hinweis
 
 	with regel_nur_hinweis("fefo_rohstoffe"):
 		return _durchlauf(groesse, stueck, spruch)
@@ -667,7 +668,7 @@ def _durchlauf(groesse: str = "9", stueck: int = 100, spruch: str = STANDARD) ->
 	vor = rueckverfolgung(puderzucker, "Vorwärts")
 	kunden = sorted({k["kundenname"] for k in vor["kunden"]})
 	schritt("QS", "Büro", f"Vorwärts vom Puderzucker {puderzucker}", f"bis Kunde {', '.join(kunden)}")
-	frappe.db.commit()
+	demo_commit()
 	return {
 		"protokoll": protokoll,
 		"los": herz_e["los"],

@@ -17,6 +17,7 @@ import frappe
 from frappe.utils import add_days, flt, formatdate, getdate, now_datetime, nowdate
 
 from keks_trace import silo, sperre
+from keks_trace.utils import demo_commit
 
 ALLERGENGRUPPEN = {
 	"Mürbeteig": "Gluten, Milch",
@@ -177,7 +178,7 @@ def run(company: str | None = None, kuerzel: str | None = None):
 	test.insert()
 	test.submit()
 	kette.rueckverfolgungstest = test.name
-	frappe.db.commit()
+	demo_commit()
 	_ausgabe(kette)
 	print(f"\n== Rückverfolgungstest {test.name}: {test.ergebnis} in {test.dauer_sekunden} s\n")
 	print(test.bericht)
@@ -1009,7 +1010,7 @@ def lagerware() -> dict:
 				p = paletten.anlegen("Lagerpalette", "Lager")
 				paletten.beladen(p, charge, auf_palette, "Karton", "Lager")
 		ergebnis.append({"los": los, "charge": name, "kartons": kartons})
-	frappe.db.commit()
+	demo_commit()
 	for e in ergebnis:
 		print(f"Los {e['los']} ({e['charge']}): {e['kartons']} Karton")
 	return {"lose": ergebnis}

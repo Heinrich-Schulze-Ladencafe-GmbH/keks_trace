@@ -255,7 +255,11 @@ MHD 32 Monate. Ausgedachte Werte (Beutelgrößen, Gebinde, Ruhezeit, Packmittel)
   Prüfziffer. Basisnummer unter **Keks Trace Einstellungen** eintragen; ohne sie werden
   Test-NVEs (Nummernkreis 02) mit Aufdruck „TEST-NVE“ erzeugt, die nicht an Kunden gehen dürfen.
   Sortenreine Paletten bekommen einen zweiten Strichcode mit GTIN, MHD, Anzahl und Los,
-  wenn am Artikel ein Barcode (EAN) je Einheit hinterlegt ist.
+  wenn am Artikel ein Barcode (EAN) je Einheit hinterlegt ist. Auf dem Etikett und in (10) steht das
+  **Los wie auf dem Karton** (z. B. `6447`), nicht der interne Chargenname.
+- **Etikett aktuell halten:** Beim Druck merkt sich die Palette ihren Inhalt. Werden danach Kartons
+  heruntergenommen (Lieferung, Umpacken, Umlagern, Verbrauch), meldet das Terminal „Etikett neu drucken“;
+  die Palettenansicht zeigt es mit grünem Knopf. Kein Korrigieren von Hand mehr.
 
 ## Prüfungen (CP/CCP)
 
@@ -480,10 +484,12 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_wareneingang_gs1` | GS1-128/EAN lesen (echte Etiketten, Prüfziffer, Datum mit Tag 00, Jahrhundert); Wareneingang per Scan ohne eigenes Etikett, Backstube findet die Charge über das Lieferanten-Etikett; „Präsentkarton“ als Charge abgewiesen; eigenes Karton-Etikett findet das Los |
 | `test_fefo` | Ältere Charge im Lager (ohne gesperrte/abgelaufene); Grund Pflicht/Hinweis/Aus; Grund an der Buchung; Bericht MHD Rohstoffe |
 | `test_rezepttreue` | Halbe Masse in Toleranz; Überdosis und fehlende Zutat brauchen Grund; Toleranz je Rezeptzeile und Mindesttoleranz; Grund an der Buchung |
+| `test_fluesse` (Ergänzung) | FEFO auch beim Zuführen an der Linie; Paletten-Etikett: Los wie Karton, „neu drucken“ nach Entnahme |
 | `test_qs_tagesliste` | Alle vier Arten eines Tages; Routinesperre „Freigabe vor Verwendung“ ist keine Abweichung; Durchsicht nur QS, je Tag einmal, nicht in der Zukunft, danach unveränderbar |
 | `test_behaelter` | Behälter nach dem Leeren frei bzw. zur Reinigung (Einstellung); Meldung „gereinigt“ mit Zeit und Station; Anfrage-ID nur für geschützte Buchungen |
 
-Die Tests rollen ihre Daten am Ende zurück.
+Die Tests rollen ihre Daten am Ende zurück. Demo-Funktionen committen nur außerhalb von Tests
+(`utils.demo_commit`); vorher schrieb ein Demo-Aufruf mitten in einem Test dessen Daten fest.
 
 ## Bewusst noch nicht enthalten
 

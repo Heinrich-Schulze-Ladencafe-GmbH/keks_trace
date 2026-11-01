@@ -11,6 +11,8 @@ import os
 import frappe
 from frappe.utils import add_days, nowdate
 
+from keks_trace.utils import demo_commit
+
 FIRMA = "Keks Test GmbH"
 KUERZEL = "KTG"
 KUNDE = "KT Demo Handel"
@@ -119,7 +121,7 @@ def einrichten():
 	for uom, code in EINHEITEN.items():
 		if frappe.db.exists("UOM", uom):
 			_code(CODELISTE_EINHEIT, code, "UOM", uom)
-	frappe.db.commit()
+	demo_commit()
 	return "eingerichtet"
 
 
@@ -163,7 +165,7 @@ def rechnung(lieferschein=None, profil="XRECHNUNG"):
 	if profil == "XRECHNUNG":
 		f2, w2 = get_validation_errors(xml.decode(), EInvoiceProfile.EN16931)
 		fehler, warnungen = fehler + f2, warnungen + w2
-	frappe.db.commit()
+	demo_commit()
 	return {"rechnung": si.name, "lieferschein": lieferschein, "brutto": si.grand_total, "steuer": si.total_taxes_and_charges,
 			"xml": pfad, "fehler": fehler, "warnungen": warnungen}  # fmt: skip
 
@@ -238,7 +240,7 @@ def eingang(xml=BEISPIEL_EINGANG):
 	for t in pi.taxes:
 		t.description = t.description or f"Vorsteuer {t.rate:g} %"  # Pflichtfeld, eu_einvoice füllt es nicht
 	pi.insert(ignore_permissions=True)
-	frappe.db.commit()
+	demo_commit()
 	ergebnis.update(eingangsrechnung=pi.name, pi_brutto=pi.grand_total, faellig=str(pi.due_date))
 	return ergebnis
 
@@ -294,7 +296,7 @@ def datev(von=None, bis=None):
 						"category": "Total", "add_deduct_tax": "Add"}]}
 		).insert(ignore_permissions=True)  # fmt: skip
 		pi.submit()
-	frappe.db.commit()
+	demo_commit()
 	download_datev_csv({"company": DATEV_FIRMA, "from_date": von or heute, "to_date": bis or heute})
 	pfad = os.path.abspath(frappe.get_site_path("private", "files", "datev-demo.zip"))
 	with open(pfad, "wb") as f:

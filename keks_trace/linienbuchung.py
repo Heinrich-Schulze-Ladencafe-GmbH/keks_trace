@@ -404,7 +404,9 @@ def kuebel_vorschlag(artikel: list[str], anzahl: int = 5) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def zufuehren(station: str, code: str, menge: float | None = None) -> dict:
+def zufuehren(station: str, code: str, menge: float | None = None, fefo_grund: str | None = None) -> dict:
+	"""Kübel, Gebinde oder Tank an die Linie. fefo_grund: Pflicht, wenn ein Rohstoff/Packmittel mit späterem
+	MHD zugeführt wird, obwohl ein früheres im Lager liegt (wie beim Herstellen)."""
 	from keks_trace import terminal
 	from keks_trace.silo import bestand as silo_bestand
 
@@ -476,6 +478,13 @@ def zufuehren(station: str, code: str, menge: float | None = None) -> dict:
 				)
 
 	uom = frappe.get_cached_value("Item", artikel, "stock_uom")
+	fefo = None
+	if r["typ"] != "silo":
+		fefo = terminal._pruefe_fefo(
+			[{"artikel": artikel, "charge": r["charge"], "typ": r["typ"], "einheit": uom,
+			  "name": frappe.get_cached_value("Item", artikel, "item_name")}],
+			fefo_grund,
+		)  # fmt: skip
 	jetzt = now_datetime()
 	se = frappe.get_doc(
 		{
@@ -488,6 +497,7 @@ def zufuehren(station: str, code: str, menge: float | None = None) -> dict:
 			"posting_time": jetzt.time().strftime("%H:%M:%S"),
 			"kt_station": s.name,
 			"kt_produktionsauftrag": pa.name,
+			"kt_fefo_abweichung": fefo,
 			"items": [
 				{
 					"item_code": artikel,

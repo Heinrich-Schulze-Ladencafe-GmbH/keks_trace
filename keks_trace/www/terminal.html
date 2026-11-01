@@ -750,15 +750,36 @@
 			textFeld("scan", "Kübel, Gebinde oder Tank scannen") +
 			zahlFeld("menge", "Menge (leer = ganzer Kübel)");
 		aktionen((a) => (a === "pa-wechseln" ? auftragWaehlen("An die Linie", linieStart) : beiAllgemein(a)));
-		enter("scan", async (code) => {
-			if (!code) return;
+		const zufuehren = async (code, menge, fefoGrund) => {
 			try {
-				const r = await api("linie_zufuehren", { station: zustand.station, code, menge: zahl(document.getElementById("menge").value) || null });
+				const r = await api("linie_zufuehren", { station: zustand.station, code, menge, fefo_grund: fefoGrund || null });
 				await linieStart();
 				meldung("gruen", "Zugeführt: " + r.name + " " + mg(r.menge, r.einheit), (r.behaelter ? r.behaelter + " · " : "") + "Charge " + r.chargen.join(", "));
 				ton(true);
 				(r.hinweise || []).forEach((h) => app.querySelector("#meldung").insertAdjacentHTML("beforeend", `<div class="meldung orange">${esc(h)}</div>`));
-			} catch (e) { meldung("rot", e.message); document.getElementById("scan").value = ""; }
+			} catch (e) { meldung("rot", e.message); const f = document.getElementById("scan"); if (f) f.value = ""; }
+		};
+		enter("scan", async (code) => {
+			if (!code) return;
+			const menge = zahl(document.getElementById("menge").value) || null;
+			// FEFO: ältere Charge im Lager? Dann Grund wählen (Pflicht laut Einstellung), sonst direkt zuführen
+			let f = { aeltere: [] };
+			try { f = await api("fefo_pruefen", { station: zustand.station, code }); } catch (e) { /* Fehler meldet das Zuführen */ }
+			if (!f.aeltere.length) return zufuehren(code, menge, null);
+			app.insertAdjacentHTML("beforeend", `<div class="panel" id="fefo-frage"><div class="meldung orange">Älteres MHD liegt im Lager<small>${esc(f.name + ": gescannt " + f.charge + ", älter " +
+				f.aeltere.map((a) => a.charge + " (MHD " + a.mhd + ", " + mg(a.menge, "Kg") + ")").join(", "))}</small></div>
+				<label>Besser die ältere Charge holen. Sonst Grund${f.pflicht ? "" : " (freiwillig)"}:</label>
+				<div class="einheiten">${FEFO_GRUENDE.map((g) => `<button type="button" data-g="${esc(g)}">${esc(g)}</button>`).join("")}</div>
+				<div class="reihe"><button class="knopf" data-g="">Abbrechen</button>${f.pflicht ? "" : `<button class="knopf" data-g="-">Ohne Grund zuführen</button>`}</div></div>`);
+			const frage = document.getElementById("fefo-frage");
+			frage.scrollIntoView({ block: "nearest" });
+			frage.addEventListener("click", (ev) => {
+				const b = ev.target.closest("[data-g]");
+				if (!b) return;
+				frage.remove();
+				if (b.dataset.g === "") { document.getElementById("scan").value = ""; return fokus("scan"); }
+				zufuehren(code, menge, b.dataset.g === "-" ? null : b.dataset.g);
+			});
 		});
 		fokus("scan");
 	}
@@ -1802,7 +1823,7 @@
 	function positionenHtml(p, aktion) {
 		if (!p.positionen.length) return `<p class="fehlt">Palette ist leer.</p>`;
 		return p.positionen.map((x, i) => `<button class="pos" ${aktion ? `data-a="${aktion}" data-i="${i}"` : "disabled"}>
-			<span>${esc(x.name)}<small>Los ${esc(x.charge)}${x.mhd ? " · MHD " + esc(x.mhd) : ""}${x.gesperrt ? " · GESPERRT" : ""}</small></span>
+			<span>${esc(x.name)}<small>Los ${esc(x.los || x.charge)}${x.mhd ? " · MHD " + esc(x.mhd) : ""}${x.gesperrt ? " · GESPERRT" : ""}</small></span>
 			<span class="rechts">${esc(stk(x.anzahl, x.einheit))}<small>${esc(kg(x.menge))}</small></span></button>`).join("");
 	}
 
@@ -1814,12 +1835,15 @@
 				${p.fuellung ? `<div style="margin-top:10px"><div style="height:14px;background:var(--panel2);border-radius:7px;overflow:hidden"><div style="height:100%;width:${Math.min(100, Math.round(p.fuellung.anteil * 100))}%;background:${p.fuellung.ueber ? "var(--rot)" : p.fuellung.voll ? "var(--gruen)" : "var(--blau)"}"></div></div>
 					<div class="fehlt" style="font-size:16px;margin-top:4px">${p.fuellung.ueber ? "ÜBERLADEN · " : p.fuellung.voll ? "VOLL · " : ""}${esc(p.fuellung.text || Math.round(p.fuellung.anteil * 100) + " % voll")}</div></div>` : ""}
 				${p.test ? `<div class="meldung orange">Test-NVE: Etikett nicht an Kunden geben (GS1-Basisnummer fehlt in den Einstellungen).</div>` : ""}
+				${p.etikett_aktuell === false && p.positionen.length ? (p.status === "Offen"
+					? `<div class="meldung">Etikett zeigt noch nicht den ganzen Inhalt<small>Nach dem Beladen mit Inhalt drucken.</small></div>`
+					: `<div class="meldung orange">Etikett passt nicht mehr zum Inhalt<small>Neu drucken und das alte überkleben, nicht von Hand korrigieren.</small></div>`) : ""}
 			</div>
 			${aktiv && p.positionen.length ? `<p class="fehlt">Position antippen, um Kartons auf eine andere Palette umzupacken.</p>` : ""}
 			${positionenHtml(p, aktiv ? "pos" : null)}
 			<div class="reihe">
 				${aktiv ? `<button class="knopf blau" data-a="laden">+ Lose Kartons laden<small>Los scannen</small></button>` : ""}
-				<button class="knopf" data-a="etikett">Etikett drucken</button>
+				<button class="knopf ${p.etikett_aktuell === false && p.positionen.length ? "gruen" : ""}" data-a="etikett">${p.etikett_aktuell === false ? "Etikett neu drucken" : "Etikett drucken"}</button>
 				${p.status === "Offen" ? `<button class="knopf" data-a="schliessen">Palette schließen</button>` : ""}
 				${p.status === "Geschlossen" ? `<button class="knopf" data-a="oeffnen">Wieder öffnen</button>` : ""}
 			</div>`;
@@ -1864,7 +1888,7 @@
 				const los = async (nach) => {
 					try {
 						const ziel = await api("palette_umpacken", { station: zustand.station, von: p.nve, nach, charge: pos.charge, anzahl: n, einheit: pos.einheit });
-						paletteZeigen(ziel, stk(n, pos.einheit) + " umgepackt.");
+						paletteZeigen(ziel, stk(n, pos.einheit) + " umgepackt." + (ziel.hinweise && ziel.hinweise.length ? " " + ziel.hinweise.join(" ") : ""));
 					} catch (e) { meldung("rot", e.message); }
 				};
 				aktionen(async (a) => {

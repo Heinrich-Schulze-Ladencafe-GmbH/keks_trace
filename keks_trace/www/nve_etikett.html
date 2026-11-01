@@ -38,7 +38,7 @@
 		<table>
 			<tr><th>Artikel</th><th>Los</th><th>MHD</th><th>Anzahl</th></tr>
 			{% for p in e.positionen[:8] %}
-			<tr><td>{{ p.name }}</td><td>{{ p.charge }}</td><td>{{ p.mhd or "" }}</td><td>{{ p.anzahl_text }} {{ p.einheit }}</td></tr>
+			<tr><td>{{ p.name }}</td><td>{{ p.los }}</td><td>{{ p.mhd or "" }}</td><td>{{ p.anzahl_text }} {{ p.einheit }}</td></tr>
 			{% endfor %}
 			{% if e.positionen|length > 8 %}<tr><td colspan="4">… und {{ e.positionen|length - 8 }} weitere Positionen</td></tr>{% endif %}
 			{% if not e.positionen %}<tr><td colspan="4">(leer)</td></tr>{% endif %}

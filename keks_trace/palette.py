@@ -200,10 +200,12 @@ def inhalt(palette: str) -> list[dict]:
 	for z in zeilen:
 		if flt(z.anzahl) <= EPS:
 			continue
-		b = frappe.db.get_value("Batch", z.charge, ["expiry_date", "kt_status"], as_dict=True) or {}
+		b = frappe.db.get_value("Batch", z.charge, ["expiry_date", "kt_status", "kt_los"], as_dict=True) or {}
 		ergebnis.append(
 			{
 				"charge": z.charge,
+				# Los wie auf Beutel und Karton (Fertigware); sonst die Charge selbst
+				"los": b.get("kt_los") or z.charge,
 				"artikel": z.artikel,
 				"name": frappe.get_cached_value("Item", z.artikel, "item_name"),
 				"einheit": z.einheit,
@@ -250,10 +252,35 @@ def lose(charge: str) -> float:
 	return flt(lagerbestand(charge) - auf_paletten(charge), 6)
 
 
+def stand(palette: str, pos=None) -> str:
+	"""Fingerabdruck des Inhalts (Los, Anzahl, Einheit) zum Vergleich mit dem gedruckten Etikett."""
+	pos = inhalt(palette) if pos is None else pos
+	return "|".join(f"{x['charge']}:{flt(x['anzahl'], 3):g}:{x['einheit']}" for x in pos)
+
+
+def etikett_gedruckt(palette: str) -> None:
+	"""Beim Druck festhalten, welchen Inhalt das Etikett zeigt (Neudruck nötig, wenn er sich ändert)."""
+	frappe.db.set_value(
+		"Palette",
+		palette,
+		{"etikett_stand": stand(palette), "etikett_gedruckt": now_datetime()},
+		update_modified=False,
+	)
+
+
+def etikett_aktuell(palette: str, pos=None) -> bool | None:
+	"""None = noch nie gedruckt; sonst ob das Etikett zum Inhalt passt."""
+	gedruckt, alt = frappe.db.get_value("Palette", palette, ["etikett_gedruckt", "etikett_stand"])
+	if not gedruckt:
+		return None
+	return (alt or "") == stand(palette, pos)
+
+
 def info(palette: str) -> dict:
 	p = frappe.get_doc("Palette", palette)
 	pos = inhalt(palette)
 	return {
+		"etikett_aktuell": etikett_aktuell(palette, pos),
 		"nve": p.name,
 		"art": p.typ,
 		"status": p.status,
@@ -306,6 +333,24 @@ def _bewegung(
 			"nutzer": frappe.session.user,
 		}
 	).insert(ignore_permissions=True)
+	if richtung == "Abgang":
+		_etikett_hinweis(palette)
+
+
+def _etikett_hinweis(palette):
+	"""Kartons von einer etikettierten Palette genommen: Etikett stimmt nicht mehr (statt Zahl von Hand korrigieren)."""
+	gemeldet = frappe.flags.setdefault("kt_etikett_hinweis", set())
+	if palette in gemeldet:
+		return
+	pos = inhalt(palette)
+	if pos and etikett_aktuell(palette, pos) is False:
+		gemeldet.add(palette)
+		frappe.msgprint(
+			_("Palette {0}: Inhalt geändert ({1}). Etikett neu drucken.").format(palette, _summe_text(pos)),
+			title=_("Etikett"),
+			indicator="orange",
+			alert=True,
+		)
 
 
 def _status_pruefen(palette):
@@ -719,7 +764,7 @@ def etikett(nve: str) -> dict:
 			mhd = _yymmdd(p["mhd_datum"])
 			anzahl = str(int(p["anzahl"]))
 			fnc1 = "Ï"  # FNC1 in JsBarcode
-			los = p["charge"] if len(p["charge"]) <= 20 else None  # GS1 (10) max. 20 Zeichen
+			los = p["los"] if len(p["los"]) <= 20 else None  # GS1 (10) wie auf dem Karton, max. 20 Zeichen
 			roh = (
 				f"02{gtin14}"
 				+ (f"15{mhd}" if mhd else "")

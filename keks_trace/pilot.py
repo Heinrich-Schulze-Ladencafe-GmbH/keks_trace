@@ -18,6 +18,7 @@ import frappe
 from frappe.utils import add_days, flt, nowdate
 
 from keks_trace import demo
+from keks_trace.utils import demo_commit
 
 PLATZHALTER = {
 	"Beutel 17846 netto": "200 g",
@@ -179,7 +180,7 @@ def anlegen(company: str | None = None) -> frappe._dict:
 		demo.neuer_traeger(code, typ)
 
 	ctx.auftrag = kundenauftrag(ctx)
-	frappe.db.commit()
+	demo_commit()
 	print(f"Pilot Honig Lebkuchen angelegt, Kundenauftrag {ctx.auftrag}. PLATZHALTER (bitte prüfen):")
 	for k, v in PLATZHALTER.items():
 		print(f"  - {k}: {v}")
@@ -326,4 +327,4 @@ def durchspielen():
 	r = rueckverfolgung(fw["charge"], "Rückwärts")
 	print(f"Rückwärts von Los {fw['los']} ({fw['charge']}): " + ", ".join(c["charge"] for c in r["chargen"]))
 	print(f"Etikett: /nve_etikett?nve={p}  (Inhalt laut System: {palette.info(p)['kartons'] or 'versendet'})")
-	frappe.db.commit()
+	demo_commit()

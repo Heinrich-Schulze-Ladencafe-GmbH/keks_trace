@@ -44,7 +44,8 @@ def einmalig(fn):
 			frappe.throw(_("Diese Buchung läuft schon. Bitte kurz warten, nicht nochmal tippen."))
 		try:
 			ergebnis = fn(*args, **kwargs)
-			frappe.db.commit()  # erst gebucht, dann gemerkt
+			if not frappe.flags.in_test:
+				frappe.db.commit()  # erst gebucht, dann gemerkt (in Tests nicht: Testdaten blieben stehen)
 			frappe.cache.set_value(schluessel, ergebnis, expires_in_sec=GUELTIG)
 			return ergebnis
 		finally:

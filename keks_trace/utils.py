@@ -6,6 +6,13 @@ import frappe
 from frappe.utils import flt
 
 
+def demo_commit():
+	"""Commit für Demos und Einrichtung, aber nicht in Tests: sonst schreibt ein Demo-Aufruf mitten in einem Test
+	alles bis dahin Angelegte fest, und Testdaten bleiben im Testsystem stehen."""
+	if not frappe.flags.in_test:
+		frappe.db.commit()
+
+
 def einstellung(feld: str):
 	"""Wert aus Keks Trace Einstellungen; eine vorübergehende Überschreibung (einstellungen()) geht vor."""
 	ueber = getattr(frappe.local, "kt_einstellungen", None) or {}

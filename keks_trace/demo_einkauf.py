@@ -10,6 +10,8 @@ schon abgerufen ist. Alle Zahlen sind Demo-Werte.
 import frappe
 from frappe.utils import add_days, add_months, nowdate
 
+from keks_trace.utils import demo_commit
+
 LIEFERANT = "KT Demo Mühle"
 KONTRAKT = {"artikel": "KT-ZUCKER", "menge": 50000, "preis": 0.62}  # 50 t zu 0,62 €/kg
 ABRUFE = [(12000, -10, 3), (12000, 0, 14)]  # (kg, Bestelltag relativ zu heute, Liefertag)
@@ -91,7 +93,7 @@ def anlegen() -> dict:
 					firma, bo, menge, add_days(nowdate(), bestellt), add_days(nowdate(), bestellt + liefern)
 				)
 			)
-	frappe.db.commit()
+	demo_commit()
 	offen = frappe.db.get_value("Blanket Order Item", {"parent": bo}, ["qty", "ordered_qty"], as_dict=True)
 
 	def kg(x):

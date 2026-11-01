@@ -10,6 +10,7 @@ import frappe
 from frappe.utils import add_days, flt, getdate, nowdate
 
 from keks_trace import demo, pilot, planung
+from keks_trace.utils import demo_commit
 
 LINIE = "Backstraße"
 
@@ -293,7 +294,7 @@ def anlegen(planen: int = 1) -> dict:
 		ergebnis.update(v)
 		if heute:
 			ergebnis["freigegeben"] = planung.tag_freigeben(LINIE, heute)["freigegeben"]
-	frappe.db.commit()
+	demo_commit()
 	tage = frappe.db.count("Produktionsauftrag", {"linie": LINIE})
 	print(f"Backstraße angelegt: {tage} Produktionsaufträge, Kundenaufträge {', '.join(auftraege)}")
 	print(

@@ -15,4 +15,8 @@ def get_context(context):
 	frappe.has_permission("Palette", "read", nve, throw=True)
 	context.e = palette.etikett(nve)
 	context.drucken = frappe.form_dict.get("druck") == "1"
+	if context.drucken:
+		# Festhalten, welchen Inhalt das gedruckte Etikett zeigt (Hinweis „neu drucken“ bei Änderung)
+		palette.etikett_gedruckt(nve)
+		frappe.db.commit()
 	context.title = "NVE " + nve

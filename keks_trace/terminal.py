@@ -2487,7 +2487,9 @@ def palette_beladen(station: str, palette: str, code: str, anzahl: float, einhei
 def palette_umpacken(station: str, von: str, nach: str, charge: str, anzahl: float, einheit: str) -> dict:
 	s = _station(station)
 	_darf(s, "paletten")
-	return paletten.umpacken(_palette(von), _palette(nach), charge, anzahl, einheit, s.name)
+	erg = paletten.umpacken(_palette(von), _palette(nach), charge, anzahl, einheit, s.name)
+	erg["hinweise"] = _meldungen()  # z. B. „Etikett der Quellpalette neu drucken“
+	return erg
 
 
 @frappe.whitelist()
@@ -2553,12 +2555,33 @@ def linie_info(station: str) -> dict:
 
 @frappe.whitelist()
 @einmalig
-def linie_zufuehren(station: str, code: str, menge: float | None = None) -> dict:
+def linie_zufuehren(
+	station: str, code: str, menge: float | None = None, fefo_grund: str | None = None
+) -> dict:
 	from keks_trace import linienbuchung
 
 	s = _station(station)
 	_darf(s, "linie")
-	return linienbuchung.zufuehren(s.name, code, menge)
+	return linienbuchung.zufuehren(s.name, code, menge, fefo_grund)
+
+
+@frappe.whitelist()
+def fefo_pruefen(station: str, code: str) -> dict:
+	"""Vor dem Zuführen: liegt vom gescannten Rohstoff/Packmittel eine Charge mit früherem MHD im Lager?
+
+	Nur lesen. Gibt die älteren Chargen und ob ein Grund Pflicht ist (Einstellung) zurück.
+	"""
+	_station(station)
+	modus = _fefo_modus()
+	r = aufloesen(code)
+	if modus == "Aus" or r["typ"] in ("silo", "palette") or not r.get("charge"):
+		return {"aeltere": [], "pflicht": False}
+	return {
+		"aeltere": _fefo_aeltere(r["artikel"], r["charge"]),
+		"pflicht": modus == "Grund Pflicht",
+		"charge": r["charge"],
+		"name": frappe.get_cached_value("Item", r["artikel"], "item_name"),
+	}
 
 
 @frappe.whitelist()
