@@ -218,12 +218,14 @@ if ! app_fertig frappe; then
 		bench init --frappe-branch ${FRAPPE_BRANCH} --python \"\$(uv python find ${PY_VERSION})\" frappe-bench" \
 		|| fehler "bench init fehlgeschlagen"
 fi
+app_fertig frappe || fehler "Nach bench init ist Frappe nicht in der Python-Umgebung. Skript nochmal starten (die halbe Bench wird beiseitegelegt); kommt das wieder: Netz/IPv6 prüfen."
 
 app_holen() {  # app_holen NAME URL BRANCH
 	app_fertig "$1" && { hinweis "$1 ist schon da"; return; }
 	schritt "App $1 holen"
 	[ -d "$BENCH/apps/$1" ] && { hinweis "halber Ordner apps/$1 von einem Abbruch: neu holen"; rm -rf "${BENCH:?}/apps/$1"; }
 	als_frappe "bench get-app --branch $3 $2"
+	app_fertig "$1" || fehler "App $1 ist nach dem Holen nicht installiert."
 }
 app_holen erpnext https://github.com/frappe/erpnext "$FRAPPE_BRANCH"
 app_holen eu_einvoice https://github.com/alyf-de/eu_einvoice "$FRAPPE_BRANCH"
