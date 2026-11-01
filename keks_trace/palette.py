@@ -75,8 +75,10 @@ def zerlegen(artikel: str, menge: float) -> str:
 		zaehl = [e["einheit"] for e in stufen if e["einheit"] not in NUR_ANZEIGE]
 		return "0 " + ANZEIGE.get(zaehl[0], zaehl[0])
 	teile = []
+	# Stückware (Herzen, Rohlinge): Rest in Stück; Kiloware: Rest als Bruchteil der kleinsten Zähleinheit
+	stueck = frappe.get_cached_value("Item", artikel, "stock_uom") in STUECK_EINHEITEN
 	for i, e in enumerate(stufen):
-		letzte = i == len(stufen) - 1 or (stufen[i + 1]["faktor"] == 1 and e["faktor"] != 1)
+		letzte = i == len(stufen) - 1 or (stufen[i + 1]["faktor"] == 1 and e["faktor"] != 1 and not stueck)
 		if letzte:
 			n = round(menge / e["faktor"], 2)
 			if n >= 0.05:  # Rundungsreste (z. B. 0,0002 kg) nicht anzeigen
@@ -95,6 +97,7 @@ def zerlegen(artikel: str, menge: float) -> str:
 
 
 ANZEIGE = {"Nos": "Stk", "Kg": "kg"}
+STUECK_EINHEITEN = ("Nos", "Stk", "Stück")
 
 
 def _n(n, einheit):
@@ -265,10 +268,14 @@ def info(palette: str) -> dict:
 
 
 def _summe_text(pos):
-	je = defaultdict(float)
+	"""„12 Karton“; angebrochene Kartons (nach Verbrauch von der Palette) als „31 Karton + 18 Stk“."""
+	je, angebrochen = defaultdict(float), []
 	for x in pos:
-		je[x["einheit"]] += x["anzahl"]
-	return ", ".join(f"{flt(n, 3):g} {e}".replace(".", ",") for e, n in je.items())
+		if abs(x["anzahl"] - round(x["anzahl"])) > 1e-6:
+			angebrochen.append(zerlegen(x["artikel"], x["menge"]))
+		else:
+			je[x["einheit"]] += x["anzahl"]
+	return ", ".join([f"{flt(n, 3):g} {e}".replace(".", ",") for e, n in je.items()] + angebrochen)
 
 
 # ---------------------------------------------------------------------------

@@ -11,6 +11,7 @@
   "typ",
   "warehouse",
   "artikel",
+  "linie",
   "column_break_1",
   "kapazitaet",
   "nachlauf",
@@ -52,6 +53,13 @@
    "in_list_view": 1
   },
   {
+   "fieldname": "linie",
+   "fieldtype": "Link",
+   "label": "Linie",
+   "options": "Linie",
+   "description": "Stationen dieser Linie sehen den Behälter (Leer melden, Karton anbrechen). Leer: Stationen ohne Linie (Backstube, Lager)."
+  },
+  {
    "fieldname": "column_break_1",
    "fieldtype": "Column Break"
   },
@@ -76,7 +84,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-28 22:00:00.000000",
+ "modified": "2026-11-01 10:05:19.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Silo",

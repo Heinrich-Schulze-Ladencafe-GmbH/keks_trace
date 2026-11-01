@@ -159,3 +159,25 @@ class TestFluesse(IntegrationTestCase):
 		pos = paletten.inhalt(nve)
 		self.assertAlmostEqual(pos[0]["menge"], 18, places=3)  # 30 kg auf der Palette, 12 kg verpackt
 		self.assertAlmostEqual(paletten.lose(e["charge"]), 0, places=3)
+
+	def test_behaelter_nur_an_ihrer_linie(self):
+		"""Leer melden und Karton anbrechen zeigen nur die Behälter der eigenen Linie (Herzenboden ≠ Backstube)."""
+		from keks_trace import demo_herzen
+
+		demo_herzen.anlegen(vorrat=0)
+		herzen = {s["silo"] for s in terminal.silos("Herzen Garnieren")}
+		backstube = {s["silo"] for s in terminal.silos("Backstube")}
+		self.assertIn("Zuckerguss Herzenboden", herzen)
+		self.assertFalse(herzen & backstube)
+		self.assertTrue(terminal.start("Herzen Verpackung")["vorraete"])
+		self.assertFalse(terminal.start("Backstube")["vorraete"])
+		einheit = {s["silo"]: s["einheit"] for s in terminal.silos("Herzen Verpackung")}
+		self.assertEqual(einheit["Folie Herzenboden"], "Nos")  # nicht kg
+
+	def test_stueckware_rest_in_stueck(self):
+		"""Angebrochene Kartons mit Stückware: „19 Karton + 7 Stk“ statt „19,7 Karton“."""
+		from keks_trace import demo_herzen
+
+		demo_herzen.anlegen(vorrat=0)
+		je = demo_herzen.STK_JE_KARTON["9"]
+		self.assertEqual(paletten.zerlegen("HZ-ROHLING-9", 3 * je + 7), "3 Karton + 7 Stk")

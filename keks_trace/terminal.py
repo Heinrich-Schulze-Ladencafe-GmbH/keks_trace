@@ -53,6 +53,11 @@ def _vorraete():
 	}
 
 
+def _silo_filter(s) -> dict:
+	"""Behälter, die eine Station sieht: die ihrer Linie; Stationen ohne Linie die ohne Linie."""
+	return {"aktiv": 1, "linie": s.linie if s.linie else ["is", "not set"]}
+
+
 def _station(station):
 	if not station or not frappe.db.exists("Terminal Station", station):
 		_fehler(_("Station {0} ist nicht eingerichtet.").format(station or "-"))
@@ -114,7 +119,7 @@ def start(station: str) -> dict:
 		"nur_fertigware": stufen == ["Fertigware"],
 		"vorschlagen": bool(s.zutaten_vorschlagen),
 		"umlager_ziel": s.umlager_ziel,
-		"vorraete": bool(s.f_silo and _vorraete()),
+		"vorraete": bool(s.f_silo and frappe.db.exists("Silo", {**_silo_filter(s), "typ": VORRAT})),
 		"linie": s.linie,
 		"pruefungen": pruefung.faellig(s.name),
 	}
@@ -360,11 +365,14 @@ def vorraete(station: str) -> list[dict]:
 	"""Offene Vorräte am Tisch mit der Charge, die gerade dran ist."""
 	from keks_trace.silo import bestand
 
-	_station(station)
+	s = _station(station)
 	jetzt = now_datetime()
 	ergebnis = []
 	for v in frappe.get_all(
-		"Silo", filters={"aktiv": 1, "typ": VORRAT}, fields=["name", "artikel", "warehouse"], order_by="name"
+		"Silo",
+		filters={**_silo_filter(s), "typ": VORRAT},
+		fields=["name", "artikel", "warehouse"],
+		order_by="name",
 	):
 		chargen = bestand(v.warehouse, jetzt)
 		ergebnis.append(
@@ -859,19 +867,22 @@ def kunden() -> list[dict]:
 
 
 @frappe.whitelist()
-def silos() -> list[dict]:
+def silos(station: str | None = None) -> list[dict]:
+	"""Silos, Tanks und Vorräte zum Leer melden; mit Station nur die, die sie sieht (ihre Linie)."""
 	from keks_trace.silo import bestand
 
 	jetzt = now_datetime()
 	ergebnis = []
+	filters = _silo_filter(_station(station)) if station else {"aktiv": 1}
 	for s in frappe.get_all(
-		"Silo", filters={"aktiv": 1}, fields=["name", "typ", "artikel", "warehouse"], order_by="name"
+		"Silo", filters=filters, fields=["name", "typ", "artikel", "warehouse"], order_by="name"
 	):
 		ergebnis.append(
 			{
 				"silo": s.name,
 				"typ": s.typ,
 				"artikel": s.artikel,
+				"einheit": frappe.get_cached_value("Item", s.artikel, "stock_uom"),
 				"bestand": flt(sum(c["menge"] for c in bestand(s.warehouse, jetzt)), 3),
 			}
 		)

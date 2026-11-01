@@ -174,9 +174,10 @@ def _behaelter(ctx):
 			).insert()  # fmt: skip
 		if not frappe.db.exists("Silo", name):
 			frappe.get_doc(
-				{"doctype": "Silo", "silo_name": name, "typ": typ, "warehouse": lager, "artikel": artikel,
+				{"doctype": "Silo", "silo_name": name, "typ": typ, "warehouse": lager, "artikel": artikel, "linie": LINIE,
 				 "nachlauf": nachlauf, "aktiv": 1}
 			).insert()  # fmt: skip
+		frappe.db.set_value("Silo", name, "linie", LINIE)  # nur am Herzenboden sichtbar
 	frappe.cache.delete_value("kt_silo_lager")
 
 
@@ -258,7 +259,13 @@ def anlegen(vorrat: int = 1) -> frappe._dict:
 def kundenauftrag(ctx) -> str:
 	"""Der Kunde bestellt Herzen in Stück (Demo)."""
 	offen = frappe.db.get_value(
-		"Sales Order", {"po_no": PO_NR, "docstatus": 1, "status": ["not in", ["Completed", "Closed"]]}
+		"Sales Order",
+		{
+			"po_no": PO_NR,
+			"customer": ctx.kunde,
+			"docstatus": 1,
+			"status": ["not in", ["Completed", "Closed"]],
+		},
 	)
 	if offen:
 		return offen

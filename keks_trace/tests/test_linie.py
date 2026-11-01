@@ -163,7 +163,7 @@ class TestLinie(IntegrationTestCase):
 		linie = f"Testlinie-{self.h}"
 		frappe.get_doc(
 			{"doctype": "Linie", "linie_name": linie, "company": self.ctx.company, "laufzeit_stunden": 8,
-			 "umruestzeit_minuten": 30, "lagerort": self.ctx.linienlager, "fertiglager": self.ctx.fertig}
+			 "umruestzeit_minuten": 30, "lagerort": self.ctx.lagerort_linie, "fertiglager": self.ctx.fertig}
 		).insert()  # fmt: skip
 		# 17846 vorübergehend dieser Testlinie zuordnen: geplant wird je Linie nur ihre Artikel
 		frappe.db.set_value("Item", "17846", "kt_linie", linie)

@@ -1129,10 +1129,13 @@
 			let i;
 			try { i = await api("linie_info", { station: zustand.station }); } catch (e) { return meldung("rot", e.message); }
 			if (!i || !i.auftrag || i.status !== "Läuft") return auftragWaehlen("Kneten", herstellenStart);
+			// Ohne veredelten Teig (z. B. Herzen-Rohlinge aus Grundteig): Kübel direkt auf die Linie
+			if (!i.zutaten.some((z) => z.stufe === "Teig veredelt")) return linieStart();
 			zustand.linienAuftrag = i;
 		} else zustand.linienAuftrag = null;
 		const la = zustand.linienAuftrag;
-		app.innerHTML = kopf(la ? "Kneten" : verpackung ? "Verpacken" : "Herstellen", true) + (la ? auftragKopf(la) : "") +
+		app.innerHTML = kopf(la ? "Kneten" : verpackung ? "Verpacken" : "Herstellen", true) + (la ? auftragKopf(la) +
+			`<div class="reihe" style="margin-top:0"><button class="knopf" data-a="direkt-linie">Kübel oder Rework direkt auf die Linie<small>ohne Kneten scannen</small></button></div>` : "") +
 			(verpackung ? `<p><b>Kundenaufträge</b> – Zeile antippen</p><div id="auftraege">Lädt …</div><p style="margin-top:22px"><b>Ohne Auftrag</b></p>` : `<p>Was wird hergestellt?</p>`) +
 			`<div id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
@@ -1149,9 +1152,12 @@
 						["Einh.", (z) => ein(z.einheit)], ["Termin", "termin"]], auftragsListe, "auftrag")
 					: `<span class="fehlt">Keine offenen Kundenaufträge.</span>`;
 			}
-			suchListe("liste", [["Artikel", "artikel"], ["Bezeichnung", "name"], ["Stufe", "stufe"]], liste, (r) => rezeptMenge(r.artikel), "Suchen: Artikelnummer oder Bezeichnung …");
+			// Kneter: nur der Teig, den der laufende Auftrag braucht
+			const wahl = la ? liste.filter((r) => la.zutaten.some((z) => z.artikel === r.artikel)) : liste;
+			suchListe("liste", [["Artikel", "artikel"], ["Bezeichnung", "name"], ["Stufe", "stufe"]], wahl, (r) => rezeptMenge(r.artikel), "Suchen: Artikelnummer oder Bezeichnung …");
 			aktionen((a, d) => {
 				if (a === "pa-wechseln") return auftragWaehlen("Kneten", herstellenStart);
+				if (a === "direkt-linie") return linieStart();
 				if (a === "rezept") return rezeptMenge(d.artikel);
 				if (a === "auftrag") { const z = auftragsListe[+d.i]; return rezeptMenge(z.artikel, z); }
 				beiAllgemein(a);
@@ -1962,7 +1968,7 @@
 		try {
 			const liste = await api("vorraete", { station: zustand.station });
 			document.getElementById("liste").innerHTML = tabelle([["Vorrat", "vorrat"], ["Artikel", "name"],
-				["Charge dran", (v) => v.chargen.map((c) => c.charge).join(", ") || "– leer –"], ["Bestand", (v) => mg(v.bestand, v.einheit), 1], ["", () => "Wählen ›"]], liste, "waehlen");
+				["Charge dran", (v) => v.chargen.length ? v.chargen[0].charge + (v.chargen.length > 1 ? ` (+${v.chargen.length - 1} weitere)` : "") : "– leer –"], ["Bestand", (v) => mg(v.bestand, v.einheit), 1], ["", () => "Wählen ›"]], liste, "waehlen");
 			aktionen(async (a, d) => {
 				if (a !== "waehlen") return beiAllgemein(a);
 				const v = liste[+d.i];
@@ -1982,8 +1988,8 @@
 		app.innerHTML = kopf("Silo leer melden", true) + `<p>Welches Silo oder welcher Tank ist leer?</p><div class="raster" id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
-			const liste = await api("silos");
-			document.getElementById("liste").innerHTML = liste.map((s) => `<button class="knopf" data-a="silo" data-name="${esc(s.silo)}">${esc(s.silo)}<small>rechnerisch ${esc(kg(s.bestand))}</small></button>`).join("") || "Keine Silos angelegt.";
+			const liste = await api("silos", { station: zustand.station });
+			document.getElementById("liste").innerHTML = liste.map((s) => `<button class="knopf" data-a="silo" data-name="${esc(s.silo)}">${esc(s.silo)}<small>rechnerisch ${esc(mg(s.bestand, s.einheit))}</small></button>`).join("") || "Keine Silos angelegt.";
 			suche("liste");
 			aktionen((a, d) => (a === "silo" ? siloBestaetigen(d.name) : beiAllgemein(a)));
 		} catch (e) { meldung("rot", e.message); }

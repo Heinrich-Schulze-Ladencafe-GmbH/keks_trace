@@ -200,7 +200,7 @@ def stammdaten() -> frappe._dict:
 					"territory": demo._blatt("Territory", None),
 				}
 			).insert()
-	return frappe._dict({**ctx, "linie": LINIE, "linienlager": lager})
+	return frappe._dict({**ctx, "linie": LINIE, "lagerort_linie": lager, "linienlager": linienlager})
 
 
 def grossauftraege(ctx) -> list[str]:
