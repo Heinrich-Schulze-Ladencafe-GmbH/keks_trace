@@ -14,7 +14,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, formatdate, getdate, now_datetime, nowdate
 
-from keks_trace import kennzeichnung, pruefung
+from keks_trace import gs1, kennzeichnung, pruefung
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
 from keks_trace.anfrage import einmalig
@@ -228,6 +228,7 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 			"stufe": artikel_stufe(z.item_code),
 			"silo": silos.get(z.item_code),
 			"vorrat": silos.get(z.item_code) if z.item_code in vorraete else None,
+			"toleranz": _toleranz(z, flt(z.qty * faktor, 3)),
 		}
 		for z in b.items
 	]
@@ -251,6 +252,9 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 		"einheit": b.uom,
 		"zutaten": zutaten,
 		"rework_moeglich": artikel_stufe(artikel) in REWORK_ZIELE,
+		# Einwaage gegen Soll prüfen (Grundteig, Teig, Halbfabrikat), siehe _pruefe_rezept
+		"rezept_pruefen": artikel_stufe(artikel) in REZEPT_STUFEN and _rezept_modus() != "Aus",
+		"rezept_pflicht": _rezept_modus() == "Grund Pflicht",
 		"ausgabe_silo": silos.get(artikel),
 		"einheiten": paletten.einheiten(artikel) if artikel_stufe(artikel) == "Fertigware" else [],
 		"pruefungen": [pruefung.beschreibung(p) for p in pruefung.fuer_herstellen(artikel, station)],
@@ -258,6 +262,64 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 		"kuebel": _kuebel_fuer(zutaten),
 		"umstellung_bio": bool(station and kennzeichnung.umstellung_noetig(station, artikel)),
 	}
+
+
+REZEPT_STUFEN = ("Grundteig", "Teig veredelt", "Halbfabrikat")
+
+
+def _rezept_modus() -> str:
+	return frappe.db.get_single_value("Keks Trace Einstellungen", "rezept_abweichung") or "Grund Pflicht"
+
+
+def _toleranz(bom_zeile, soll: float) -> float:
+	"""Erlaubte Abweichung in der Lagereinheit: % an der Rezeptzeile, sonst Standard; nie unter dem Minimum."""
+	einstellung = lambda feld: frappe.db.get_single_value("Keks Trace Einstellungen", feld)  # noqa: E731
+	prozent = flt(bom_zeile.get("kt_toleranz_prozent")) or flt(einstellung("rezept_toleranz_prozent") or 5)
+	return flt(max(abs(soll) * prozent / 100, flt(einstellung("rezept_toleranz_min") or 0.01)), 4)
+
+
+def _pruefe_rezept(ziel: str, sollmenge, eingaenge: list[dict], grund: str | None) -> str | None:
+	"""Einwaage gegen das Rezept, umgerechnet auf die Sollmenge (z. B. halbe Masse = halbe Sollmenge).
+
+	Nur mit Sollmenge vom Terminal (Teigmacher), nur für REZEPT_STUFEN. Rework zählt nicht (eigene Regel).
+	Gibt den Text fürs Protokoll zurück (None = alles in der Toleranz).
+	"""
+	modus = _rezept_modus()
+	if not flt(sollmenge) or modus == "Aus" or artikel_stufe(ziel) not in REZEPT_STUFEN:
+		return None
+	r = rezept(ziel, flt(sollmenge))
+	ist = {}
+	for z in eingaenge:
+		ist[z["artikel"]] = ist.get(z["artikel"], 0) + flt(z["menge"])
+	texte = []
+	for z in r["zutaten"]:
+		menge = flt(ist.get(z["artikel"]), 3)
+		if abs(menge - z["menge"]) <= z["toleranz"] + 1e-9:
+			continue
+		prozent = f"{(menge / z['menge'] - 1) * 100:+.0f} %" if z["menge"] else ""
+		texte.append(
+			_("{0}: {1} statt {2} ({3}, erlaubt ± {4})").format(
+				z["name"],
+				paletten._n(menge, z["einheit"]),
+				paletten._n(z["menge"], z["einheit"]),
+				prozent,
+				paletten._n(z["toleranz"], z["einheit"]),
+			)
+		)
+	if not texte:
+		return None
+	kopf = _("Sollmenge {0}").format(paletten._n(flt(sollmenge), r["einheit"]))
+	grund = (grund or "").strip()
+	if not grund:
+		if modus == "Grund Pflicht":
+			_fehler(
+				_("Einwaage außerhalb der Toleranz. Bitte korrigieren oder einen Grund angeben.")
+				+ "<br>"
+				+ "<br>".join(texte)
+			)
+		frappe.msgprint("<br>".join(texte), title=_("Einwaage"), indicator="orange", alert=True)
+		return _("Ohne Grund (Einstellung: nur Hinweis)") + "\n" + kopf + "\n" + "\n".join(texte)
+	return _("Grund: {0}").format(grund) + "\n" + kopf + "\n" + "\n".join(texte)
 
 
 def _kuebel_fuer(zutaten) -> list[dict]:
@@ -530,6 +592,99 @@ def rework_artikel() -> list[dict]:
 		fields=["name as artikel", "item_name as name", "kt_allergengruppe as allergengruppe"],
 		order_by="item_name",
 	)
+
+
+GEBINDEARTEN = ("Sack", "Fass", "IBC", "Eimer", "Karton", "Kanister", "BigBag", "Sonstiges")
+
+
+def _artikel_zur_gtin(gtin: str) -> dict | None:
+	"""Artikel und Einheit zu einer GTIN/EAN aus der Barcode-Tabelle am Artikel (ERPNext-Standard)."""
+	for g in gs1.gtin_varianten(gtin):
+		z = frappe.db.get_value("Item Barcode", {"barcode": g}, ["parent", "uom"], as_dict=True)
+		if z:
+			return {"artikel": z.parent, "einheit": z.uom}
+	return None
+
+
+def _charge_name(artikel: str, lieferantencharge: str) -> str:
+	"""Name unserer Charge zu einer Lieferanten-Charge: die Lieferanten-Charge selbst, bei gleicher Nummer
+	eines anderen Artikels <Artikel>-<Lieferanten-Charge>. Eine Nummer je Sache, keine Zweitnummer."""
+	if frappe.db.exists("Batch", lieferantencharge) and (
+		frappe.db.get_value("Batch", lieferantencharge, "item") != artikel
+	):
+		return f"{artikel}-{lieferantencharge}"
+	return lieferantencharge
+
+
+def _pruefe_lieferantencharge(artikel: str, text: str) -> None:
+	"""Plausibilität: eine Charge enthält eine Ziffer und ist nicht der Artikelname (z. B. „Präsentkarton“)."""
+	if not 2 <= len(text) <= 60:
+		_fehler(
+			_("Charge {0}: bitte die Charge des Lieferanten (2 bis 60 Zeichen).").format(frappe.bold(text))
+		)
+	name = (frappe.get_cached_value("Item", artikel, "item_name") or "").casefold()
+	if not any(z.isdigit() for z in text) or text.casefold() in (name, artikel.casefold()):
+		_fehler(
+			_(
+				"{0} ist keine Charge. Bitte die Charge vom Etikett des Lieferanten scannen oder abtippen."
+			).format(frappe.bold(text))
+		)
+
+
+@frappe.whitelist()
+def wareneingang_scan(code: str) -> dict:
+	"""Etikett des Lieferanten im Wareneingang lesen. Schlägt vor, bucht nichts.
+
+	GS1-128/DataMatrix: Artikel (über GTIN), Charge, MHD, Gewicht. Einfache EAN: nur Artikel und Einheit.
+	Alles andere: Text, wird als Charge vorgeschlagen.
+	"""
+	g = gs1.lesen(code)
+	gtin = g.get("gtin") if g else gs1.ean(code)
+	erg = {"code": (code or "").strip(), "gs1": bool(g), "gtin": gtin}
+	if not g and not gtin:
+		erg["charge"] = erg["code"]
+		return erg
+	if g:
+		erg["charge"] = g.get("charge")
+		erg["mhd"] = str(g["mhd"]) if g.get("mhd") else None
+		erg["netto_kg"] = g.get("netto_kg")
+		erg["unvollstaendig"] = bool(g.get("rest"))
+	treffer = _artikel_zur_gtin(gtin) if gtin else None
+	if not treffer:
+		erg["unbekannt"] = True
+		return erg
+	artikel = treffer["artikel"]
+	stufe = artikel_stufe(artikel)
+	if stufe not in ("Rohstoff", "Packmittel") or not frappe.get_cached_value(
+		"Item", artikel, "has_batch_no"
+	):
+		_fehler(
+			_("Code {0} gehört zu {1} ({2}) - das ist kein Rohstoff oder Packmittel mit Charge.").format(
+				gtin, artikel, frappe.get_cached_value("Item", artikel, "item_name")
+			)
+		)
+	erg["artikel"] = artikel
+	erg["einheit"] = treffer["einheit"]
+	# Menge je Gebinde: Gewicht aus dem Etikett, sonst Umrechnung der Einheit des Barcodes (Karton = 25 Stk)
+	lager_einheit = frappe.get_cached_value("Item", artikel, "stock_uom")
+	je = None
+	if erg.get("netto_kg") and lager_einheit in ("Kg", "kg"):
+		je = erg["netto_kg"]
+	elif treffer["einheit"] and treffer["einheit"] != lager_einheit:
+		je = next(
+			(
+				e["faktor"]
+				for e in paletten.einheiten(artikel, alle=True)
+				if e["einheit"] == treffer["einheit"]
+			),
+			None,
+		)
+	erg["menge_je_gebinde"] = je
+	erg["gebindeart"] = treffer["einheit"] if treffer["einheit"] in GEBINDEARTEN else None
+	if erg.get("charge"):
+		vorhanden = _charge_name(artikel, erg["charge"])
+		erg["charge_bekannt"] = bool(frappe.db.exists("Batch", vorhanden))
+	return erg
 
 
 @frappe.whitelist()
@@ -922,7 +1077,10 @@ def aufloesen(code: str) -> dict:
 
 	if frappe.db.exists("Produkttraeger", code):
 		t = frappe.db.get_value(
-			"Produkttraeger", code, ["name", "typ", "status", "charge", "artikel", "menge"], as_dict=True
+			"Produkttraeger",
+			code,
+			["name", "typ", "status", "charge", "artikel", "menge", "gereinigt_am"],
+			as_dict=True,
 		)
 		erg = {
 			"typ": "behaelter",
@@ -930,6 +1088,9 @@ def aufloesen(code: str) -> dict:
 			"behaelter": code,
 			"behaelter_typ": t.typ,
 			"status": t.status,
+			"gereinigt_am": frappe.utils.format_datetime(t.gereinigt_am, "dd.MM.yyyy HH:mm")
+			if t.gereinigt_am
+			else None,
 		}
 		if t.charge:
 			lager = charge_lager(t.charge)
@@ -959,6 +1120,33 @@ def aufloesen(code: str) -> dict:
 			"inhalt": flt(sum(lager.values()), 3),
 		}
 
+	# Etikett des Lieferanten (GS1-128 mit GTIN und Charge) oder nur seine EAN
+	g = gs1.lesen(code)
+	if g and g.get("sscc") and not g.get("gtin"):
+		nve = paletten.finde(g["sscc"])
+		if nve:
+			return aufloesen(nve)
+	gtin = g.get("gtin") if g else gs1.ean(code)
+	treffer = _artikel_zur_gtin(gtin) if gtin else None
+	if treffer:
+		name = frappe.get_cached_value("Item", treffer["artikel"], "item_name")
+		if not (g and g.get("charge")):
+			_fehler(
+				_(
+					"Das ist {0} ({1}), aber ohne Charge im Strichcode. Bitte das Gebinde-Etikett scannen oder die Charge eingeben."
+				).format(treffer["artikel"], name)
+			)
+		if artikel_stufe(treffer["artikel"]) in ("Rohstoff", "Packmittel"):
+			charge = _charge_name(treffer["artikel"], g["charge"])
+			if not frappe.db.exists("Batch", charge):
+				_fehler(
+					_("{0} ({1}) Charge {2} ist nicht im Wareneingang gebucht.").format(
+						treffer["artikel"], name, frappe.bold(g["charge"])
+					)
+				)
+			return aufloesen(charge)
+		return aufloesen(_charge_zum_eigenen_los(treffer["artikel"], name, g))
+
 	# Ohne Scanner: aufgedruckte Los-Nummer oder Buchungsnummer (MAT-STE-...) eingetippt
 	charge = _charge_aus_los_oder_buchung(code)
 	if charge:
@@ -969,6 +1157,27 @@ def aufloesen(code: str) -> dict:
 			frappe.bold(code)
 		)
 	)
+
+
+def _charge_zum_eigenen_los(artikel: str, name: str, g: dict) -> str:
+	"""Eigenes GS1-Etikett (Karton): Los (10) und ggf. MHD (15) -> unsere Charge dieses Artikels mit Bestand."""
+	kandidaten = frappe.get_all(
+		"Batch", {"item": artikel, "kt_los": g["charge"]}, ["name", "expiry_date"], order_by="creation desc"
+	)
+	if g.get("mhd"):
+		passend = [b for b in kandidaten if b.expiry_date and getdate(b.expiry_date) == g["mhd"]]
+		kandidaten = passend or kandidaten
+	mit_bestand = [b for b in kandidaten if charge_lager(b.name)]
+	kandidaten = mit_bestand or kandidaten
+	if not kandidaten:
+		_fehler(_("{0} ({1}) Los {2} gibt es nicht.").format(artikel, name, frappe.bold(g["charge"])))
+	if len(kandidaten) > 1:
+		_fehler(
+			_("{0} Los {1} gibt es mehrfach: {2}. Bitte die Charge wählen.").format(
+				name, g["charge"], ", ".join(b.name for b in kandidaten[:6])
+			)
+		)
+	return kandidaten[0].name
 
 
 def _charge_aus_los_oder_buchung(code: str) -> str | None:
@@ -1066,6 +1275,73 @@ def _pruefe_charge(charge, artikel):
 		)
 
 
+FEFO_STUFEN = ("Rohstoff", "Packmittel")
+
+
+def _fefo_aeltere(artikel: str, charge: str | None, verwendet=()) -> list[dict]:
+	"""FEFO: Chargen desselben Rohstoffs/Packmittels mit früherem MHD, die noch im Lager liegen.
+
+	Nicht gezählt: gesperrte und abgelaufene Chargen, Silo/Vorrat/Linie (dort teilt das System selbst zu),
+	und Chargen, die in derselben Buchung ohnehin verbraucht werden.
+	"""
+	if not charge or artikel_stufe(artikel) not in FEFO_STUFEN:
+		return []
+	eigen = frappe.db.get_value("Batch", charge, "expiry_date")
+	if not eigen:
+		return []
+	heute, eigen = getdate(nowdate()), getdate(eigen)
+	aeltere = []
+	for c in _lager_chargen(artikel):
+		if c["charge"] == charge or c["charge"] in verwendet:
+			continue
+		mhd = frappe.db.get_value("Batch", c["charge"], "expiry_date")
+		if mhd and heute <= getdate(mhd) < eigen:
+			aeltere.append(
+				{"charge": c["charge"], "mhd": formatdate(mhd), "menge": c["menge"], "iso": str(mhd)}
+			)
+	aeltere.sort(key=lambda a: a["iso"])
+	return [{k: v for k, v in a.items() if k != "iso"} for a in aeltere[:3]]
+
+
+def _fefo_modus() -> str:
+	return frappe.db.get_single_value("Keks Trace Einstellungen", "fefo_rohstoffe") or "Grund Pflicht"
+
+
+def _fefo_text(z: dict, aeltere: list[dict]) -> str:
+	a = aeltere[0]
+	return _("{0}: Charge {1} genommen, älter ist {2} (MHD {3}, {4} im Lager).").format(
+		z["name"], z["charge"], a["charge"], a["mhd"], paletten._n(a["menge"], z["einheit"])
+	)
+
+
+def _pruefe_fefo(eingaenge: list[dict], grund: str | None) -> str | None:
+	"""Abweichung von FEFO nur mit Grund. Gibt den Text fürs Protokoll zurück (None = keine Abweichung)."""
+	modus = _fefo_modus()
+	if modus == "Aus":
+		return None
+	verwendet = {z["charge"] for z in eingaenge if z.get("charge")}
+	texte = []
+	for z in eingaenge:
+		if z.get("typ") == "silo":
+			continue
+		aeltere = _fefo_aeltere(z["artikel"], z.get("charge"), verwendet)
+		if aeltere:
+			texte.append(_fefo_text(z, aeltere))
+	if not texte:
+		return None
+	grund = (grund or "").strip()
+	if modus == "Nur Hinweis" and not grund:
+		frappe.msgprint("<br>".join(texte), title=_("FEFO-Hinweis"), indicator="orange", alert=True)
+		return _("Ohne Grund (Einstellung: nur Hinweis)") + "\n" + "\n".join(texte)
+	if not grund:
+		_fehler(
+			_("Älteres MHD liegt im Lager. Bitte die ältere Charge nehmen oder einen Grund angeben.")
+			+ "<br>"
+			+ "<br>".join(texte)
+		)
+	return _("Grund: {0}").format(grund) + "\n" + "\n".join(texte)
+
+
 def _pruefe_rework_fuer(rework, ziel):
 	from keks_trace.rework import _pruefe_allergene
 
@@ -1149,6 +1425,11 @@ def _zeile(code, menge, ziel=None, erlaubt=None):
 		"einheit": frappe.get_cached_value("Item", artikel, "stock_uom"),
 		"rework": ist_rework,
 		"max_anteil": max_anteil,
+		# Hinweis am Terminal: ältere Chargen (die Oberfläche blendet die schon gescannten aus)
+		"fefo": _fefo_aeltere(artikel, r.get("charge"))
+		if r["typ"] != "silo" and _fefo_modus() != "Aus"
+		else [],
+		"fefo_pflicht": _fefo_modus() == "Grund Pflicht",
 	}
 
 
@@ -1297,8 +1578,14 @@ def _ziel_behaelter(code):
 	r = aufloesen(code)
 	if r["typ"] != "behaelter":
 		_fehler(_("{0} ist kein Behälter.").format(code))
-	if r["status"] in ("Reinigung", "Gesperrt"):
-		_fehler(_("Behälter {0} ist auf '{1}' gesetzt.").format(code, r["status"]))
+	if r["status"] == "Reinigung":
+		_fehler(
+			_("Behälter {0} ist zur Reinigung. Erst reinigen und im Info-Scan als gereinigt melden.").format(
+				code
+			)
+		)
+	if r["status"] == "Gesperrt":
+		_fehler(_("Behälter {0} ist gesperrt.").format(code))
 	if r["behaelter_typ"] == "Gebinde":
 		_fehler(_("{0} ist ein Gebinde vom Wareneingang, kein Zielbehälter.").format(code))
 	if r.get("charge"):
@@ -1378,10 +1665,17 @@ def herstellen(
 	kundenauftrag: str | None = None,
 	pruefwerte=None,
 	mhd: str | None = None,
+	fefo_grund: str | None = None,
+	sollmenge: float | None = None,
+	rezept_grund: str | None = None,
 ) -> dict:
 	"""Fertigung buchen: Zutaten (gescannt) -> neue Charge des Ziels, optional in einen Behälter.
 
 	Fertigware: Ausbringung als Anzahl + Einheit (Karton/Beutel); ziel_behaelter darf eine Palette sein.
+	fefo_grund: Pflicht, wenn ein Rohstoff/Packmittel mit späterem MHD genommen wird, obwohl ein früheres
+	im Lager liegt (FEFO); wird mit der Buchung gespeichert.
+	sollmenge / rezept_grund: Sollmenge vom Teigmacher; weicht eine Zutat über die Toleranz ab, ist ein Grund
+	Pflicht (Einstellung), siehe _pruefe_rezept.
 	"""
 	s = _station(station)
 	r = rezept(ziel, station=s.name)
@@ -1396,6 +1690,8 @@ def herstellen(
 	eingaenge = [_zeile(z["code"], z["menge"], ziel, erlaubt) for z in _liste(zeilen)]
 	if not eingaenge:
 		_fehler(_("Keine Zutaten gescannt."))
+	fefo = _pruefe_fefo(eingaenge, fefo_grund)
+	rezept_abw = _pruefe_rezept(ziel, sollmenge, eingaenge, rezept_grund)
 	pruef_ergebnisse = pruefung.bei_buchung(pruefung.HERSTELLEN, ziel, pruefwerte, s.name)
 	pruefung.verweigern_herstellen(pruef_ergebnisse, s.name, _("Herstellen {0}").format(r["name"]))
 
@@ -1465,6 +1761,8 @@ def herstellen(
 			"kt_station": s.name,
 			"kt_kundenauftrag": kundenauftrag,
 			"kt_produktionsauftrag": linien_auftrag.name if linien_auftrag else None,
+			"kt_fefo_abweichung": fefo,
+			"kt_rezept_abweichung": rezept_abw,
 			"items": [_se_zeile(z, s_warehouse=z["lager"]) for z in eingaenge] + [ausgabe],
 		}
 	)
@@ -1593,11 +1891,14 @@ def wareneingang(
 	gebinde: int | None = None,
 	gebindeart: str | None = None,
 	pruefwerte=None,
+	etiketten=1,
 ) -> dict:
 	"""Wareneingang mit Lieferantencharge, ins Rohstofflager oder direkt ins Silo.
 
-	gebinde = Anzahl Gebinde (Sack, Fass, IBC, ...); menge ist dann die Menge JE Gebinde. Jedes Gebinde
-	bekommt einen eigenen Code (Etikett) und wird später in der Backstube gescannt.
+	gebinde = Anzahl Gebinde (Sack, Fass, IBC, ...); menge ist dann die Menge JE Gebinde.
+	etiketten = 1: jedes Gebinde bekommt einen eigenen Code (Etikett) und wird in der Backstube gescannt.
+	etiketten = 0: kein eigenes Etikett - das Etikett des Lieferanten trägt die Charge (GS1-128) und wird
+	in der Backstube gescannt; gebucht wird die Gesamtmenge auf die Charge.
 	"""
 	s = _station(station)
 	_darf(s, "wareneingang")
@@ -1608,6 +1909,22 @@ def wareneingang(
 		_fehler(_("Bitte eine Menge größer 0 eingeben."))
 	if not lieferantencharge:
 		_fehler(_("Bitte die Charge des Lieferanten scannen oder eingeben."))
+	g = gs1.lesen(lieferantencharge)
+	if g:
+		# Ganzes Lieferanten-Etikett ins Chargenfeld gescannt: Charge herauslesen, Artikel muss passen
+		treffer = _artikel_zur_gtin(g["gtin"]) if g.get("gtin") else None
+		if treffer and treffer["artikel"] != artikel:
+			_fehler(
+				_("Das Etikett gehört zu {0} ({1}), nicht zu {2}.").format(
+					treffer["artikel"],
+					frappe.get_cached_value("Item", treffer["artikel"], "item_name"),
+					artikel,
+				)
+			)
+		if not g.get("charge"):
+			_fehler(_("Auf diesem Etikett steht keine Charge im Strichcode. Bitte die Charge abtippen."))
+		lieferantencharge = g["charge"]
+	_pruefe_lieferantencharge(artikel, lieferantencharge)
 	if frappe.get_cached_value("Item", artikel, "has_expiry_date") and not mhd:
 		_fehler(_("Bitte das MHD eingeben."))
 	if kennzeichnung.BIO in kennzeichnung.artikel_kennzeichen(artikel):
@@ -1648,10 +1965,7 @@ def wareneingang(
 		if not lager:
 			_fehler(_("An der Station {0} ist kein Rohstofflager eingerichtet.").format(s.name))
 
-	charge_id = lieferantencharge
-	if frappe.db.exists("Batch", charge_id):
-		if frappe.db.get_value("Batch", charge_id, "item") != artikel:
-			charge_id = f"{artikel}-{lieferantencharge}"
+	charge_id = _charge_name(artikel, lieferantencharge)
 	charge = (
 		charge_id
 		if frappe.db.exists("Batch", charge_id)
@@ -1659,6 +1973,8 @@ def wareneingang(
 	)
 
 	jetzt = now_datetime()
+	if gebinde and not cint(etiketten):
+		menge, gebinde = menge * gebinde, 0
 	codes = [_neues_gebinde(gebindeart) for _i in range(gebinde)]
 	rate = flt(frappe.get_cached_value("Item", artikel, "valuation_rate"))
 	zeilen = []
@@ -2303,6 +2619,39 @@ def rework_linie(station: str, auftrag: str, rework_artikel: str, kg: float, beh
 	s = _station(station)
 	_darf(s, "rework")
 	return linienbuchung.rework_von_linie(s.name, auftrag, rework_artikel, kg, behaelter)
+
+
+@frappe.whitelist()
+@einmalig
+def behaelter_reinigung(station: str, code: str, gereinigt=1) -> dict:
+	"""Behälter zur Reinigung geben (gereinigt=0) oder als gereinigt melden (gereinigt=1, dann wieder frei).
+
+	Nur leere Behälter. Gesperrte bleiben gesperrt (Freigabe nur durch die QS im Büro).
+	Die Meldung „gereinigt“ wird mit Zeit und Station am Behälter gespeichert; die Historie führt Frappe.
+	"""
+	s = _station(station)
+	r = aufloesen(code)
+	if r["typ"] != "behaelter":
+		_fehler(_("{0} ist kein Behälter.").format(code))
+	if r["behaelter_typ"] == "Gebinde":
+		_fehler(
+			_("{0} ist ein Gebinde vom Wareneingang, es wird nicht gereinigt und wiederverwendet.").format(
+				code
+			)
+		)
+	if r.get("charge"):
+		_fehler(_("Behälter {0} enthält noch Charge {1}. Erst leeren.").format(code, r["charge"]))
+	if r["status"] == "Gesperrt":
+		_fehler(_("Behälter {0} ist gesperrt. Freigabe nur durch die QS.").format(code))
+	t = frappe.get_doc("Produkttraeger", r["behaelter"])
+	if cint(gereinigt):
+		t.status = "Frei"
+		t.gereinigt_am = now_datetime()
+		t.gereinigt_station = s.name
+	else:
+		t.status = "Reinigung"
+	t.save(ignore_permissions=True)
+	return {"behaelter": t.name, "status": t.status, "gereinigt_am": t.gereinigt_am and str(t.gereinigt_am)}
 
 
 @frappe.whitelist()

@@ -16,6 +16,21 @@ from keks_trace.utils import ausgangs_zeilen, eingangs_zeilen, zeilen_chargen, z
 
 TOLERANZ = 0.005  # 0,5 % Wiegetoleranz beim Entnehmen
 
+# Behälterart -> Einstellung „nach dem Leeren zur Reinigung“ (Keks Trace Einstellungen)
+REINIGUNG_NACH_LEEREN = {
+	"Teigbehälter": "reinigung_teigbehaelter",
+	"Rework-Behälter": "reinigung_rework",
+	"Kiste lose Ware": "reinigung_kiste",
+}
+
+
+def status_nach_leeren(traeger) -> str:
+	"""Frei oder Reinigung, je nach Einstellung für die Behälterart."""
+	feld = REINIGUNG_NACH_LEEREN.get(frappe.db.get_value("Produkttraeger", traeger, "typ"))
+	if feld and frappe.db.get_single_value("Keks Trace Einstellungen", feld):
+		return "Reinigung"
+	return "Frei"
+
 
 def _entnahme_zeilen(doc):
 	"""Zeilen, die aus einem Träger entnehmen: Verbrauch, und Umlagerung aus einem Kübel an die Linie."""
@@ -209,7 +224,7 @@ def _entnehmen(traeger, charge, menge, stock_entry, zeit):
 			bel.name,
 			{"menge_aktuell": 0, "offen": 0, "bis": zeit, "stock_entry_ausgang": stock_entry},
 		)
-		_setze_traeger(traeger, None, None, 0, None)
+		_setze_traeger(traeger, None, None, 0, None, leer=status_nach_leeren(traeger))
 	else:
 		frappe.db.set_value("Traeger Belegung", bel.name, "menge_aktuell", rest)
 		frappe.db.set_value("Produkttraeger", traeger, "menge", rest)
@@ -238,12 +253,12 @@ def _befuellen(traeger, charge, artikel, menge, stock_entry, zeit):
 	_setze_traeger(traeger, charge, artikel, menge, zeit)
 
 
-def _setze_traeger(traeger, charge, artikel, menge, seit):
+def _setze_traeger(traeger, charge, artikel, menge, seit, leer="Frei"):
 	frappe.db.set_value(
 		"Produkttraeger",
 		traeger,
 		{
-			"status": "Belegt" if charge else "Frei",
+			"status": "Belegt" if charge else leer,
 			"charge": charge,
 			"artikel": artikel,
 			"menge": menge,

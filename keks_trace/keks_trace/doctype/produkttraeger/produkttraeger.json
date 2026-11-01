@@ -16,6 +16,8 @@
   "artikel",
   "menge",
   "belegt_seit",
+  "gereinigt_am",
+  "gereinigt_station",
   "section_break_1",
   "bemerkung"
  ],
@@ -88,6 +90,19 @@
    "read_only": 1
   },
   {
+   "fieldname": "gereinigt_am",
+   "fieldtype": "Datetime",
+   "label": "Zuletzt gereinigt",
+   "read_only": 1
+  },
+  {
+   "fieldname": "gereinigt_station",
+   "fieldtype": "Link",
+   "label": "Gemeldet an Station",
+   "options": "Terminal Station",
+   "read_only": 1
+  },
+  {
    "fieldname": "section_break_1",
    "fieldtype": "Section Break"
   },
@@ -99,7 +114,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-28 22:00:00.000000",
+ "modified": "2026-11-01 14:30:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Produkttraeger",

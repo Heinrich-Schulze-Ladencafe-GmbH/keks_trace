@@ -386,7 +386,7 @@ def vorrat_anlegen(ctx=None) -> dict:
 	from keks_trace import demo, terminal
 
 	ctx = ctx or frappe._dict(pilot.anlegen())
-	h = frappe.generate_hash(length=4).upper()
+	h = frappe.generate_hash(length=4).upper() + "7"
 	mhd = add_days(nowdate(), 300)
 	ergebnis = {}
 	if _bestand("HZ-PUDERZUCKER") < 20:
@@ -452,7 +452,7 @@ def rohlinge_backen(ctx, groesse: str, kartons: int) -> dict:
 		 "menge": kartons, "einheit": "Karton", "status": "Freigegeben",
 		 "bemerkung": "Herzen-Rohlinge auf Lager (Demo)"}
 	).insert()  # fmt: skip
-	h = frappe.generate_hash(length=4).upper()
+	h = frappe.generate_hash(length=4).upper() + "7"
 	kuebel = demo.neuer_traeger(f"HZK-{groesse}-{h}", "Teigbehälter")
 	t = demo.neue_charge("5812", f"5812-HZ{groesse}-{h}", add_days(nowdate(), -20))
 	demo.buchen(
@@ -480,6 +480,14 @@ def rohlinge_backen(ctx, groesse: str, kartons: int) -> dict:
 
 @frappe.whitelist()
 def durchlauf(groesse: str = "9", stueck: int = 100, spruch: str = STANDARD) -> dict:
+	"""Siehe _durchlauf. Die Demo nimmt bewusst frisch angelegte Chargen: FEFO nur als Hinweis."""
+	from keks_trace.utils import regel_nur_hinweis
+
+	with regel_nur_hinweis("fefo_rohstoffe"):
+		return _durchlauf(groesse, stueck, spruch)
+
+
+def _durchlauf(groesse: str = "9", stueck: int = 100, spruch: str = STANDARD) -> dict:
 	"""Ein Herz komplett durch alle Abteilungen, so wie es an den Terminals gebucht wird, mit Protokoll.
 
 	Lager (Wareneingang) → Backstube (Grundteig in den Kübel, Rohlinge backen) → Herzen Garnieren
@@ -495,7 +503,7 @@ def durchlauf(groesse: str = "9", stueck: int = 100, spruch: str = STANDARD) -> 
 	ctx = anlegen(vorrat=0)
 	stueck = int(stueck)
 	teig_je, guss_je = GROESSEN[groesse]
-	h = frappe.generate_hash(length=4).upper()
+	h = frappe.generate_hash(length=4).upper() + "7"
 	mhd = add_days(nowdate(), 300)
 	protokoll = []
 

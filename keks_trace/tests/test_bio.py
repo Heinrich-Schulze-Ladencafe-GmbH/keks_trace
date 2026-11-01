@@ -6,16 +6,19 @@ from frappe.utils import add_days, nowdate
 
 from keks_trace import demo, kennzeichnung, pruefung, terminal
 from keks_trace.kennzeichnung import KennzeichenFehler
+from keks_trace.utils import regel_nur_hinweis
 
 
 def _hash():
-	return frappe.generate_hash(length=5).upper()
+	return frappe.generate_hash(length=5).upper() + "7"  # mit Ziffer: Chargen-Plausibilität
 
 
 class TestBio(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
+		# bewusst frisch angelegte Chargen: FEFO nur als Hinweis (FEFO selbst prüft test_fefo)
+		cls.enterClassContext(regel_nur_hinweis("fefo_rohstoffe"))
 		cls.ctx = demo.stammdaten()
 		cls.h = _hash()
 		cls.bio_lieferant = demo.BIO_LIEFERANT[0]

@@ -1,7 +1,24 @@
 """Gemeinsame Hilfsfunktionen für Stock-Entry-Zeilen und Chargen."""
 
+from contextlib import contextmanager
+
 import frappe
 from frappe.utils import flt
+
+
+@contextmanager
+def regel_nur_hinweis(feld: str = "fefo_rohstoffe"):
+	"""Eine Prüfregel aus den Keks Trace Einstellungen für einen Ablauf auf „Nur Hinweis“ stellen, danach zurück.
+
+	Für Demos und Tests, die bewusst bestimmte (frische) Chargen nehmen. Die Abweichung steht trotzdem an der
+	Buchung („Ohne Grund (Einstellung: nur Hinweis)“).
+	"""
+	vorher = frappe.db.get_single_value("Keks Trace Einstellungen", feld)
+	frappe.db.set_single_value("Keks Trace Einstellungen", feld, "Nur Hinweis")
+	try:
+		yield
+	finally:
+		frappe.db.set_single_value("Keks Trace Einstellungen", feld, vorher or "Grund Pflicht")
 
 
 def zeilen_menge(row) -> float:

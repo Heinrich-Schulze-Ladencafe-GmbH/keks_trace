@@ -86,6 +86,10 @@ Alle Warenflüsse stehen im Flussschema (Bestände und nummerierte Flüsse, je m
 | 2.1.2.1 Aufzeichnungen nicht nachträglich änderbar, nur Berechtigte | Genealogie, Behälterhistorie und Sperrprotokoll für niemanden änderbar oder löschbar; gebuchte und stornierte Belege nicht löschbar; Chargen mit Historie nicht löschbar; Herstell- und Verfallsdatum nur durch die QS, mit Änderungsprotokoll an Charge und Artikel |
 | 5.11 Nicht konforme Ware | **Sperren/Freigeben** (`keks_trace.sperre.sperren`, `freigeben`, nur QS): Artikel mit „Freigabe vor Verwendung“ starten gesperrt (Wareneingang, lose Ware). Gesperrte Chargen können nicht verarbeitet, umgefüllt oder ausgeliefert werden; Umlagern ins Sperrlager und Ausbuchen bleiben möglich. **Rückrufsperre** (`rueckruf_sperre`): sperrt eine Charge und alle, in die sie eingeflossen ist, und liefert die betroffenen Kunden. Alles im Protokoll `Chargen Sperre` |
 | Vollständigkeit (Auditor-Frage) | Fehlt bei einer Fertigung eine Zutat laut Stückliste, warnt oder blockiert die Buchung (Einstellung in `Keks Trace Einstellungen`) |
+| Rezepturtreue (Einwaage) | Am Teigmacher wird die Einwaage je Zutat gegen das Soll geprüft, umgerechnet auf die Sollmenge (halbe Masse = halbe Sollmenge). Außerhalb der Toleranz (je Rezeptzeile oder Standard, mit Mindesttoleranz für kleine Mengen) braucht die Buchung einen Grund; er steht an der Buchung (`Rezept-Abweichung`) |
+| Lagerumschlag (FEFO) | Rohstoff/Packmittel mit späterem MHD gescannt, obwohl ein früheres im Lager liegt: Hinweis beim Scan, Grund beim Buchen (Einstellung), gespeichert an der Buchung (`FEFO-Abweichung`). Bericht **MHD Rohstoffe**: was bald abläuft und was bei normalem Verbrauch voraussichtlich übrig bleibt |
+| Rückverfolgung Lieferant | Die Charge ist die Lieferanten-Charge (keine Zweitnummer). Wareneingang per Scan des GS1-128-Etiketts; offensichtlich falsche Chargen („Präsentkarton“) werden abgewiesen |
+| Reinigung Behälter | Je Behälterart einstellbar: leerer Behälter geht auf „Reinigung“ und wird erst nach der Meldung „gereinigt“ (Info-Scan, mit Zeit und Station) wieder befüllt |
 
 Gebucht wird ausschließlich mit ERPNext-Standardbelegen (Stock Entry „Manufacture“ und „Repack“,
 Lieferschein). Der ERPNext-Kern wird nicht verändert.
@@ -178,6 +182,20 @@ Eine Bildschirmtastatur unten schreibt in das angetippte Feld: Ziffern bei Menge
 (MHD als `300628` oder `30.06.28`), Buchstaben bei Text. OK springt ins nächste Feld, ▾ blendet
 sie aus. Der Scanner wird an der Tippgeschwindigkeit erkannt: ein Scan landet immer im Scanfeld,
 auch wenn gerade ein Mengenfeld aktiv ist (dessen Inhalt bleibt). Echte Tastatur geht immer.
+
+### Wareneingang mit Scan
+
+Zuerst das Etikett des Lieferanten scannen. **GS1-128** (oder GS1-DataMatrix/QR) mit (01) GTIN, (10) Charge,
+(15)/(17) MHD und (310x) Gewicht füllt Artikel, Charge, MHD und Menge je Gebinde vor; eine **einfache EAN**
+erkennt nur Artikel und Einheit. Die GTIN steht am Artikel unter **Barcodes** (ERPNext-Standard), mit Einheit
+(z. B. Karton = 25 Stk) und Typ `EAN` (13 Stellen) bzw. `GTIN-14`. Unbekannte Codes: das Terminal sagt es, der
+Artikel wird aus der Liste gewählt; eintragen im Büro. Alles Gelesene ist nur ein Vorschlag, gebucht wird erst
+mit „Buchen“.
+
+Trägt der Strichcode des Lieferanten die Charge, ist **kein eigenes Etikett** nötig: die Backstube scannt das
+Lieferanten-Etikett und landet bei derselben Charge. Ohne Charge im Strichcode druckt das Terminal wie bisher
+ein Etikett je Gebinde. Der Scanner muss das Trennzeichen FNC1 als ASCII 29 senden (Einstellung am Scanner),
+sonst kann eine Charge mitten im Code die folgenden Felder verschlucken.
 
 Gescannt werden Behälter-Codes, Silo-Namen, Paletten (NVE) oder Chargennummern. Jede Zeile wird beim Scannen
 geprüft (Rezept, Sperre, Verfall, Rework-Regel, Allergene, Bestand im Behälter/Silo). Stationen
@@ -455,6 +473,10 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_t30` | Zuckersirup: rückwärts bis zur Zuckercharge, Ausbeute mit Wasser |
 | `test_t31`, `test_t32` | Gesperrte Charge im Silo blockiert; zu wenig im Tank |
 | `test_t33` | Sackmehl neben Silomehl: genau die gescannte Charge |
+| `test_wareneingang_gs1` | GS1-128/EAN lesen (echte Etiketten, Prüfziffer, Datum mit Tag 00, Jahrhundert); Wareneingang per Scan ohne eigenes Etikett, Backstube findet die Charge über das Lieferanten-Etikett; „Präsentkarton“ als Charge abgewiesen; eigenes Karton-Etikett findet das Los |
+| `test_fefo` | Ältere Charge im Lager (ohne gesperrte/abgelaufene); Grund Pflicht/Hinweis/Aus; Grund an der Buchung; Bericht MHD Rohstoffe |
+| `test_rezepttreue` | Halbe Masse in Toleranz; Überdosis und fehlende Zutat brauchen Grund; Toleranz je Rezeptzeile und Mindesttoleranz; Grund an der Buchung |
+| `test_behaelter` | Behälter nach dem Leeren frei bzw. zur Reinigung (Einstellung); Meldung „gereinigt“ mit Zeit und Station; Anfrage-ID nur für geschützte Buchungen |
 
 Die Tests rollen ihre Daten am Ende zurück.
 
@@ -472,6 +494,13 @@ Abweichungsmanagement/CAPA, SOPs und Schulungsnachweise.
 - Schokolierter oder gefüllter Bruch hat keine Rework-Regel (geht nicht zurück in Teig).
 - MHD Fertigware = früheres von Backtag + Haltbarkeit und kürzestem MHD der nach dem Backen
   aufgebrachten Füllungen, Glasuren und Schokolade.
+- Lieferanten-Charge enthält mindestens eine Ziffer (2 bis 60 Zeichen). TODO(fachlich): gibt es Lieferanten
+  mit rein alphabetischer Charge?
+- FEFO bei Rohstoffen und Packmitteln: Standard „Grund Pflicht“.
+- Einwaage: Standardtoleranz 5 % je Zutat, mindestens 0,01 kg. TODO(fachlich): Werte je Rezeptzeile mit der
+  QS festlegen (Gewürze, Triebmittel enger).
+- Behälter nach dem Leeren zur Reinigung: Standard aus (wie bisher). TODO(fachlich): für welche Behälterarten
+  einschalten (Teigkübel, Rework-Behälter, Kisten)?
 
 ## Lizenz
 

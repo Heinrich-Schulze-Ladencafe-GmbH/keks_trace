@@ -198,7 +198,9 @@
 	function speichern(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* privat */ } }
 	function laden(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
-	const BUCHUNGEN = /^(herstellen|linie_|palette|pruefung_erfassen|umlagern|lieferung|paket_lieferung|anbrechen|wareneingang|rework_erfassen|rework_linie$|silo_leer)/;
+	const BUCHUNGEN = /^(herstellen|linie_|palette|pruefung_erfassen|umlagern|lieferung|paket_lieferung|anbrechen|wareneingang|rework_erfassen|rework_linie$|silo_leer|behaelter_)/;
+	// Anfrage-ID nur für Methoden, die der Server mit @einmalig schützt (terminal.py); Test test_anfrage_liste
+	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "herstellen", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_zufuehren", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
 	async function api(methode, args) {
 		let r;
 		try {
@@ -219,7 +221,7 @@
 	let anfrageId = null;
 	function neueId() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2); }
 	async function apiRoh(methode, args) {
-		const buchung = BUCHUNGEN.test(methode) && methode !== "kopfdaten";
+		const buchung = MIT_ANFRAGE_ID.has(methode);
 		if (buchung && !anfrageId) anfrageId = neueId();
 		const r = await fetch(API + methode, {
 			method: "POST",
@@ -1223,8 +1225,9 @@
 		const r = ansatz.rezept;
 		const zutaten = r.zutaten.map((z) => {
 			const ist = gescannt(z.artikel);
-			const fertig = ist >= z.menge * 0.98;
-			return `<div class="zeile"><div><span class="${fertig ? "ok" : ""}">${fertig ? "✔" : "○"} ${esc(z.name)}</span>
+			const ueber = r.rezept_pruefen && ist > 0 && Math.abs(ist - z.menge) > (z.toleranz || 0) + 1e-9;
+			const fertig = ist >= z.menge * 0.98 && !ueber;
+			return `<div class="zeile"><div><span class="${fertig ? "ok" : ""}">${ueber ? "⚠" : fertig ? "✔" : "○"} ${esc(z.name)}</span>${ueber ? ` <span class="fehlt" style="font-size:16px;color:#b45309">${esc(prozentText(ist, z.menge))}, erlaubt ± ${esc(mg(z.toleranz, z.einheit))}</span>` : ""}
 				${z.vorrat ? ` <span class="fehlt" style="font-size:16px">aus ${esc(z.vorrat)}</span>`
 					: z.silo ? (fertig ? ` <span class="fehlt" style="font-size:16px">aus ${esc(z.silo)}</span>` : ` <button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>`)
 					: ` <button class="knopf klein" data-a="auswahl" data-artikel="${esc(z.artikel)}">${fertig ? "ändern" : "Wählen"}</button>`}</div>
@@ -1242,6 +1245,7 @@
 			${r.kuebel && r.kuebel.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Grundteig-Kübel (ältester zuerst)</div><div class="gross">${r.kuebel.map((k) => esc(k.code)).join(" · ")}</div>
 				<div class="fehlt" style="font-size:16px">${r.kuebel.map((k) => esc(k.code + ": " + k.name + (k.datum ? " vom " + k.datum : "") + ", " + mg(k.menge, "Kg"))).join("<br>")}</div></div>` : ""}
 			<div class="panel">${zutaten}${extra}</div>
+			${sollAnpassbar() ? `<div class="reihe"><button class="knopf" data-a="soll-anpassen">Soll an Grundteig anpassen: ${esc(mg(sollAnpassbar(), r.einheit))}</button></div>` : ""}
 			${ansatz.offen
 				? zahlFeld("scan", `Menge (${esc(ein(ansatz.offen.einheit))}) für ${esc(ansatz.offen.anzeige)}`, ansatz.offen.vorschlag) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
 				: textFeld("scan", (zustand.vorschlagen ? "Vom Terminal ausgefüllt – „ändern“ zum Selbst-Auswählen; Scannen geht auch" : "Gebinde, Behälter oder Silo scannen") + (r.rework_moeglich ? " – auch Rework-Behälter" : ""))}
@@ -1255,6 +1259,7 @@
 			if (a === "weg") { ansatz.zeilen.splice(+d.i, 1); return ansatzZeigen(); }
 			if (a === "abbrechen") { ansatz.offen = null; return ansatzZeigen(); }
 			if (a === "abschluss") return ansatzAbschluss();
+			if (a === "soll-anpassen") return sollAnpassen(sollAnpassbar());
 			beiAllgemein(a);
 		});
 		enter("scan", (v) => (ansatz.offen ? mengeEingegeben(v) : codeGescannt(v)));
@@ -1325,12 +1330,65 @@
 			ansatz.zeilen.push(z);
 			ansatz.offen = null;
 			ansatzZeigen();
+			const f = fefoOffen().find((x) => x.z === z);
+			if (f) return meldung("orange", "Älteres MHD im Lager: " + f.aelter.map((a) => a.charge + " (MHD " + a.mhd + ")").join(", "),
+				"Besser die ältere Charge nehmen. Sonst beim Buchen einen Grund wählen.");
 			meldung("gruen", "OK: " + z.name + " " + mg(z.menge, z.einheit), z.charge ? "Charge " + z.charge : z.silo ? "aus " + z.silo + " (Charge wird nach FIFO zugeteilt)" : "");
 		} catch (e) {
 			ansatz.offen = null;
 			ansatzZeigen();
 			meldung("rot", e.message);
 		}
+	}
+
+	// Rezepturtreue: Einwaage je Zutat gegen das Soll (Sollmenge, z. B. halbe Masse), Toleranz aus dem Rezept
+	function prozentText(ist, soll) { return soll ? (ist >= soll ? "+" : "") + Math.round((ist / soll - 1) * 100) + " %" : ""; }
+	const REZEPT_GRUENDE = ["Rezept angepasst (Anweisung)", "Korrektur nach Prüfung", "Rest aufgebraucht", "Sonstiges"];
+	function rezeptAbweichungen() {
+		const r = ansatz.rezept;
+		if (!r.rezept_pruefen) return [];
+		return r.zutaten.map((z) => ({ z, ist: gescannt(z.artikel) })).filter((x) => Math.abs(x.ist - x.z.menge) > (x.z.toleranz || 0) + 1e-9);
+	}
+	// Neue Sollmenge, wenn ein Grundteig (ganzer Kübel) eingesetzt ist und vom Soll abweicht; sonst 0
+	function sollAnpassbar() {
+		const r = ansatz.rezept;
+		if (!r.rezept_pruefen) return 0;
+		const gt = r.zutaten.find((z) => z.stufe === "Grundteig" && z.menge > 0);
+		if (!gt) return 0;
+		const ist = gescannt(gt.artikel);
+		if (ist <= 0 || Math.abs(ist - gt.menge) <= (gt.toleranz || 0) + 1e-9) return 0;
+		return rund(r.sollmenge * ist / gt.menge, 3);
+	}
+	async function sollAnpassen(soll) {
+		try {
+			ansatz.rezept = await api("rezept", { artikel: ansatz.rezept.artikel, menge: soll, station: zustand.station });
+			ansatzZeigen();
+			meldung("gruen", "Soll angepasst: " + mg(soll, ansatz.rezept.einheit), "Die übrigen Zutaten richten sich jetzt nach dem eingesetzten Grundteig.");
+		} catch (e) { meldung("rot", e.message); }
+	}
+	function rezeptPanel() {
+		const abw = rezeptAbweichungen();
+		if (!abw.length) return "";
+		const r = ansatz.rezept;
+		return `<div class="meldung orange">Einwaage außerhalb der Toleranz<small>${abw.map((x) => esc(x.z.name + ": " + mg(x.ist, x.z.einheit) + " statt " + mg(x.z.menge, x.z.einheit) +
+			(x.ist ? " (" + prozentText(x.ist, x.z.menge) + ")" : " (fehlt)"))).join("<br>")}</small></div>
+			<label>Grund für die Abweichung${r.rezept_pflicht ? "" : " (freiwillig)"}</label><div class="einheiten">${REZEPT_GRUENDE.map((g) =>
+				`<button type="button" data-a="rezept-grund" data-e="${esc(g)}" class="${ansatz.rezeptGrund === g ? "an" : ""}">${esc(g)}</button>`).join("")}</div>`;
+	}
+
+	// FEFO: Zeilen mit älterer Charge im Lager (in diesem Ansatz schon gescannte zählen nicht)
+	const FEFO_GRUENDE = ["Ältere Charge nicht erreichbar", "Ältere Charge angebrochen oder beschädigt", "Anweisung QS", "Sonstiges"];
+	function fefoOffen() {
+		const verwendet = new Set(ansatz.zeilen.map((z) => z.charge).filter(Boolean));
+		return ansatz.zeilen.map((z) => ({ z, aelter: (z.fefo || []).filter((a) => !verwendet.has(a.charge)) })).filter((x) => x.aelter.length);
+	}
+	function fefoPanel() {
+		const offen = fefoOffen();
+		if (!offen.length) return "";
+		return `<div class="meldung orange">Älteres MHD liegt im Lager<small>${offen.map((x) => esc(x.z.name + ": genommen " + x.z.charge + ", älter " +
+			x.aelter.map((a) => a.charge + " (MHD " + a.mhd + ")").join(", "))).join("<br>")}</small></div>
+			<label>Grund für die Abweichung${offen.some((x) => x.z.fefo_pflicht) ? "" : " (freiwillig)"}</label><div class="einheiten">${FEFO_GRUENDE.map((g) =>
+				`<button type="button" data-a="fefo-grund" data-e="${esc(g)}" class="${ansatz.fefoGrund === g ? "an" : ""}">${esc(g)}</button>`).join("")}</div>`;
 	}
 
 	function ansatzAbschluss() {
@@ -1350,11 +1408,15 @@
 			${r.ausgabe_silo ? `<p class="fehlt">Geht in ${esc(r.ausgabe_silo)}.</p>`
 				: fertigware ? textFeld("scan", "Palette scannen (optional)") + `<div class="reihe"><button class="knopf" data-a="neue-palette">+ Neue Palette (Etikett drucken)</button></div>`
 				: textFeld("scan", "Zielbehälter / Kiste scannen (optional)")}
+			<div id="rezept-abw">${rezeptPanel()}</div>
+			<div id="fefo">${fefoPanel()}</div>
 			${pruefFelder(r.pruefungen, "ph")}
 			<div class="reihe"><button class="knopf" data-a="zurueck-ansatz">← Zutaten</button><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
 		aktionen(async (a, d) => {
 			if (a === "einheit") { einheit = d.e; einheitSetzen(einheit); document.getElementById("einheit-text").textContent = einheit; return fokus("aus"); }
 			if (a === "zurueck-ansatz") return ansatzZeigen();
+			if (a === "fefo-grund") { ansatz.fefoGrund = d.e; document.getElementById("fefo").innerHTML = fefoPanel(); return; }
+			if (a === "rezept-grund") { ansatz.rezeptGrund = d.e; document.getElementById("rezept-abw").innerHTML = rezeptPanel(); return; }
 			if (a === "buchen") return ansatzBuchen(zaehlen ? einheit : null);
 			if (a === "neue-palette") {
 				try {
@@ -1392,6 +1454,8 @@
 	}
 
 	async function ansatzBuchen(einheit) {
+		if (rezeptAbweichungen().length && ansatz.rezept.rezept_pflicht && !ansatz.rezeptGrund) return meldung("rot", "Einwaage außerhalb der Toleranz.", "Bitte einen Grund wählen oder zurück und korrigieren.");
+		if (fefoOffen().some((x) => x.z.fefo_pflicht) && !ansatz.fefoGrund) return meldung("rot", "Älteres MHD liegt im Lager.", "Bitte einen Grund wählen oder zurück und die ältere Charge scannen.");
 		const knopf = app.querySelector('[data-a="buchen"]');
 		if (knopf) { knopf.disabled = true; knopf.textContent = "Bucht …"; }
 		const ziel = document.getElementById("scan");
@@ -1408,6 +1472,9 @@
 				kundenauftrag: ansatz.auftrag ? ansatz.auftrag.auftrag : null,
 				pruefwerte: pruefWerte(ansatz.rezept.pruefungen, "ph"),
 				mhd: ansatz.mhd || null,
+				fefo_grund: fefoOffen().length ? ansatz.fefoGrund : null,
+				sollmenge: ansatz.rezept.rezept_pruefen ? ansatz.rezept.sollmenge : null,
+				rezept_grund: rezeptAbweichungen().length ? ansatz.rezeptGrund || null : null,
 			});
 			const zeilen = [
 				e.los ? "Los: " + e.los + (e.los !== e.charge ? " (" + e.charge + ")" : "") : "Neue Charge: " + e.charge,
@@ -1520,30 +1587,73 @@
 	// ------------------------------------------------------------------ Wareneingang
 	let artikelListe = [];
 	async function wareneingangStart() {
-		app.innerHTML = kopf("Wareneingang", true) + `<p>Welcher Artikel? Zeile antippen</p><div id="liste">Lädt …</div>`;
+		// Zuerst das Etikett des Lieferanten scannen; ohne Code den Artikel antippen
+		let vorschlag = null;
+		app.innerHTML = kopf("Wareneingang", true) +
+			textFeld("etikett", "Etikett des Lieferanten scannen – oder Artikel unten antippen") +
+			`<div id="etikett-info"></div><p>Welcher Artikel? Zeile antippen</p><div id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
 			artikelListe = await api("wareneingang_artikel");
 			suchListe("liste", [["Artikel", "artikel"], ["Bezeichnung", "name"], ["Einheit", (r) => ein(r.stock_uom)],
 				["Hinweis", (r) => [r.silo ? "Silo" : "", r.kt_freigabe_pflicht ? "Freigabe QS" : "", r.bio ? "BIO" : ""].filter(Boolean).join(", ")]],
-				artikelListe, (r) => wareneingangErfassen(r), "Suchen: Artikelnummer oder Bezeichnung …");
+				artikelListe, (r) => wareneingangErfassen(r, vorschlag), "Suchen: Artikelnummer oder Bezeichnung …");
 		} catch (e) { meldung("rot", e.message); }
+		enter("etikett", async (code, f) => {
+			if (!code) return;
+			try {
+				const r = await api("wareneingang_scan", { code });
+				const info = document.getElementById("etikett-info");
+				if (r.artikel) {
+					const art = artikelListe.find((a) => a.artikel === r.artikel);
+					if (!art) return meldung("rot", "Artikel " + r.artikel + " ist hier nicht für den Wareneingang freigegeben.");
+					return wareneingangErfassen(art, r);
+				}
+				vorschlag = r.gs1 || r.gtin ? { ...r, artikel: null } : { charge: r.charge };
+				f.value = "";
+				info.innerHTML = r.unbekannt
+					? `<div class="meldung orange">Code ${esc(r.gtin)} ist keinem Artikel zugeordnet. Bitte den Artikel unten antippen.<small>Im Büro am Artikel unter „Barcodes“ eintragen (mit Einheit, z. B. Karton). Danach erkennt das Terminal ihn selbst.</small></div>`
+					: `<div class="meldung orange">Kein Artikel-Code, als Charge übernommen: ${esc(r.charge)}. Bitte den Artikel unten antippen.</div>`;
+			} catch (e) { meldung("rot", e.message); }
+		});
+		fokus("etikett");
 	}
 
-	function wareneingangErfassen(art) {
+	// Lieferanten-Etikett ins Formular übernehmen (nur Vorschlag – der Mensch prüft vor dem Buchen)
+	function etikettUebernehmen(v, einheit) {
+		if (!v) return "";
+		const set = (id, wert) => { const f = document.getElementById(id); if (f && wert != null && wert !== "") f.value = wert; };
+		set("scan", v.charge);
+		if (v.mhd) { const [y, m, d] = v.mhd.split("-"); set("mhd", `${d}.${m}.${y}`); }
+		if (v.menge_je_gebinde) set("menge", String(rund(v.menge_je_gebinde, 3)).replace(".", ","));
+		const teile = [v.charge ? "Charge " + v.charge : "", v.mhd ? "MHD " + datumDe(v.mhd) : "",
+			v.menge_je_gebinde ? "je Gebinde " + String(rund(v.menge_je_gebinde, 3)).replace(".", ",") + (einheit ? " " + ein(einheit) : "") : ""].filter(Boolean);
+		return (teile.length ? `<div class="panel">Vom Etikett gelesen: <b>${esc(teile.join(" · "))}</b><br><span class="fehlt" style="font-size:16px">Noch nicht gebucht. Bitte mit dem Etikett vergleichen.</span></div>` : "") +
+			(v.unvollstaendig ? `<div class="meldung orange">Etikett nur teilweise gelesen. Bitte alle Felder prüfen.</div>` : "") +
+			(v.charge_bekannt ? `<div class="meldung orange">Diese Charge ist schon gebucht. Gleiche Lieferung zweimal?</div>` : "");
+	}
+	function datumDe(iso) { const [y, m, d] = String(iso).split("-"); return `${d}.${m}.${y}`; }
+
+	function wareneingangErfassen(art, vorschlag) {
 		const ARTEN = ["Sack", "Fass", "IBC", "Eimer", "Karton", "Kanister", "BigBag", "Sonstiges"];
-		let gebindeart = "Sack";
+		let gebindeart = vorschlag && ARTEN.includes(vorschlag.gebindeart) ? vorschlag.gebindeart : "Sack";
+		// Eigenes Etikett nur, wenn das Etikett des Lieferanten die Charge nicht im Strichcode trägt
+		let etiketten = !(vorschlag && vorschlag.gs1 && vorschlag.charge && vorschlag.artikel === art.artikel);
 		const lief = art.lieferanten || [];
 		app.innerHTML = kopf(art.name, true) +
 			(art.bio ? `<div class="panel">${kennzeichenMarken(["Bio"])} <span class="fehlt" style="font-size:16px">Nur Lieferanten mit gültigem Öko-Zertifikat.</span></div>` : "") +
 			(art.bio && !lief.length ? `<div class="meldung rot">Kein Lieferant mit gültigem Öko-Zertifikat hinterlegt. Annahme als Bio nicht möglich.<small>Zertifikat beim Lieferanten im Büro eintragen.</small></div>` : "") +
 			(lief.length ? `<label>Lieferant${art.bio ? "" : " (optional)"}</label><select id="lieferant" class="feld">${art.bio ? "" : `<option value="">–</option>`}${lief.map((l) => `<option value="${esc(l.lieferant)}">${esc(l.name)}${l.bio_ok ? " · Bio-zertifiziert" : ""}</option>`).join("")}</select>` : "") +
-			textFeld("scan", "Charge des Lieferanten (scannen oder eingeben)") +
+			`<div id="etikett-info"></div>` +
+			textFeld("scan", "Charge des Lieferanten (Etikett scannen oder Charge eingeben)") +
 			`${art.has_expiry_date ? datumFeld("mhd", "MHD") : ""}
 			${art.silo ? `<label>Wohin?</label><select id="ziel" class="feld"><option value="${esc(art.silo)}">ins ${esc(art.silo)}</option><option value="">als Gebinde ins Lager</option></select>` : ""}
 			<div id="gebinde-box" style="${art.silo ? "display:none" : ""}">
 				<label>Gebindeart</label><div class="einheiten">${ARTEN.map((a) => `<button type="button" data-a="einheit" data-e="${a}" class="${a === gebindeart ? "an" : ""}">${a}</button>`).join("")}</div>
 				${zahlFeld("anzahl", "Wie viele Gebinde?", 1)}
+				<label>Eigenes Etikett je Gebinde?</label><div class="einheiten">
+					<button type="button" data-a="etikett" data-e="ja" class="${etiketten ? "an" : ""}">Ja, drucken</button>
+					<button type="button" data-a="etikett" data-e="nein" class="${etiketten ? "" : "an"}">Nein, Lieferanten-Etikett hat die Charge</button></div>
 			</div>` +
 			zahlFeld("menge", `<span id="menge-text">${art.silo ? "Menge" : "Menge je Gebinde"}</span> (${esc(ein(art.stock_uom))})`) +
 			pruefFelder(art.pruefungen, "pw") +
@@ -1554,8 +1664,34 @@
 			document.getElementById("gebinde-box").style.display = silo ? "none" : "";
 			document.getElementById("menge-text").textContent = silo ? "Menge" : "Menge je Gebinde";
 		});
+		const info = document.getElementById("etikett-info");
+		info.innerHTML = etikettUebernehmen(vorschlag, art.stock_uom);
+		// Lieferanten-Charge mit Charge im Strichcode: nur dann kann die Backstube das Lieferanten-Etikett scannen
+		let chargeImCode = !etiketten;
+		const etikettSetzen = (ja) => {
+			etiketten = ja;
+			app.querySelectorAll('[data-a="etikett"]').forEach((b) => b.classList.toggle("an", (b.dataset.e === "ja") === ja));
+			if (!ja && !chargeImCode) meldung("orange", "Ohne eigenes Etikett muss die Backstube die Charge eintippen – das Lieferanten-Etikett hat sie nicht im Strichcode.");
+		};
+		enter("scan", async (code) => {
+			if (!code) return;
+			try {
+				const r = await api("wareneingang_scan", { code });
+				if (r.artikel && r.artikel !== art.artikel) return meldung("rot", "Das Etikett gehört zu " + r.artikel + ", nicht zu " + art.artikel + ".");
+				if (r.gs1 || r.gtin) {
+					if (!r.charge) return meldung("orange", "Auf diesem Etikett steht keine Charge im Strichcode. Bitte die Charge abtippen.");
+					document.getElementById("scan").value = "";
+					info.innerHTML = etikettUebernehmen(r, art.stock_uom);
+					chargeImCode = !!(r.gs1 && r.artikel === art.artikel);
+					if (chargeImCode) etikettSetzen(false);
+				}
+			} catch (e) { return meldung("rot", e.message); }
+			const m = document.getElementById("mhd");
+			if (m && !m.value) m.focus(); else fokus("menge");
+		});
 		aktionen(async (a, d) => {
 			if (a === "einheit") { gebindeart = d.e; return einheitSetzen(gebindeart); }
+			if (a === "etikett") return etikettSetzen(d.e === "ja");
 			if (a !== "buchen") return beiAllgemein(a);
 			const knopf = app.querySelector('[data-a="buchen"]');
 			if (knopf) { knopf.disabled = true; knopf.textContent = "Bucht …"; }
@@ -1574,6 +1710,7 @@
 					silo,
 					gebinde: silo ? 0 : Math.max(1, Math.round(zahl(document.getElementById("anzahl").value))),
 					gebindeart: silo ? null : gebindeart,
+					etiketten: etiketten ? 1 : 0,
 					pruefwerte: pruefWerte(art.pruefungen, "pw"),
 				});
 				if (e.abgelehnt) {
@@ -1594,10 +1731,10 @@
 				meldung("rot", err.message);
 			}
 		});
-		enter("scan", () => { const m = document.getElementById("mhd"); if (m) m.focus(); else fokus("menge"); });
 		enter("anzahl", () => fokus("menge"));
 		enter("menge", () => {});
-		fokus("scan");
+		const mhdFeld = document.getElementById("mhd");
+		fokus(!(vorschlag && vorschlag.charge) ? "scan" : mhdFeld && !mhdFeld.value ? "mhd" : art.silo ? "menge" : "anzahl");
 	}
 
 	// ------------------------------------------------------------------ Anzahl-Dialog (Kartons/Beutel)
@@ -2032,6 +2169,7 @@
 				}
 				const zeilen = [];
 				if (r.typ === "behaelter") zeilen.push(["Behälter", r.behaelter + " (" + r.behaelter_typ + ")"], ["Status", r.status]);
+				if (r.typ === "behaelter" && r.gereinigt_am) zeilen.push(["Zuletzt gereinigt", r.gereinigt_am]);
 				if (r.typ === "silo") zeilen.push(["Silo/Tank", r.silo]);
 				if (r.artikelname) zeilen.push(["Artikel", r.artikelname]);
 				if (r.charge) zeilen.push(["Charge", r.charge]);
@@ -2042,10 +2180,24 @@
 				if (r.bestand) r.bestand.forEach((b) => zeilen.push(["Im Silo", b.charge + ": " + kg(b.menge)]));
 				if (r.moeglich_enthalten && r.moeglich_enthalten.length) zeilen.push(["Möglicherweise enthalten", r.moeglich_enthalten.join(", ")]);
 				const gesperrt = r.sperrstatus === "Gesperrt";
+				// Leerer Behälter: zur Reinigung geben bzw. als gereinigt melden
+				const reinigen = r.typ === "behaelter" && !r.charge && r.behaelter_typ !== "Gebinde" && r.status !== "Gesperrt";
 				document.getElementById("info").innerHTML =
-					(gesperrt ? `<div class="meldung rot">GESPERRT<small>${esc(r.sperrgrund || "")}</small></div>` : r.abgelaufen ? `<div class="meldung rot">ABGELAUFEN</div>` : `<div class="meldung gruen">${esc(v)}</div>`) +
-					`<div class="panel">${zeilen.map(([k, w]) => `<div class="zeile"><div class="fehlt">${esc(k)}</div><div class="rechts">${esc(w)}</div></div>`).join("")}</div>`;
+					(gesperrt ? `<div class="meldung rot">GESPERRT<small>${esc(r.sperrgrund || "")}</small></div>` : r.abgelaufen ? `<div class="meldung rot">ABGELAUFEN</div>`
+						: r.status === "Reinigung" ? `<div class="meldung orange">${esc(v)} ist zur Reinigung<small>Erst nach der Meldung „gereinigt“ wieder befüllen.</small></div>` : `<div class="meldung gruen">${esc(v)}</div>`) +
+					`<div class="panel">${zeilen.map(([k, w]) => `<div class="zeile"><div class="fehlt">${esc(k)}</div><div class="rechts">${esc(w)}</div></div>`).join("")}</div>` +
+					(reinigen ? `<div class="reihe">${r.status === "Reinigung" ? `<button class="knopf gruen" data-a="gereinigt">Gereinigt – wieder frei</button>`
+						: `<button class="knopf" data-a="zur-reinigung">Zur Reinigung</button><button class="knopf" data-a="gereinigt">Gereinigt melden</button>`}</div>` : "");
 				ton(!gesperrt && !r.abgelaufen);
+				aktionen(async (a) => {
+					if (a !== "gereinigt" && a !== "zur-reinigung") return beiAllgemein(a);
+					try {
+						const e = await api("behaelter_reinigung", { station: zustand.station, code: r.behaelter, gereinigt: a === "gereinigt" ? 1 : 0 });
+						meldung("gruen", e.behaelter + ": " + (e.status === "Frei" ? "gereinigt, frei" : "zur Reinigung"));
+						document.getElementById("info").innerHTML = "";
+						fokus("scan");
+					} catch (err) { meldung("rot", err.message); }
+				});
 			} catch (e) { meldung("rot", e.message); }
 		});
 		fokus("scan");

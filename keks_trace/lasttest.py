@@ -188,7 +188,7 @@ def buchungen(anzahl: int = 300) -> dict:
 			c = terminal.wareneingang(
 				"Lager",
 				z["artikel"],
-				f"{PRAEFIX}WE{_hash()[:6]}",
+				f"{PRAEFIX}WE{_hash()[:6]}7",
 				z["menge"] * 1.01,
 				add_days(nowdate(), 300),
 			)["charge"]

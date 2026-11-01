@@ -15,7 +15,7 @@ VPC = "Verpackungs-PC"
 
 
 def _hash():
-	return frappe.generate_hash(length=5).upper()
+	return frappe.generate_hash(length=5).upper() + "7"  # mit Ziffer: Chargen-Plausibilität
 
 
 class TestFluesse(IntegrationTestCase):

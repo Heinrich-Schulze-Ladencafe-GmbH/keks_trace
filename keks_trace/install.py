@@ -333,6 +333,32 @@ CUSTOM_FIELDS = {
 			"insert_after": "kt_station",
 			"description": "Für diesen Kundenauftrag verpackt (Terminal Verpackung).",
 		},
+		{
+			"fieldname": "kt_rezept_abweichung",
+			"label": "Rezept-Abweichung",
+			"fieldtype": "Small Text",
+			"read_only": 1,
+			"insert_after": "kt_kundenauftrag",
+			"description": "Einwaage außerhalb der Toleranz: Grund und Zutaten (Terminal).",
+		},
+		{
+			"fieldname": "kt_fefo_abweichung",
+			"label": "FEFO-Abweichung",
+			"fieldtype": "Small Text",
+			"read_only": 1,
+			"insert_after": "kt_kundenauftrag",
+			"description": "Ältere Charge lag im Lager, eine jüngere wurde genommen: Grund und Chargen (Terminal).",
+		},
+	],
+	"BOM Item": [
+		{
+			"fieldname": "kt_toleranz_prozent",
+			"label": "Toleranz Einwaage ± %",
+			"fieldtype": "Float",
+			"insert_after": "qty",
+			"allow_on_submit": 1,
+			"description": "Erlaubte Abweichung beim Einwiegen am Terminal. Leer = Standard aus Keks Trace Einstellungen.",
+		},
 	],
 	"Delivery Note": [
 		{

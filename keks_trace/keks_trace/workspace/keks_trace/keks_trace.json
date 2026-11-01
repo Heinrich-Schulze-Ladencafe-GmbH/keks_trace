@@ -209,7 +209,7 @@
    "hidden": 0,
    "is_query_report": 0,
    "label": "Einkauf",
-   "link_count": 4,
+   "link_count": 5,
    "onboard": 0,
    "type": "Card Break"
   },
@@ -219,6 +219,16 @@
    "label": "Reichweite Rohstoffe",
    "link_count": 0,
    "link_to": "Reichweite Rohstoffe",
+   "link_type": "Report",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 1,
+   "label": "MHD Rohstoffe",
+   "link_count": 0,
+   "link_to": "MHD Rohstoffe",
    "link_type": "Report",
    "onboard": 0,
    "type": "Link"

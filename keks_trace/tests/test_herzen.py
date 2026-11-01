@@ -6,10 +6,11 @@ from frappe.utils import add_days, add_months, getdate, nowdate
 
 from keks_trace import demo, demo_herzen, terminal
 from keks_trace.trace import rueckwaerts
+from keks_trace.utils import regel_nur_hinweis
 
 
 def _hash():
-	return frappe.generate_hash(length=5).upper()
+	return frappe.generate_hash(length=5).upper() + "7"  # mit Ziffer: Chargen-Plausibilität
 
 
 G = "9"  # Größe Gr. 9, Standardspruch
@@ -19,6 +20,8 @@ class TestHerzen(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
+		# bewusst frisch angelegte Chargen: FEFO nur als Hinweis (FEFO selbst prüft test_fefo)
+		cls.enterClassContext(regel_nur_hinweis("fefo_rohstoffe"))
 		cls.ctx = demo_herzen.anlegen(vorrat=0)
 		cls.herz, cls.garniert, cls.rohling = (
 			demo_herzen.herz(G),

@@ -9,6 +9,15 @@
  "field_order": [
   "vollstaendigkeit",
   "bilanz_toleranz_prozent",
+  "fefo_rohstoffe",
+  "section_rezept",
+  "rezept_abweichung",
+  "rezept_toleranz_prozent",
+  "rezept_toleranz_min",
+  "section_behaelter",
+  "reinigung_teigbehaelter",
+  "reinigung_rework",
+  "reinigung_kiste",
   "section_nve",
   "gs1_basisnummer",
   "nve_reserveziffer",
@@ -35,6 +44,65 @@
    "label": "Toleranz Mengenbilanz (%)",
    "default": "0.5",
    "description": "Abweichung zwischen Lagerbuchungen und Genealogie, ab der eine Charge als Abweichung gilt."
+  },
+  {
+   "fieldname": "fefo_rohstoffe",
+   "fieldtype": "Select",
+   "label": "Jüngere Charge genommen, ältere im Lager (FEFO)",
+   "options": "Grund Pflicht\nNur Hinweis\nAus",
+   "default": "Grund Pflicht",
+   "description": "Rohstoffe und Packmittel: Wird eine Charge mit späterem MHD gescannt, obwohl eine mit früherem MHD im Lager liegt, verlangt das Terminal einen Grund (gespeichert an der Buchung) oder zeigt nur einen Hinweis."
+  },
+  {
+   "fieldname": "section_rezept",
+   "fieldtype": "Section Break",
+   "label": "Rezepturtreue (Einwaage)"
+  },
+  {
+   "fieldname": "rezept_abweichung",
+   "fieldtype": "Select",
+   "label": "Einwaage außerhalb der Toleranz",
+   "options": "Grund Pflicht\nNur Hinweis\nAus",
+   "default": "Grund Pflicht",
+   "description": "Grundteig, veredelter Teig, Halbfabrikat: Weicht eine Zutat mehr als die Toleranz vom Soll ab (Sollmenge am Terminal, z. B. halbe Masse), verlangt das Terminal einen Grund (gespeichert an der Buchung)."
+  },
+  {
+   "fieldname": "rezept_toleranz_prozent",
+   "fieldtype": "Float",
+   "label": "Toleranz je Zutat in %",
+   "default": "5",
+   "description": "Gilt, wenn an der Rezeptzeile (Stückliste) keine eigene Toleranz steht."
+  },
+  {
+   "fieldname": "rezept_toleranz_min",
+   "fieldtype": "Float",
+   "label": "Mindesttoleranz (Lagereinheit, z. B. kg)",
+   "default": "0.01",
+   "description": "Kleinere Abweichungen zählen nie, z. B. wegen der Auflösung der Waage bei kleinen Mengen."
+  },
+  {
+   "fieldname": "section_behaelter",
+   "fieldtype": "Section Break",
+   "label": "Behälter"
+  },
+  {
+   "fieldname": "reinigung_teigbehaelter",
+   "fieldtype": "Check",
+   "default": "0",
+   "label": "Teigbehälter nach dem Leeren zur Reinigung",
+   "description": "Leerer Teigbehälter (Kübel) geht auf „Reinigung“ und wird erst nach der Meldung „gereinigt“ (Info-Scan am Terminal) wieder befüllt."
+  },
+  {
+   "fieldname": "reinigung_rework",
+   "fieldtype": "Check",
+   "default": "0",
+   "label": "Rework-Behälter nach dem Leeren zur Reinigung"
+  },
+  {
+   "fieldname": "reinigung_kiste",
+   "fieldtype": "Check",
+   "default": "0",
+   "label": "Kisten lose Ware nach dem Leeren zur Reinigung"
   },
   {
    "fieldname": "section_nve",
@@ -99,7 +167,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-31 09:00:00.000000",
+ "modified": "2026-11-01 14:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Keks Trace Einstellungen",

@@ -6,16 +6,19 @@ from frappe.utils import add_days, add_months, flt, getdate, nowdate
 
 from keks_trace import demo, demo_linie, linienbuchung, planung, pruefung, terminal
 from keks_trace.linienbuchung import LinienFehler
+from keks_trace.utils import regel_nur_hinweis
 
 
 def _hash():
-	return frappe.generate_hash(length=5).upper()
+	return frappe.generate_hash(length=5).upper() + "7"  # mit Ziffer: Chargen-Plausibilität
 
 
 class TestLinie(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
+		# bewusst frisch angelegte Chargen: FEFO nur als Hinweis (FEFO selbst prüft test_fefo)
+		cls.enterClassContext(regel_nur_hinweis("fefo_rohstoffe"))
 		cls.ctx = demo_linie.stammdaten()
 		cls.h = _hash()
 		cls.alt = demo.neuer_traeger(f"TKA-{cls.h}", "Teigbehälter")

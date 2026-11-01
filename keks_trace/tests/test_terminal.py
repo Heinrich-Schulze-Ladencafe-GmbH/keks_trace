@@ -13,7 +13,7 @@ from keks_trace.terminal import TerminalFehler
 
 
 def _hash():
-	return frappe.generate_hash(length=6).upper()
+	return frappe.generate_hash(length=6).upper() + "7"  # mit Ziffer: Chargen-Plausibilität
 
 
 class TestTerminal(IntegrationTestCase):
