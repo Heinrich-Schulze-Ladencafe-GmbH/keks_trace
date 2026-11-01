@@ -14,6 +14,7 @@ Jeder Lauf erzeugt neue Chargen und Behälter (eindeutiges Kürzel), Stammdaten 
 """
 
 import frappe
+from frappe import _
 from frappe.utils import add_days, flt, formatdate, getdate, now_datetime, nowdate
 
 from keks_trace import silo, sperre
@@ -190,6 +191,29 @@ def run(company: str | None = None, kuerzel: str | None = None):
 # ---------------------------------------------------------------------------
 
 
+def standardlager(company: str) -> tuple[str, str, str]:
+	"""Rohstoff-, Produktions- und Fertigwarenlager der Firma, unabhängig von der Sprache der Einrichtung
+	(„Stores“ bzw. „Lagerräume“): aus den Standardlagern der Firma, sonst über den übersetzten Namen."""
+	c = frappe.get_cached_doc("Company", company)
+	ergebnis = []
+	for feld, englisch in (
+		("default_warehouse", "Stores"),
+		("default_wip_warehouse", "Work In Progress"),
+		("default_fg_warehouse", "Finished Goods"),
+	):
+		sprache = frappe.db.get_single_value("System Settings", "language") or "en"
+		namen = list({englisch, _(englisch), _(englisch, lang=sprache)})
+		lager = c.get(feld) or frappe.db.get_value(
+			"Warehouse", {"company": company, "is_group": 0, "warehouse_name": ["in", namen]}
+		)
+		if not lager:
+			frappe.throw(
+				f"Firma {company}: kein Lager für {englisch} gefunden (Standardlager an der Firma setzen)."
+			)
+		ergebnis.append(lager)
+	return tuple(ergebnis)
+
+
 def stammdaten(company: str | None = None) -> frappe._dict:
 	company = company or frappe.defaults.get_global_default("company") or frappe.db.get_value("Company", {})
 	if not company:
@@ -343,6 +367,7 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 				),
 			}
 		).insert()
+	roh_lager, wip_lager, fertig_lager = standardlager(company)
 	for station in (
 		"Backstube",
 		"Verpackung",
@@ -359,9 +384,9 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 					"station_name": station,
 					"typ": station,
 					"company": company,
-					"rohstofflager": f"Stores - {abbr}",
-					"produktionslager": f"Work In Progress - {abbr}",
-					"fertiglager": f"Finished Goods - {abbr}",
+					"rohstofflager": roh_lager,
+					"produktionslager": wip_lager,
+					"fertiglager": fertig_lager,
 					"umlager_ziel": verkauf if station == "Lagerverkauf" else None,
 				}
 			).insert()
@@ -385,7 +410,7 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 			frappe.get_doc(
 				{"doctype": "Warehouse", "warehouse_name": name, "company": company, "parent_warehouse": wurzel}
 			).insert()  # fmt: skip
-	for lager in [f"{n} - {abbr}" for n in UMLAGER_LAGER] + [f"Finished Goods - {abbr}", verkauf]:
+	for lager in [f"{n} - {abbr}" for n in UMLAGER_LAGER] + [fertig_lager, verkauf]:
 		frappe.db.set_value("Warehouse", lager, "kt_umlagerziel", 1)
 	frappe.db.set_value("Warehouse", verkauf, "kt_lagerverkauf", 1)
 
@@ -393,9 +418,9 @@ def stammdaten(company: str | None = None) -> frappe._dict:
 
 	return frappe._dict(
 		company=company,
-		lager=f"Stores - {abbr}",
-		produktion=f"Work In Progress - {abbr}",
-		fertig=f"Finished Goods - {abbr}",
+		lager=roh_lager,
+		produktion=wip_lager,
+		fertig=fertig_lager,
 		lieferant=lieferant,
 		kunde=kunde,
 		verkauf=verkauf,

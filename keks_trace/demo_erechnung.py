@@ -92,7 +92,8 @@ def einrichten():
 	konto = f"Hausbank - {KUERZEL}"
 	if not frappe.db.exists("Account", konto):
 		frappe.get_doc(
-			{"doctype": "Account", "account_name": "Hausbank", "parent_account": f"Bank Accounts - {KUERZEL}",
+			{"doctype": "Account", "account_name": "Hausbank",
+			 "parent_account": frappe.db.get_value("Account", {"company": FIRMA, "account_type": "Bank", "is_group": 1}),
 			 "company": FIRMA, "account_type": "Bank", "account_currency": "EUR"}
 		).insert(ignore_permissions=True)  # fmt: skip
 	if not frappe.db.exists("Bank", BANK):

@@ -550,7 +550,7 @@ class TestTerminal(IntegrationTestCase):
 		with self.assertRaisesRegex(TerminalFehler, "wählen"):
 			terminal.umlagern("Lager", code=e["charge"], anzahl=1, einheit="Karton")
 		with self.assertRaisesRegex(TerminalFehler, "nicht umgelagert"):
-			terminal.umlagern("Lager", code=e["charge"], anzahl=1, einheit="Karton", nach="Stores - " + abbr)
+			terminal.umlagern("Lager", code=e["charge"], anzahl=1, einheit="Karton", nach=self.ctx.lager)
 		u = terminal.umlagern("Lager", code=e["charge"], anzahl=4, einheit="Karton", nach=aussen)
 		self.assertEqual(u["nach"], aussen)
 		self.assertTrue(terminal.charge_lager(e["charge"]).get(aussen))
@@ -562,8 +562,7 @@ class TestTerminal(IntegrationTestCase):
 	def test_19f_ruecknahme_aus_dem_lagerverkauf(self):
 		"""Zu viel in den Lagerverkauf geholt: am Lagerverkauf-Terminal zurück ins Lager."""
 		frappe.db.set_single_value("Keks Trace Einstellungen", "los_format", "LJJMMTT-NN")
-		abbr = frappe.get_cached_value("Company", self.ctx.company, "abbr")
-		fertig = f"Finished Goods - {abbr}"
+		fertig = self.ctx.fertig
 		e = self._verpacken(5)
 		terminal.umlagern("Lagerverkauf", code=e["charge"], anzahl=3, einheit="Karton")
 		ziele = terminal.umlager_ziele("Lagerverkauf")

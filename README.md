@@ -412,7 +412,7 @@ MHD-Begrenzung durch die Füllung (MHD = MHD des Nougats statt Backtag + 270 Tag
 # 200 Rohlinge und 200 garnierte Herzen je Größe. Füllt bei jedem Lauf nur auf, was fehlt.
 bench --site keks.localhost execute keks_trace.demo_herzen.anlegen
 # Ein Herz durch alle Abteilungen bis zum Lieferschein, mit Protokoll und Rückverfolgung
-bench --site keks.localhost execute keks_trace.demo_herzen.durchlauf --kwargs "{'groesse': '18', 'stueck': 100}"
+bench --site keks.localhost execute keks_trace.demo_herzen.durchlauf --kwargs "{'groesse': '9', 'stueck': 100}"
 ```
 
 ## Einkauf: Kontrakte und Reichweite
