@@ -69,7 +69,13 @@ redis_bench() {  # redis_bench start|stop
 	done
 }
 
-passwort() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20; }
+# Zufallspasswort aus 20 Buchstaben/Ziffern. Ohne „tr < /dev/urandom | head“: das bricht tr mit
+# SIGPIPE ab, und mit pipefail gilt das als Fehler.
+passwort() {
+	local p=""
+	while [ "${#p}" -lt 20 ]; do p+="$(head -c 64 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9')"; done
+	printf '%s' "${p:0:20}"
+}
 
 zugang_lesen() { [ -f "$ZUGANG" ] && grep -E "^$1=" "$ZUGANG" | cut -d= -f2- || true; }
 
@@ -127,7 +133,7 @@ if [ ! -x "/opt/node${NODE_MAJOR}/bin/node" ]; then
 	basis="https://nodejs.org/dist/latest-v${NODE_MAJOR}.x"
 	tmp="$(mktemp -d)"
 	curl -fsSL "$basis/SHASUMS256.txt" -o "$tmp/SHASUMS256.txt"
-	datei="$(grep -oE "node-v[0-9.]+-linux-${arch}\.tar\.xz" "$tmp/SHASUMS256.txt" | head -1)"
+	datei="$(grep -m1 -oE "node-v[0-9.]+-linux-${arch}\.tar\.xz" "$tmp/SHASUMS256.txt")"
 	curl -fsSL "$basis/$datei" -o "$tmp/$datei"
 	(cd "$tmp" && grep " $datei\$" SHASUMS256.txt | sha256sum -c - >/dev/null) || fehler "Prüfsumme von $datei falsch"
 	mkdir -p "/opt/node${NODE_MAJOR}" && tar -xJf "$tmp/$datei" -C "/opt/node${NODE_MAJOR}" --strip-components=1
@@ -222,7 +228,8 @@ if [ ! -d "$BENCH/sites/$SITE" ]; then
 fi
 als_frappe "bench use ${SITE}"
 for app in erpnext eu_einvoice erpnext_datev keks_trace; do
-	if ! als_frappe "bench --site ${SITE} list-apps" | grep -qw "$app"; then
+	installiert="$(als_frappe "bench --site ${SITE} list-apps")"
+	if ! grep -qw "$app" <<<"$installiert"; then
 		schritt "App ${app} installieren"
 		als_frappe "bench --site ${SITE} install-app ${app}"
 	fi
@@ -231,7 +238,7 @@ done
 als_frappe "bench config set-common-config -c chromium_path /usr/bin/chromium"
 
 schritt "Einrichtungsassistent (Deutsch, ${FIRMA}, Geschäftsjahr $(date +%Y))"
-eingerichtet() { als_frappe "bench --site ${SITE} execute frappe.is_setup_complete" | grep -qi true; }
+eingerichtet() { local a; a="$(als_frappe "bench --site ${SITE} execute frappe.is_setup_complete")"; grep -qi true <<<"$a"; }
 if ! eingerichtet; then
 	JAHR="$(date +%Y)"
 	als_frappe "bench --site ${SITE} execute frappe.desk.page.setup_wizard.setup_wizard.setup_complete --kwargs \"{'args': {'language': 'Deutsch', 'country': 'Germany', 'timezone': 'Europe/Berlin', 'currency': 'EUR', 'full_name': 'Test Admin', 'email': 'admin@example.com', 'password': '${ADMIN}', 'company_name': '${FIRMA}', 'company_abbr': '${KUERZEL}', 'chart_of_accounts': 'Standard', 'fy_start_date': '${JAHR}-01-01', 'fy_end_date': '${JAHR}-12-31'}}\""
