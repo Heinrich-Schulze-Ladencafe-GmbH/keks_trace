@@ -48,9 +48,12 @@ hinweis() { printf '\033[0;33m    %s\033[0m\n' "$*"; }
 fehler()  { printf '\n\033[1;31mFEHLER: %s\033[0m\n' "$*" >&2; exit 1; }
 trap 'printf "\n\033[1;31mAbgebrochen in Zeile %s: %s\033[0m\nEinfach nochmal starten; Erledigtes wird übersprungen.\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 
-# Befehl als Benutzer frappe im Bench-Verzeichnis (mit Node und uv im Pfad)
+# Befehl als Benutzer frappe im Bench-Verzeichnis (mit Node und uv im Pfad).
+# FRAPPE_DOCKER_BUILD=1: bench startet nach get-app/init sonst supervisor neu und fragt dafür nach dem
+# sudo-Passwort von frappe (das es nicht gibt). Neu gestartet wird am Ende vom Skript selbst als root.
+# Weitere Wirkung laut bench-Quelltext nur: keine Versionsprüfung von bench, Pakete kopiert statt verlinkt.
 als_frappe() {
-	sudo -u "$BENCH_USER" -H bash -c "export PATH=\"/opt/node${NODE_MAJOR}/bin:${BENCH_HOME}/.local/bin:\$PATH\"; cd \"${BENCH}\" 2>/dev/null || cd ~; $*"
+	sudo -u "$BENCH_USER" -H bash -c "export FRAPPE_DOCKER_BUILD=1 PATH=\"/opt/node${NODE_MAJOR}/bin:${BENCH_HOME}/.local/bin:\$PATH\"; cd \"${BENCH}\" 2>/dev/null || cd ~; $*"
 }
 
 # Die Redis-Dienste der Bench (config/redis_*.conf): Seite anlegen, Einrichtung und Demos brauchen
@@ -210,12 +213,15 @@ schritt "Frappe ${FRAPPE_BRANCH} (bench init, dauert einige Minuten)"
 # Fertig ist ein Schritt erst, wenn die App in sites/apps.txt steht und sich laden lässt; ein halber
 # Ordner von einem abgebrochenen Lauf zählt nicht.
 app_fertig() { grep -qsx "$1" "$BENCH/sites/apps.txt" && "$BENCH/env/bin/python" -c "import $1" 2>/dev/null; }
-if ! app_fertig frappe; then
+NEU_GEHOLT=0
+# bench init ist erst fertig, wenn auch die Oberfläche gebaut ist (assets.json)
+if ! app_fertig frappe || [ ! -f "$BENCH/sites/assets/assets.json" ]; then
 	if [ -d "$BENCH" ]; then
 		hinweis "Abgebrochene Bench gefunden: wird als ${BENCH}.abgebrochen beiseitegelegt und neu angelegt."
 		rm -rf "${BENCH}.abgebrochen" && mv "$BENCH" "${BENCH}.abgebrochen"
 	fi
-	sudo -u "$BENCH_USER" -H bash -c "export PATH=\"/opt/node${NODE_MAJOR}/bin:${BENCH_HOME}/.local/bin:\$PATH\"; cd ~ && \
+	NEU_GEHOLT=1
+	sudo -u "$BENCH_USER" -H bash -c "export FRAPPE_DOCKER_BUILD=1 PATH=\"/opt/node${NODE_MAJOR}/bin:${BENCH_HOME}/.local/bin:\$PATH\"; cd ~ && \
 		bench init --frappe-branch ${FRAPPE_BRANCH} --python \"\$(uv python find ${PY_VERSION})\" frappe-bench" \
 		|| fehler "bench init fehlgeschlagen"
 fi
@@ -227,6 +233,7 @@ app_holen() {  # app_holen NAME URL BRANCH
 	[ -d "$BENCH/apps/$1" ] && { hinweis "halber Ordner apps/$1 von einem Abbruch: neu holen"; rm -rf "${BENCH:?}/apps/$1"; }
 	als_frappe "bench get-app --branch $3 $2"
 	app_fertig "$1" || fehler "App $1 ist nach dem Holen nicht installiert."
+	NEU_GEHOLT=1
 }
 app_holen erpnext https://github.com/frappe/erpnext "$FRAPPE_BRANCH"
 app_holen eu_einvoice https://github.com/alyf-de/eu_einvoice "$FRAPPE_BRANCH"
@@ -244,6 +251,13 @@ if ! app_fertig keks_trace; then
 	als_frappe "bench get-app --branch ${BRANCH} ${URL}"
 	# Token nicht im Repository stehen lassen
 	als_frappe "git -C apps/keks_trace remote set-url upstream ${REPO} 2>/dev/null; git -C apps/keks_trace remote set-url origin ${REPO} 2>/dev/null; true"
+	app_fertig keks_trace || fehler "keks_trace ist nach dem Holen nicht installiert."
+	NEU_GEHOLT=1
+fi
+
+if [ "$NEU_GEHOLT" -eq 1 ]; then
+	schritt "Oberfläche aller Apps bauen (einige Minuten)"
+	als_frappe "bench build"
 fi
 
 # ---------------------------------------------------------------------------
