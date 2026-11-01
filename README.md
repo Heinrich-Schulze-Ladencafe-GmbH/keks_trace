@@ -143,7 +143,17 @@ und Füllungen.
 
 ## Testserver auf Debian 13 in einem Lauf
 
-Auf einer frischen VM mit Debian 13 (trixie), als root:
+Auf einer frischen VM mit Debian 13 (trixie). Zuerst die Grundeinrichtung (allgemein, nicht nur für
+keks_trace): Benutzer mit sudo, Rechnername, Zeitzone, feste IP. Als root mit `su -` (mit Minus):
+
+```bash
+bash debian-grundeinrichtung.sh     # fragt alles nacheinander, Enter übernimmt bzw. überspringt
+```
+
+Die feste IP wirkt nach dem Neustart, den das Skript anbietet; geänderte Dateien werden als
+`*.vor-grundeinrichtung` gesichert. Oft einfacher: die Adresse im Router per DHCP reservieren.
+
+Dann keks_trace, als root:
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/Heinrich-Schulze-Ladencafe-GmbH/keks_trace/main/scripts/testserver-einrichten.sh
