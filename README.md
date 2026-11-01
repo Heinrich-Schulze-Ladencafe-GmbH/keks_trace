@@ -141,7 +141,30 @@ Haltbarkeiten nutzen die ERPNext-Standardfelder „Has Expiry Date“ und „She
 Standzeit bei Teigen, Höchstalter bei Rework, maximale Lagerdauer bei loser Ware, MHD bei Fertigware
 und Füllungen.
 
-## Installation auf dem Testserver
+## Testserver auf Debian 13 in einem Lauf
+
+Auf einer frischen VM mit Debian 13 (trixie), als root:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/Heinrich-Schulze-Ladencafe-GmbH/keks_trace/main/scripts/testserver-einrichten.sh
+sudo bash testserver-einrichten.sh               # Testfirma „Keks Test GmbH“ mit Demo-Daten
+sudo bash testserver-einrichten.sh --update      # später: neuesten Stand einspielen
+```
+
+Das Skript installiert MariaDB, Redis, nginx, supervisor, Chromium (für PDFs statt wkhtmltopdf),
+Node 24 (offizielles Paket mit Prüfsumme), uv mit Python 3.14 und bench; dann Frappe/ERPNext 16,
+E-Rechnung, DATEV und keks_trace, richtet die Seite auf Deutsch ein, spielt die Demos ein und stellt
+auf Dauerbetrieb (startet nach Neustart von selbst). Am Ende stehen Adresse und Anmeldung da; die
+Passwörter erzeugt es selbst und legt sie nur in `/root/keks-zugang.txt` ab. Bricht ein Lauf ab:
+nochmal starten, Erledigtes wird übersprungen. Ist das Repository privat, fragt es nach einem
+GitHub-Token (nur Lesezugriff) und lässt ihn nicht im Repository stehen; ohne Abfrage:
+`KT_TOKEN=... sudo -E bash testserver-einrichten.sh`. Für Etikettendrucker muss die VM im selben
+Netz wie die Drucker sein (Port 9100).
+
+Ist das Repository privat, lässt sich das Skript selbst nicht per `curl` laden: dann aus GitHub
+herunterladen und auf die VM kopieren.
+
+## Installation auf einem bestehenden Server
 
 Voraussetzung: ERPNext 16 läuft und der Einrichtungsassistent ist abgeschlossen (Firma angelegt).
 
