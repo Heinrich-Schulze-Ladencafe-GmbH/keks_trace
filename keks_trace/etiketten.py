@@ -47,7 +47,7 @@ def karton(station: str) -> dict:
 
 
 def gebinde(codes) -> list[dict]:
-	"""Gebinde- und Behälter-Etiketten (Code als QR, Artikel, Charge, MHD, Menge, Eingang)."""
+	"""Gebinde- und Behälter-Etiketten (Code als Data Matrix, Artikel, Charge, MHD, Menge, Eingang)."""
 	if isinstance(codes, str):
 		codes = codes.split(",")
 	codes = [c.strip() for c in (codes or []) if c and c.strip()][:MAX_GEBINDE]
@@ -227,14 +227,15 @@ def zpl_karton(d: dict, anzahl: int = 1, dpi: int = 203, breite=100, hoehe=60, l
 
 
 def zpl_gebinde(etiketten: list[dict], dpi: int = 203, breite=100, hoehe=70) -> str:
-	"""Gebinde-Etikett (Standard 100 x 70 mm): QR mit dem Code links, Angaben rechts. Eins je Gebinde.
+	"""Gebinde-Etikett (Standard 100 x 70 mm): Data Matrix mit dem Code links, Angaben rechts. Eins je Gebinde.
 
 	Ohne Logo: das Etikett bleibt im Haus.
 	"""
 	teile = []
 	for e in etiketten:
 		z = zpl.Etikett(breite, hoehe, dpi)
-		z.qr(3, 3, e["code"], groesse_mm=34, version=zpl.qr_version(e["code"]))
+		# Data Matrix mit der Nummer (wie am Kübel); intern genügt die Nummer, alles andere holt das System
+		z.datamatrix(5, 5, e["code"], groesse_mm=30)
 		z.text(3, 40, 4.5, e["code"], breite=36, mitte=True)
 		x, b = 42, breite - 45
 		z.text(x, 4, 4.3, e.get("name") or "", breite=b, zeilen=2)

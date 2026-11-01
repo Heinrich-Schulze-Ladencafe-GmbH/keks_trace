@@ -9,6 +9,7 @@ wird in den Daten als "\x1d" übergeben (wie in gs1.py) und als FNC1 gesetzt.
 """
 
 import math
+import re
 
 FNC1 = "\x1d"
 MODUL_GS1_MM = 0.495  # GS1: kleinste Modulbreite für Logistik-Etiketten (SSCC)
@@ -95,6 +96,23 @@ class Etikett:
 		vergroesserung = max(1, min(10, self.p(groesse_mm) // module))
 		self.teile.append(f"^FO{self.p(x)},{self.p(y)}^BQN,2,{vergroesserung}^FDMA,{feld(str(code))}^FS")
 
+	def datamatrix(self, x, y, code, groesse_mm=26) -> int:
+		"""Data Matrix (ECC 200) ab (x, y), höchstens ``groesse_mm`` groß. Gibt die Modulgröße in Punkten zurück.
+
+		Erlaubt sind Buchstaben, Ziffern und - . / (Nummern wie KL-H1-ACF4); sonst ValueError, denn das
+		Escape-Zeichen von ^BX (_) und die ZPL-Steuerzeichen sollen nicht in den Daten stehen.
+		"""
+		code = str(code)
+		if not DM_ZEICHEN.match(code):
+			raise ValueError(f"Für Data Matrix nur Buchstaben, Ziffern und - . / erlaubt: {code!r}")
+		kante = dm_module(code)
+		punkte = max(2, self.p(groesse_mm) // (kante + 2))  # mit Ruhezone von je einem Modul
+		# Spalten = Zeilen = Kante, Seitenverhältnis 1: quadratisch und so groß wie berechnet (_ ist das
+		# Escape-Zeichen von ^BX; es kommt in den erlaubten Zeichen nicht vor)
+		feld = f"^BXN,{punkte},200,{kante},{kante},6,_,1"
+		self.teile.append(f"^FO{self.p(x + 1)},{self.p(y + 1)}{feld}^FD{code}^FS")
+		return punkte
+
 	def grafik(self, x, y, grafik: "Grafik"):
 		"""Schwarz-Weiß-Bild (siehe ``bild``) ab (x, y) in mm."""
 		self.teile.append(
@@ -110,6 +128,32 @@ class Etikett:
 # ---------------------------------------------------------------------------
 # Hilfen
 # ---------------------------------------------------------------------------
+
+
+DM_ZEICHEN = re.compile(r"^[A-Za-z0-9./-]{1,60}$")
+# ECC 200, quadratisch: Kantenlänge in Modulen und Datenwörter. Im ASCII-Modus braucht jedes Zeichen höchstens
+# ein Datenwort (zwei Ziffern zusammen eins); so ist die Größe nie unterschätzt. Der Drucker wählt selbst.
+DM_GROESSEN = (
+	(10, 3),
+	(12, 5),
+	(14, 8),
+	(16, 12),
+	(18, 18),
+	(20, 22),
+	(22, 30),
+	(24, 36),
+	(26, 44),
+	(32, 62),
+)
+
+
+def dm_module(code: str) -> int:
+	"""Kantenlänge des Data-Matrix-Symbols in Modulen (höchstens; ASCII-Kodierung)."""
+	n = len(str(code))
+	for kante, zeichen in DM_GROESSEN:
+		if n <= zeichen:
+			return kante
+	return 36
 
 
 class Grafik:

@@ -285,6 +285,11 @@ Kartonetikett (Drucker und Browser), nicht auf dem internen Gebinde-Etikett. Der
 Schwarz: Transparentes wird weiß, alles Dunkle und Farbige schwarz. Bei 10 mm Höhe und 203 dpi bleibt
 das Wappen klar, feine Schrift im Logo („seit 1830“) ist nicht mehr lesbar.
 
+**Interne Codes als Data Matrix:** Gebinde- und Behälter-Etikett tragen (wie die Kübel) einen Data Matrix
+mit nur der Nummer; alles Weitere holt das System. Lesbar aus jedem Winkel, verträgt Schmutz, klein.
+Braucht 2D-Scanner (Imager). Behälter-Codes deshalb nur aus Buchstaben, Ziffern und `- . /`.
+Nach außen bleibt es linear: SSCC als GS1-128 auf der Palette, EAN auf dem Karton.
+
 Inhalt wie die Browser-Etiketten (gleiche Datenquelle). Auf dem Paletten-Etikett steht der Inhalt
 einer sortenreinen Palette in **zwei** GS1-128: (02)+(37) und (15)+(10). In einem Code wären die
 Striche bei 203 dpi nur 0,25 mm breit, so sind es 0,5 mm. Ein Druck über die Anfrage-ID läuft
@@ -520,7 +525,7 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_fluesse` (Ergänzung) | FEFO auch beim Zuführen an der Linie; Paletten-Etikett: Los wie Karton, „neu drucken“ nach Entnahme |
 | `test_qs_tagesliste` | Alle vier Arten eines Tages; Routinesperre „Freigabe vor Verwendung“ ist keine Abweichung; Durchsicht nur QS, je Tag einmal, nicht in der Zukunft, danach unveränderbar |
 | `test_behaelter` | Behälter nach dem Leeren frei bzw. zur Reinigung (Einstellung); Meldung „gereinigt“ mit Zeit und Station; Anfrage-ID nur für geschützte Buchungen |
-| `test_etiketten` | GS1-128 in ZPL (Zeichensätze, FNC1, zurückgelesen); Layouts je Rollengröße, Mindestmaß beim Zuordnen und Ändern; Logo (transparent wird weiß, fehlt es: ohne Logo drucken); Drucker an der Station oder Browserdruck; inaktiv; nicht erreichbar mit klarer Meldung; Testdruck; Adresse geprüft; „Genutzt an“ |
+| `test_etiketten` | GS1-128 in ZPL (Zeichensätze, FNC1, zurückgelesen); Data Matrix (Größe, Zeichen, Behälter-Code); Layouts je Rollengröße, Mindestmaß beim Zuordnen und Ändern; Logo (transparent wird weiß, fehlt es: ohne Logo drucken); Drucker an der Station oder Browserdruck; inaktiv; nicht erreichbar mit klarer Meldung; Testdruck; Adresse geprüft; „Genutzt an“ |
 
 Die Tests rollen ihre Daten am Ende zurück. Demo-Funktionen committen nur außerhalb von Tests
 (`utils.demo_commit`); vorher schrieb ein Demo-Aufruf mitten in einem Test dessen Daten fest.

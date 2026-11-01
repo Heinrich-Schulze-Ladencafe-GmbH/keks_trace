@@ -5,6 +5,12 @@ from frappe.model.document import Document
 
 class Produkttraeger(Document):
 	def validate(self):
+		if self.is_new():
+			from keks_trace.zpl import DM_ZEICHEN
+
+			# Der Code steht als Data Matrix auf dem Etikett und wird gescannt: keine Leer- und Sonderzeichen
+			if not DM_ZEICHEN.match(self.code or ""):
+				frappe.throw(_("Code bitte nur aus Buchstaben, Ziffern und - . / (höchstens 60 Zeichen)."))
 		vorher = self.get_doc_before_save()
 		if not vorher or self.flags.kt_vom_system:
 			return

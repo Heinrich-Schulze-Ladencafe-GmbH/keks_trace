@@ -8,7 +8,8 @@
 	html, body { background: #888 !important; margin: 0; }
 	.etikett { width: 100mm; height: 70mm; box-sizing: border-box; margin: 10px auto; padding: 3mm 4mm; background: #fff; color: #000;
 		font: 9pt/1.25 Arial, Helvetica, sans-serif; display: grid; grid-template-columns: 34mm 1fr; gap: 3mm; page-break-after: always; overflow: hidden; }
-	.qr svg { width: 34mm; height: 34mm; }
+	.dm { width: 30mm; height: 30mm; margin: 2mm; }
+	.dm svg { width: 100%; height: 100%; }
 	.code { font: bold 15pt monospace; margin-top: 1mm; text-align: center; }
 	.name { font-size: 13pt; font-weight: bold; line-height: 1.15; }
 	.k { font-size: 7pt; text-transform: uppercase; color: #333; margin-top: 1.5mm; }
@@ -21,7 +22,7 @@
 <button class="knopf" onclick="window.print()">Drucken ({{ etiketten|length }})</button>
 {% for e in etiketten %}
 <div class="etikett">
-	<div><div class="qr">{{ e.qr|safe }}</div><div class="code">{{ e.code }}</div></div>
+	<div><div class="dm" data-code="{{ e.code }}"></div><div class="code">{{ e.code }}</div></div>
 	<div>
 		<div class="name">{{ e.name or "" }}</div>
 		<div>Art.-Nr. {{ e.artikel or "" }} · {{ e.art }}</div>
@@ -34,5 +35,12 @@
 {% endfor %}
 {% endblock %}
 {% block script %}
-{% if drucken %}<script>window.addEventListener("load", () => setTimeout(() => window.print(), 300));</script>{% endif %}
+<script src="/assets/keks_trace/js/bwip-js-min.js"></script>
+<script>
+	// Data Matrix mit der Nummer, wie am Kübel (kuebel_code.html); erst zeichnen, dann drucken
+	document.querySelectorAll(".dm").forEach((el) => {
+		el.innerHTML = bwipjs.toSVG({ bcid: "datamatrix", text: el.dataset.code, scale: 4, paddingwidth: 1, paddingheight: 1 });
+	});
+	{% if drucken %}window.addEventListener("load", () => setTimeout(() => window.print(), 300));{% endif %}
+</script>
 {% endblock %}

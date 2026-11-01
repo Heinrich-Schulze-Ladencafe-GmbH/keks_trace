@@ -25,11 +25,11 @@
   {
    "fieldname": "code",
    "fieldtype": "Data",
-   "label": "Code (QR)",
+   "label": "Code",
    "reqd": 1,
    "unique": 1,
    "in_list_view": 1,
-   "description": "Steht im QR-Code auf dem Behälter."
+   "description": "Steht als Data Matrix auf dem Etikett bzw. am Kübel. Nur Buchstaben, Ziffern und - . /"
   },
   {
    "fieldname": "typ",

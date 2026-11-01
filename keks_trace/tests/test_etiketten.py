@@ -165,8 +165,19 @@ class TestLayouts(unittest.TestCase):
 		]
 		z = etiketten.zpl_gebinde(e)
 		self.assertEqual(z.count("^XA"), 2)
-		self.assertIn("^BQN,2,", z)
-		self.assertIn("^FDMA,GB-0001^FS", z)
+		self.assertIn("^BXN,", z)  # Data Matrix wie am Kübel
+		self.assertIn(",200,14,14,6,_,1^FDGB-0001^FS", z)  # 7 Zeichen: 14 x 14 Module, quadratisch
+		self.assertNotIn("^BQ", z)
+
+	def test_data_matrix_groesse_und_zeichen(self):
+		self.assertEqual(zpl.dm_module("KL-H1-ACF4"), 16)  # 10 Zeichen
+		self.assertEqual(zpl.dm_module("TR-ABCDEFGHIJKLM"), 18)  # 16 Zeichen (längster Code heute)
+		z = zpl.Etikett(100, 70, 203)
+		punkte = z.datamatrix(5, 5, "KL-H1-ACF4", groesse_mm=30)
+		self.assertEqual(punkte, 240 // 18)  # 30 mm = 240 Punkte, 16 Module + Ruhezone
+		for falsch in ("KL H1", "A_B", "Ä1", "x^y", ""):
+			with self.assertRaises(ValueError):
+				z.datamatrix(5, 5, falsch)
 
 
 class TestDrucken(IntegrationTestCase):
@@ -339,6 +350,11 @@ class TestRolleZuordnen(IntegrationTestCase):
 			self._drucker(100, 0)
 		with self.assertRaises(frappe.ValidationError):
 			self._drucker(400, 100)
+
+	def test_behaelter_code_nur_scanbare_zeichen(self):
+		with self.assertRaisesRegex(frappe.ValidationError, "nur aus Buchstaben"):
+			demo.neuer_traeger(f"TR {_hash()}", "Teigbehälter")
+		self.assertTrue(demo.neuer_traeger(f"TR-{_hash()}", "Teigbehälter"))
 
 	def test_logo_aus_den_einstellungen(self):
 		import os

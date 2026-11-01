@@ -14,7 +14,7 @@ def rueckverfolgung(charge: str, richtung: str = "Vorwärts") -> dict:
 
 @frappe.whitelist()
 def traeger_info(code: str) -> dict:
-	"""Inhalt eines Behälters (Charge, Menge, Verfall) nach dem Scannen seines QR-Codes."""
+	"""Inhalt eines Behälters (Charge, Menge, Verfall) nach dem Scannen seines Codes (Data Matrix, früher QR)."""
 	frappe.has_permission("Produkttraeger", "read", code, throw=True)
 	return traeger.info(code)
 

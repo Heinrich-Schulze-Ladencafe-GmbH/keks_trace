@@ -689,7 +689,7 @@ def drei_tage_kette(ctx, kuerzel: str | None = None, start=None) -> frappe._dict
 	c.silo = silos_anlegen(ctx, k)
 	W, Z, D, T = c.silo["KT-MEHL"], c.silo["KT-ZUCKER"], c.silo["KT-DINKEL"], c.silo["KT-SIRUP"]
 
-	# Behälter mit QR-Code
+	# Behälter mit Code (Data Matrix)
 	c.tb1 = neuer_traeger(f"TB1-{k}", "Teigbehälter")
 	c.tb2 = neuer_traeger(f"TB2-{k}", "Teigbehälter")
 	c.tb3 = neuer_traeger(f"TB3-{k}", "Teigbehälter")
