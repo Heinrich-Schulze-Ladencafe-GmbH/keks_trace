@@ -9,6 +9,7 @@
 #   2. Rechnername (mit /etc/hosts)
 #   3. Zeitzone
 #   4. feste IP statt DHCP (ifupdown, NetworkManager oder systemd-networkd; wirkt nach Neustart)
+#   5. in einer VM (Proxmox/KVM): qemu-guest-agent, damit Proxmox IP und Zustand sieht
 # Geänderte Dateien werden vorher als *.vor-grundeinrichtung gesichert. Mehrfach ausführbar.
 #
 # Besser als eine feste IP am Rechner ist oft eine DHCP-Reservierung im Router: dann bleibt die Adresse
@@ -220,6 +221,28 @@ if [ "$DYNAMISCH" -eq 1 ] || ja "Die Adresse ist schon fest. Trotzdem ändern?";
 	else
 		ok "DHCP bleibt"
 	fi
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Gast-Agent für Proxmox (nur in einer KVM-VM)
+# ---------------------------------------------------------------------------
+schritt "5. Proxmox-Gast-Agent"
+VIRT="$(systemd-detect-virt 2>/dev/null || true)"
+if [ "$VIRT" = "kvm" ] || [ "$VIRT" = "qemu" ]; then
+	if dpkg -s qemu-guest-agent >/dev/null 2>&1; then
+		ok "qemu-guest-agent ist schon installiert"
+	else
+		apt-get install -y -q qemu-guest-agent >/dev/null
+		ok "qemu-guest-agent installiert"
+	fi
+	# Läuft nur, wenn in Proxmox unter Optionen der QEMU Guest Agent an ist (dann gibt es das Gerät dafür)
+	if [ -e /dev/virtio-ports/org.qemu.guest_agent.0 ]; then
+		systemctl start qemu-guest-agent 2>/dev/null && ok "läuft: Proxmox zeigt jetzt die IP der VM an"
+	else
+		hinweis "In Proxmox bei der VM unter Optionen den QEMU Guest Agent einschalten; wirkt erst, wenn die VM in Proxmox gestoppt und neu gestartet wird."
+	fi
+else
+	ok "keine KVM-VM (${VIRT:-unbekannt}), nicht nötig"
 fi
 
 # ---------------------------------------------------------------------------
