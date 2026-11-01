@@ -323,13 +323,18 @@ schritt "Produktivbetrieb einrichten (nginx, supervisor)"
 # pip install, das es in der uv-Umgebung nicht gibt) und legt beim ersten Lauf den supervisor-Link
 # nicht an (liest seine Einstellungen, bevor es sie schreibt).
 als_frappe "bench setup supervisor --user ${BENCH_USER} --yes --skip-supervisord"
-als_frappe "bench setup nginx --yes"
+# Log-Format "combined" kennt nginx von Haus aus; bench nimmt sonst "main", das Debian nicht definiert
+als_frappe "bench setup nginx --yes --logging combined --log_format combined"
 [ -f "$BENCH/config/supervisor.conf" ] && [ -f "$BENCH/config/nginx.conf" ] || fehler "supervisor- oder nginx-Konfiguration wurde nicht erzeugt."
 ln -sfn "$BENCH/config/supervisor.conf" /etc/supervisor/conf.d/frappe-bench.conf
 ln -sfn "$BENCH/config/nginx.conf" /etc/nginx/conf.d/frappe-bench.conf
 rm -f /etc/nginx/sites-enabled/default   # sonst antwortet nginx statt Frappe auf http://<IP>
-# frappe darf supervisor und nginx neu starten (für „bench restart“ und Updates); legt bench selbst an
-(cd "$BENCH" && bench setup sudoers "$BENCH_USER") || hinweis "sudo-Rechte für frappe nicht gesetzt: bench restart dann als root."
+# frappe darf supervisor steuern und nginx prüfen/neu laden (für bench restart und Updates), sonst nichts.
+# Nicht über "bench setup sudoers": das verlangt certbot (HTTPS-Zertifikate), das es hier nicht braucht.
+SUDOERS=/etc/sudoers.d/frappe-bench
+printf '%s ALL=(root) NOPASSWD: /usr/bin/supervisorctl, /usr/sbin/nginx -t, /usr/bin/systemctl reload nginx\n' "$BENCH_USER" > "$SUDOERS.neu"
+chmod 440 "$SUDOERS.neu"
+if visudo -cf "$SUDOERS.neu" >/dev/null; then mv "$SUDOERS.neu" "$SUDOERS"; else rm -f "$SUDOERS.neu"; hinweis "sudo-Regel für frappe fehlerhaft, nicht gesetzt."; fi
 systemctl enable --now supervisor nginx >/dev/null 2>&1 || true
 supervisorctl reread >/dev/null && supervisorctl update >/dev/null && supervisorctl restart all >/dev/null
 nginx -t || fehler "nginx-Konfiguration fehlerhaft (siehe oben)."
