@@ -33,7 +33,12 @@
   "stufen",
   "section_linie",
   "linie",
-  "aktueller_auftrag"
+  "aktueller_auftrag",
+  "section_drucker",
+  "drucker_palette",
+  "drucker_karton",
+  "column_break_drucker",
+  "drucker_gebinde"
  ],
  "fields": [
   {
@@ -191,11 +196,43 @@
    "fieldtype": "Check",
    "label": "Zutaten vorschlagen statt scannen",
    "description": "Beim Herstellen/Verpacken füllt das Terminal Ware und Packmittel selbst aus (älteste zuerst, Vorrat am Tisch, Behälter); der Mitarbeiter ändert nur, wenn es nicht passt. Gescannt wird nur in der Backstube (Rohstoffe, Teige) und bei Paletten und Kartons."
+  },
+  {
+   "fieldname": "section_drucker",
+   "fieldtype": "Section Break",
+   "label": "Etikettendrucker",
+   "collapsible": 0,
+   "description": "Drucker im Netz für die Etiketten dieses Terminals. Leer: Druck über den Browser wie bisher."
+  },
+  {
+   "fieldname": "drucker_palette",
+   "fieldtype": "Link",
+   "options": "Etikettendrucker",
+   "label": "Palettenetikett (NVE)",
+   "description": "A6 hoch, 105 x 148 mm"
+  },
+  {
+   "fieldname": "drucker_karton",
+   "fieldtype": "Link",
+   "options": "Etikettendrucker",
+   "label": "Kartonlabel",
+   "description": "100 x 60 mm"
+  },
+  {
+   "fieldname": "column_break_drucker",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "drucker_gebinde",
+   "fieldtype": "Link",
+   "options": "Etikettendrucker",
+   "label": "Gebinde- und Behälter-Etikett",
+   "description": "100 x 70 mm (Wareneingang, Rework)"
   }
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-31 10:00:00.000000",
+ "modified": "2026-11-01 16:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Terminal Station",

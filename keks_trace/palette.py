@@ -779,4 +779,16 @@ def etikett(nve: str) -> dict:
 				+ (f" (10) {los}" if los else "")
 			)
 			daten["gtin"] = gtin14
+			# Für den Etikettendrucker in zwei Codes (je kürzer, also breitere Striche): Was und wie viel,
+			# dann MHD und Los. Variable Felder stehen jeweils am Ende, ein Trennzeichen ist nicht nötig.
+			daten["inhalt_zeilen"] = [(f"02{gtin14}37{anzahl}", f"(02) {gtin14} (37) {anzahl}")]
+			if mhd or los:
+				daten["inhalt_zeilen"].append(
+					(
+						(f"15{mhd}" if mhd else "") + (f"10{los}" if los else ""),
+						" ".join(
+							x for x in ((f"(15) {mhd}" if mhd else ""), (f"(10) {los}" if los else "")) if x
+						),
+					)
+				)
 	return daten

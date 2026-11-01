@@ -1,0 +1,118 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:drucker_name",
+ "creation": "2026-11-01 16:00:00.000000",
+ "description": "Etikettendrucker im Netz (ZPL über TCP, Port 9100). Zebra; Honeywell PM43 u. a. mit ZSim (Zebra-Emulation). Welcher Drucker an welchem Terminal druckt, steht an der Terminal Station.",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "drucker_name",
+  "standort",
+  "aktiv",
+  "column_break_1",
+  "adresse",
+  "port",
+  "dpi",
+  "section_genutzt",
+  "genutzt",
+  "section_bemerkung",
+  "bemerkung"
+ ],
+ "fields": [
+  {
+   "fieldname": "drucker_name",
+   "fieldtype": "Data",
+   "label": "Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "description": "Wie auf dem Aufkleber am Drucker, z. B. „Versand 1“."
+  },
+  {
+   "fieldname": "standort",
+   "fieldtype": "Data",
+   "label": "Standort",
+   "in_list_view": 1,
+   "description": "Wo er steht, z. B. „Halle 2, Palettenwickler“."
+  },
+  {
+   "default": "1",
+   "fieldname": "aktiv",
+   "fieldtype": "Check",
+   "label": "Aktiv",
+   "in_list_view": 1,
+   "description": "Aus: die Terminals drucken wieder über den Browser."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "adresse",
+   "fieldtype": "Data",
+   "label": "Adresse im Netz",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "IP-Adresse oder Rechnername des Druckers. Am besten fest vergeben (DHCP-Reservierung)."
+  },
+  {
+   "default": "9100",
+   "fieldname": "port",
+   "fieldtype": "Int",
+   "label": "Port",
+   "reqd": 1,
+   "non_negative": 1,
+   "description": "Rohdruck, fast immer 9100."
+  },
+  {
+   "default": "203",
+   "fieldname": "dpi",
+   "fieldtype": "Select",
+   "label": "Auflösung (dpi)",
+   "options": "203\n300",
+   "reqd": 1,
+   "description": "Steht auf dem Typenschild oder dem Konfigurationsausdruck. Der Testdruck zeigt einen Rahmen von genau 90 x 50 mm: passt das Maß nicht, ist die Auflösung falsch."
+  },
+  {
+   "fieldname": "section_genutzt",
+   "fieldtype": "Section Break",
+   "label": "Genutzt an"
+  },
+  {
+   "fieldname": "genutzt",
+   "fieldtype": "HTML",
+   "label": "Genutzt an"
+  },
+  {
+   "fieldname": "section_bemerkung",
+   "fieldtype": "Section Break",
+   "collapsible": 1,
+   "label": "Bemerkung"
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung",
+   "description": "Modell, Etikettenrolle, Einstellungen am Drucker (z. B. „ZSim an“)."
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-01 16:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Etikettendrucker",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1, "print": 1, "share": 1},
+  {"role": "Stock Manager", "read": 1, "write": 1, "create": 1, "report": 1, "export": 1, "print": 1},
+  {"role": "Stock User", "read": 1, "report": 1}
+ ],
+ "sort_field": "drucker_name",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "drucker_name",
+ "track_changes": 1
+}

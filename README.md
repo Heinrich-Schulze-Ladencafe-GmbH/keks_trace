@@ -261,6 +261,31 @@ MHD 32 Monate. Ausgedachte Werte (Beutelgrößen, Gebinde, Ruhezeit, Packmittel)
   heruntergenommen (Lieferung, Umpacken, Umlagern, Verbrauch), meldet das Terminal „Etikett neu drucken“;
   die Palettenansicht zeigt es mit grünem Knopf. Kein Korrigieren von Hand mehr.
 
+## Etikettendrucker im Netz
+
+Etiketten gehen direkt auf einen Drucker im Netz (ZPL über TCP, Port 9100), ohne Druckdialog.
+Zebra-Drucker sprechen ZPL; Honeywell PM43 und andere über **ZSim** (Zebra-Emulation, am Drucker als
+Befehlssprache einstellen). Für die PX6i ist ZSim nicht belegt: erst Testdruck.
+
+1. **Etikettendrucker** anlegen: Name, Adresse (feste IP oder Rechnername), Port 9100, Auflösung.
+   Knopf **Testdruck**: Rahmen nachmessen (genau 90 x 50 mm, sonst stimmt die Auflösung nicht),
+   **beide Strichcodes scannen**. Code 2 muss `(02)04032744000011(37)8(10)AB1234` ergeben; er wechselt
+   die Code-128-Zeichensätze wie ein echtes Paletten-Etikett.
+2. An der **Terminal Station**, Abschnitt „Etikettendrucker“, je Etikett einen Drucker eintragen:
+   Palettenetikett (A6, 105 x 148 mm), Kartonlabel (100 x 60 mm), Gebinde-Etikett (100 x 70 mm).
+   Die Druckermaske zeigt unter „Genutzt an“, welche Terminals ihn nutzen.
+3. Leer gelassen oder Drucker nicht aktiv: das Terminal druckt wie bisher über den Browser.
+   Antwortet der Drucker nicht, sagt das Terminal das und bietet „Im Browser drucken“ an.
+
+Inhalt wie die Browser-Etiketten (gleiche Datenquelle). Auf dem Paletten-Etikett steht der Inhalt
+einer sortenreinen Palette in **zwei** GS1-128: (02)+(37) und (15)+(10). In einem Code wären die
+Striche bei 203 dpi nur 0,25 mm breit, so sind es 0,5 mm. Ein Druck über die Anfrage-ID läuft
+höchstens einmal, auch wenn nach Funkloch nochmal getippt wird. Kübel-Codes bleiben beim Laser.
+
+Ausprobieren ohne Drucker: `bench execute keks_trace.etiketten.zpl_test --kwargs "{'drucker': {'name': 'X'}}"`
+liefert das ZPL; ein Renderer wie Labelary zeigt es an. Achtung: der offline geprüfte Renderer
+(zebrash) setzt den Wechsel nach Zeichensatz C (`>5`) falsch um; maßgeblich ist der Scan vom Drucker.
+
 ## Prüfungen (CP/CCP)
 
 Unter **Prüfplan** werden Kontrollen gepflegt: Lenkung (CCP, CP, GHP), Auslöser (Intervall in
@@ -487,13 +512,14 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_fluesse` (Ergänzung) | FEFO auch beim Zuführen an der Linie; Paletten-Etikett: Los wie Karton, „neu drucken“ nach Entnahme |
 | `test_qs_tagesliste` | Alle vier Arten eines Tages; Routinesperre „Freigabe vor Verwendung“ ist keine Abweichung; Durchsicht nur QS, je Tag einmal, nicht in der Zukunft, danach unveränderbar |
 | `test_behaelter` | Behälter nach dem Leeren frei bzw. zur Reinigung (Einstellung); Meldung „gereinigt“ mit Zeit und Station; Anfrage-ID nur für geschützte Buchungen |
+| `test_etiketten` | GS1-128 in ZPL (Zeichensätze, FNC1, zurückgelesen); Layouts; Drucker an der Station oder Browserdruck; inaktiv; nicht erreichbar mit klarer Meldung; Testdruck; Adresse geprüft; „Genutzt an“ |
 
 Die Tests rollen ihre Daten am Ende zurück. Demo-Funktionen committen nur außerhalb von Tests
 (`utils.demo_commit`); vorher schrieb ein Demo-Aufruf mitten in einem Test dessen Daten fest.
 
 ## Bewusst noch nicht enthalten
 
-Waagenanbindung, Wareneingang über Bestellungen, eigene Kasse mit TSE und Kundendisplay,
+Waagenanbindung, Druckerstatus (Papier leer), Wareneingang über Bestellungen, eigene Kasse mit TSE und Kundendisplay,
 Abweichungsmanagement/CAPA, SOPs und Schulungsnachweise.
 
 ## Offene fachliche Annahmen (von der QS zu bestätigen)

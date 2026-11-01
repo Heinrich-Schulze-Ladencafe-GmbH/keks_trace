@@ -55,6 +55,9 @@
 	.meldung.gruen { background: var(--gruen); color: #fff; }
 	.meldung.orange { background: var(--orange); color: #111; }
 	.meldung small { display: block; font-weight: 400; font-size: 17px; margin-top: 6px; }
+	#druckhinweis { position: fixed; left: 16px; right: 16px; top: 8px; z-index: 60; max-width: 900px; margin: 0 auto; }
+	#druckhinweis .meldung { box-shadow: 0 4px 16px rgba(0,0,0,.35); margin: 0; }
+	#druckhinweis .reihe { margin-top: 10px; }
 	.gross { font-size: 34px; font-weight: 700; letter-spacing: 0.5px; word-break: break-all; }
 	.reihe { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
 	.reihe > * { flex: 1 1 220px; }
@@ -200,7 +203,7 @@
 
 	const BUCHUNGEN = /^(herstellen|linie_|palette|pruefung_erfassen|umlagern|lieferung|paket_lieferung|anbrechen|wareneingang|rework_erfassen|rework_linie$|silo_leer|behaelter_)/;
 	// Anfrage-ID nur für Methoden, die der Server mit @einmalig schützt (terminal.py); Test test_anfrage_liste
-	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "herstellen", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_zufuehren", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
+	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "etikett_drucken", "herstellen", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_zufuehren", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
 	async function api(methode, args) {
 		let r;
 		try {
@@ -526,8 +529,41 @@
 		if (a === "zurueck") return startseite();
 		if (a === "station-wechseln") { speichern("kt_station", ""); zustand.station = null; return stationWaehlen(); }
 	}
+	// Etiketten: auf den Netzwerkdrucker, der an der Terminal Station eingetragen ist (Abschnitt
+	// „Etikettendrucker“), sonst wie bisher über den Browser. Geht der Drucker nicht: Meldung und Browserdruck.
+	function browserDruck(url) { window.open(url, "_blank"); }
+	let druckTimer;
+	function druckHinweis(art, text, url) {
+		let el = document.getElementById("druckhinweis");
+		if (!el) { el = document.createElement("div"); el.id = "druckhinweis"; document.body.appendChild(el); }
+		clearTimeout(druckTimer);
+		el.innerHTML = `<div class="meldung ${art}">${esc(text)}${url ? `<div class="reihe"><button class="knopf" data-d="browser">Im Browser drucken</button><button class="knopf" data-d="zu">Schließen</button></div>` : ""}</div>`;
+		el.querySelectorAll("[data-d]").forEach((b) => b.addEventListener("click", () => { el.innerHTML = ""; if (b.dataset.d === "browser") browserDruck(url); }));
+		if (art === "rot") ton(false);
+		else druckTimer = setTimeout(() => { el.innerHTML = ""; }, art === "gruen" ? 5000 : 20000);
+	}
+	async function druckeEtikett(art, args, url) {
+		const drucker = (zustand.drucker || {})[art];
+		if (!drucker) { browserDruck(url); return false; }
+		druckHinweis("orange", "Druckt auf " + drucker + " …");
+		try {
+			const r = await api("etikett_drucken", Object.assign({ station: zustand.station, art }, args));
+			druckHinweis("gruen", (r.etiketten > 1 ? r.etiketten + " Etiketten" : "Etikett") + " an " + r.drucker + " geschickt.");
+			return true;
+		} catch (e) {
+			druckHinweis("rot", e.message, url);
+			return false;
+		}
+	}
 	function etikettDrucken(nve) {
-		window.open("/nve_etikett?nve=" + encodeURIComponent(nve) + "&druck=1", "_blank");
+		return druckeEtikett("palette", { nve }, "/nve_etikett?nve=" + encodeURIComponent(nve) + "&druck=1");
+	}
+	function kartonDrucken(anzahl) {
+		druckeEtikett("karton", { anzahl }, "/karton_etikett?druck=1&station=" + encodeURIComponent(zustand.station) + "&anzahl=" + anzahl);
+	}
+	function gebindeDrucken(codes) {
+		const liste = [].concat(codes).join(",");
+		druckeEtikett("gebinde", { codes: liste }, "/gebinde_etikett?druck=1&codes=" + encodeURIComponent(liste));
 	}
 
 	// ------------------------------------------------------------------ Station
@@ -800,7 +836,7 @@
 		aktionen((a) => {
 			if (a === "pa-wechseln") return auftragWaehlen("Packstation", packstationStart);
 			if (a === "neu") return packstationStart();
-			if (a === "label") return window.open("/karton_etikett?druck=1&station=" + encodeURIComponent(zustand.station) + "&anzahl=" + Math.max(1, Math.round(zahl(document.getElementById("anzahl").value))), "_blank");
+			if (a === "label") return kartonDrucken(Math.max(1, Math.round(zahl(document.getElementById("anzahl").value))));
 			beiAllgemein(a);
 		});
 	}
@@ -834,7 +870,7 @@
 			if (a === "karton") return paletteFertigStart(vpcStart);
 			if (a === "lose") return loseBuchen(d);
 			if (a === "linienlager-verpacken") return schnellStart(true);
-			if (a === "label") return window.open("/karton_etikett?druck=1&station=" + encodeURIComponent(zustand.station) + "&anzahl=" + (d.karton_je_palette || 20), "_blank");
+			if (a === "label") return kartonDrucken(d.karton_je_palette || 20);
 			if (a === "beenden") { const i = await api("linie_info", { station: zustand.station }); return auftragBeenden(i); }
 			beiAllgemein(a);
 		});
@@ -1567,11 +1603,11 @@
 			try {
 				const e = await api("rework_linie", { station: zustand.station, auftrag: a.auftrag, rework_artikel: sorte,
 					kg: zahl(document.getElementById("kg").value), behaelter: document.getElementById("scan").value.trim() || behaelter });
-				window.open("/gebinde_etikett?druck=1&codes=" + encodeURIComponent(e.behaelter), "_blank");
+				gebindeDrucken(e.behaelter);
 				ergebnis(e.name, ["Behälter: " + e.behaelter, "Menge: " + kg(e.menge), e.punkt ? "Entnahmepunkt: " + e.punkt : "", "Charge: " + e.charge,
 					e.mhd ? "Verwendbar bis: " + e.mhd : "", "Von Auftrag " + e.auftrag], [],
 					`<button class="knopf" data-a="etikett">Etikett nochmal</button><button class="knopf gruen" data-a="weiter">Nächster Behälter</button>`)((b) => {
-					if (b === "etikett") return window.open("/gebinde_etikett?druck=1&codes=" + encodeURIComponent(e.behaelter), "_blank");
+					if (b === "etikett") return gebindeDrucken(e.behaelter);
 					if (b === "weiter") return reworkLinie(a);
 					beiAllgemein(b);
 				});
@@ -1751,7 +1787,7 @@
 					ton(false);
 					return aktionen(beiAllgemein);
 				}
-				const druck = () => window.open("/gebinde_etikett?druck=1&codes=" + encodeURIComponent(e.gebinde.join(",")), "_blank");
+				const druck = () => gebindeDrucken(e.gebinde);
 				if (e.gebinde && e.gebinde.length) druck();
 				ergebnis(e.name, ["Charge: " + e.charge, "Menge: " + mg(e.menge, art.stock_uom), "Ort: " + e.lager,
 					e.gebinde && e.gebinde.length ? "Gebinde: " + e.gebinde.join(", ") : "", e.mhd ? "MHD: " + e.mhd : ""].filter(Boolean),
@@ -1850,7 +1886,7 @@
 		if (hinweis) meldung("gruen", hinweis);
 		aktionen(async (a, d) => {
 			try {
-				if (a === "etikett") return etikettDrucken(p.nve);
+				if (a === "etikett") { if (await etikettDrucken(p.nve)) paletteLaden(p.nve); return; }
 				if (a === "schliessen") return paletteZeigen(await api("palette_schliessen", { station: zustand.station, palette: p.nve }), "Palette geschlossen.");
 				if (a === "oeffnen") return paletteZeigen(await api("palette_oeffnen", { station: zustand.station, palette: p.nve }), "Palette geöffnet.");
 				if (a === "laden") return kartonsLaden(p);
@@ -2250,6 +2286,7 @@
 			zustand.nur_fertigware = s.nur_fertigware;
 			zustand.umlager_ziel = s.umlager_ziel;
 			zustand.vorschlagen = s.vorschlagen;
+			zustand.drucker = s.drucker || {};
 			zustand.linie = s.linie;
 			umlagerNach = null;
 			zustand.vorraete = s.vorraete;

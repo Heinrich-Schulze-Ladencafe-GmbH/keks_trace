@@ -14,7 +14,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, formatdate, getdate, now_datetime, nowdate
 
-from keks_trace import gs1, kennzeichnung, pruefung
+from keks_trace import etiketten, gs1, kennzeichnung, pruefung
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
 from keks_trace.anfrage import einmalig
@@ -122,7 +122,19 @@ def start(station: str) -> dict:
 		"vorraete": bool(s.f_silo and frappe.db.exists("Silo", {**_silo_filter(s), "typ": VORRAT})),
 		"linie": s.linie,
 		"pruefungen": pruefung.faellig(s.name),
+		"drucker": etiketten.drucker_der_station(s.name),
 	}
+
+
+@frappe.whitelist()
+@einmalig
+def etikett_drucken(
+	station: str, art: str, nve: str | None = None, codes: str | None = None, anzahl: int | None = None
+) -> dict:
+	"""Etikett direkt auf den Netzwerkdrucker der Station (siehe etiketten.py). Einmalig: ein verlorenes
+	Ergebnis und nochmal Tippen druckt nicht doppelt."""
+	_station(station)
+	return etiketten.drucken(station, art, nve=nve, codes=codes, anzahl=anzahl)
 
 
 @frappe.whitelist()
