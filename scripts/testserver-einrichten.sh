@@ -53,6 +53,22 @@ als_frappe() {
 	sudo -u "$BENCH_USER" -H bash -c "export PATH=\"/opt/node${NODE_MAJOR}/bin:${BENCH_HOME}/.local/bin:\$PATH\"; cd \"${BENCH}\" 2>/dev/null || cd ~; $*"
 }
 
+# Die Redis-Dienste der Bench (config/redis_*.conf): Seite anlegen, Einrichtung und Demos brauchen
+# sie; im Dauerbetrieb startet sie supervisor. Vorher selbst starten, vor dem Dauerbetrieb beenden.
+redis_bench() {  # redis_bench start|stop
+	local conf port
+	for conf in "$BENCH"/config/redis_*.conf; do
+		[ -f "$conf" ] || continue
+		port="$(awk '$1 == "port" {print $2}' "$conf")"
+		[ -n "$port" ] || continue
+		if [ "$1" = start ]; then
+			als_frappe "redis-cli -p ${port} ping >/dev/null 2>&1 || redis-server ${conf} --daemonize yes >/dev/null"
+		else
+			als_frappe "redis-cli -p ${port} shutdown nosave >/dev/null 2>&1 || true"
+		fi
+	done
+}
+
 passwort() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20; }
 
 zugang_lesen() { [ -f "$ZUGANG" ] && grep -E "^$1=" "$ZUGANG" | cut -d= -f2- || true; }
@@ -199,6 +215,7 @@ fi
 # ---------------------------------------------------------------------------
 # 5. Seite anlegen, Apps installieren, Einrichtung auf Deutsch
 # ---------------------------------------------------------------------------
+redis_bench start
 schritt "Seite ${SITE} anlegen"
 if [ ! -d "$BENCH/sites/$SITE" ]; then
 	als_frappe "bench new-site ${SITE} --admin-password '${ADMIN}' --db-root-username root --db-root-password '${DB_ROOT}'"
@@ -250,6 +267,7 @@ fi
 # ---------------------------------------------------------------------------
 # 7. Dauerbetrieb: nginx und supervisor (startet nach Neustart von selbst)
 # ---------------------------------------------------------------------------
+redis_bench stop   # supervisor startet sie gleich selbst
 schritt "Produktivbetrieb einrichten (nginx, supervisor)"
 rm -f /etc/nginx/sites-enabled/default   # sonst antwortet nginx statt Frappe auf http://<IP>
 cd "$BENCH"
