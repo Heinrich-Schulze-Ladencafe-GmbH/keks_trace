@@ -319,12 +319,21 @@ fi
 # ---------------------------------------------------------------------------
 redis_bench stop   # supervisor startet sie gleich selbst
 schritt "Produktivbetrieb einrichten (nginx, supervisor)"
+# Die Schritte von "bench setup production" einzeln: das Ganze verlangt ansible und fail2ban (sonst
+# pip install, das es in der uv-Umgebung nicht gibt) und legt beim ersten Lauf den supervisor-Link
+# nicht an (liest seine Einstellungen, bevor es sie schreibt).
+als_frappe "bench setup supervisor --user ${BENCH_USER} --yes --skip-supervisord"
+als_frappe "bench setup nginx --yes"
+[ -f "$BENCH/config/supervisor.conf" ] && [ -f "$BENCH/config/nginx.conf" ] || fehler "supervisor- oder nginx-Konfiguration wurde nicht erzeugt."
+ln -sfn "$BENCH/config/supervisor.conf" /etc/supervisor/conf.d/frappe-bench.conf
+ln -sfn "$BENCH/config/nginx.conf" /etc/nginx/conf.d/frappe-bench.conf
 rm -f /etc/nginx/sites-enabled/default   # sonst antwortet nginx statt Frappe auf http://<IP>
-cd "$BENCH"
-bench setup production "$BENCH_USER" --yes
+# frappe darf supervisor und nginx neu starten (für „bench restart“ und Updates); legt bench selbst an
+(cd "$BENCH" && bench setup sudoers "$BENCH_USER") || hinweis "sudo-Rechte für frappe nicht gesetzt: bench restart dann als root."
 systemctl enable --now supervisor nginx >/dev/null 2>&1 || true
 supervisorctl reread >/dev/null && supervisorctl update >/dev/null && supervisorctl restart all >/dev/null
-nginx -t >/dev/null 2>&1 && systemctl reload nginx
+nginx -t || fehler "nginx-Konfiguration fehlerhaft (siehe oben)."
+systemctl reload nginx
 
 # ---------------------------------------------------------------------------
 # Fertig
