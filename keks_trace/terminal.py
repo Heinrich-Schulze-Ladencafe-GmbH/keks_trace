@@ -387,10 +387,33 @@ def lager_chargen(station: str, artikel: str) -> list[dict]:
 	return _lager_chargen(artikel)
 
 
-def _lager_chargen(artikel: str) -> list[dict]:
+def _offene_auftraege(namen) -> set:
+	"""Welche dieser Kundenaufträge noch offen sind (gebucht, nicht erledigt/geschlossen)."""
+	namen = [n for n in set(namen or ()) if n]
+	if not namen:
+		return set()
+	return set(
+		frappe.get_all(
+			"Sales Order",
+			{"name": ["in", namen], "docstatus": 1, "status": ["not in", ["Completed", "Closed"]]},
+			pluck="name",
+		)
+	)
+
+
+def _reserviert(charge: str | None) -> str | None:
+	"""Für welchen offenen Kundenauftrag eine Charge hergestellt wurde (sonst frei)."""
+	if not charge:
+		return None
+	auftrag = frappe.db.get_value("Batch", charge, "kt_kundenauftrag")
+	return auftrag if auftrag in _offene_auftraege([auftrag]) else None
+
+
+def _lager_chargen(artikel: str, auftrag: str | None = None) -> list[dict]:
 	"""Chargen eines Artikels mit Bestand im Lager (nicht im Vorrat/Silo/Lagerverkauf), ältestes MHD zuerst.
 
-	Zum Antippen ohne Scanner.
+	Zum Antippen ohne Scanner. Reserviert (für einen offenen Kundenauftrag hergestellt): nur für diesen Auftrag,
+	dort zuerst. Sonderanfertigung nach Auftrag: mit Auftrag nur die eigene Ware.
 	"""
 	# nicht aus Silo/Vorrat, Lagerverkauf oder von einer Linie (das gehört dem Produktionsauftrag)
 	aus = list(
@@ -402,30 +425,42 @@ def _lager_chargen(artikel: str) -> list[dict]:
 	linienlager = tuple(frappe.get_all("Linie", {"linienlager": ["is", "set"]}, pluck="linienlager")) or ("",)
 	zeilen = frappe.db.sql(
 		"""
-		select sbe.batch_no as charge, sum(sbe.qty) as menge, b.expiry_date as mhd,
+		select sbe.batch_no as charge, sum(sbe.qty) as menge, b.expiry_date as mhd, b.kt_kundenauftrag as auftrag,
 			sum(case when sbe.warehouse in %(ll)s then sbe.qty else 0 end) > 0.000001 as linienlager
 		from `tabSerial and Batch Entry` sbe
 		join `tabSerial and Batch Bundle` sbb on sbb.name = sbe.parent
 		join `tabBatch` b on b.name = sbe.batch_no
 		where b.item = %(artikel)s and sbb.is_cancelled = 0 and sbb.docstatus = 1
 			and ifnull(b.kt_status, '') != 'Gesperrt' and sbe.warehouse not in %(aus)s
-		group by sbe.batch_no, b.expiry_date, b.creation
+		group by sbe.batch_no, b.expiry_date, b.creation, b.kt_kundenauftrag
 		having sum(sbe.qty) > 0.000001
 		order by linienlager desc, b.expiry_date is null, b.expiry_date, b.creation
-		limit 30
+		limit 200
 		""",
 		{"artikel": artikel, "aus": tuple(aus), "ll": linienlager},
 		as_dict=True,
 	)
-	return [
-		{
-			"charge": z.charge,
-			"menge": flt(z.menge, 3),
-			"mhd": formatdate(z.mhd) if z.mhd else None,
-			"linienlager": cint(z.linienlager),
-		}
-		for z in zeilen
-	]
+	offen = _offene_auftraege(z.auftrag for z in zeilen)
+	sonder = cint(frappe.get_cached_value("Item", artikel, "kt_nach_auftrag"))
+	ergebnis = []
+	for z in zeilen:
+		reserviert = z.auftrag if z.auftrag in offen else None
+		if reserviert and reserviert != auftrag:
+			continue  # gehört einem anderen Auftrag
+		if sonder and auftrag and reserviert != auftrag:
+			continue  # Sonderanfertigung: nur die für diesen Auftrag gemachte
+		ergebnis.append(
+			{
+				"charge": z.charge,
+				"menge": flt(z.menge, 3),
+				"mhd": formatdate(z.mhd) if z.mhd else None,
+				"linienlager": cint(z.linienlager),
+				"auftrag": reserviert,
+			}
+		)
+	if auftrag:
+		ergebnis.sort(key=lambda x: x["auftrag"] != auftrag)  # eigene zuerst, sonst Reihenfolge wie oben
+	return ergebnis[:30]
 
 
 @frappe.whitelist()
@@ -558,17 +593,58 @@ def _hauptzutat(artikel: str) -> str | None:
 	return max(zeilen, key=lambda z: flt(z.stock_qty)).item_code if zeilen else None
 
 
+def _fertig_fuer(auftrag: str, artikel: str) -> float:
+	"""Wie viel von artikel mit diesem Kundenauftrag hergestellt wurde (Lagereinheit)."""
+	return flt(
+		frappe.db.sql(
+			"""select sum(sed.transfer_qty) from `tabStock Entry Detail` sed
+			join `tabStock Entry` se on se.name = sed.parent
+			where se.docstatus = 1 and se.kt_kundenauftrag = %s and sed.item_code = %s and sed.is_finished_item = 1""",
+			(auftrag, artikel),
+		)[0][0]
+	)
+
+
+def _vorrat_je_auftrag(artikel: str) -> tuple[dict, float]:
+	"""({Auftrag: reservierter Bestand}, freier Bestand) eines Artikels im Lager."""
+	reserviert, frei = {}, 0.0
+	for c in _lager_chargen_alle(artikel):
+		if c["auftrag"]:
+			reserviert[c["auftrag"]] = reserviert.get(c["auftrag"], 0) + c["menge"]
+		else:
+			frei += c["menge"]
+	return reserviert, frei
+
+
+def _lager_chargen_alle(artikel: str) -> list[dict]:
+	"""Wie _lager_chargen, aber auch die für andere Aufträge reservierte Ware (zum Zählen)."""
+	ergebnis = []
+	for auftrag in [
+		None,
+		*_offene_auftraege(
+			frappe.get_all(
+				"Batch", {"item": artikel, "kt_kundenauftrag": ["is", "set"]}, pluck="kt_kundenauftrag"
+			)
+		),
+	]:
+		ergebnis += [c for c in _lager_chargen(artikel, auftrag) if c["auftrag"] == auftrag]
+	return ergebnis
+
+
 @frappe.whitelist()
 def aufgaben(station: str) -> list[dict]:
 	"""Offene Kundenaufträge als Arbeitsliste der Station (Herzenboden: Garnieren und Verpacken).
 
-	Je Auftragsposition: was diese Station dafür herstellt (Garnieren: das garnierte Herz, Verpacken: das
-	verpackte Herz), bestellt, schon erledigt (Buchungen mit diesem Kundenauftrag), noch zu tun und wie viel
-	von der Vorstufe im Lager liegt.
+	Ein Auftrag läuft am Herzenboden durch: was beim Garnieren für ihn gemacht wird, ist für ihn reserviert und
+	wird beim Verpacken zuerst genommen. Je Auftragsposition: was diese Station dafür herstellt, bestellt, erledigt
+	(Verpacken: verpackt; Garnieren: schon verpackt plus für den Auftrag garniert und noch im Lager), ToDo und
+	Vorrat der Vorstufe: erst die für den Auftrag reservierte, dann freie Ware nach Liefertermin verteilt
+	(Sonderanfertigungen nur reserviert).
 	"""
 	s = _station(station)
 	stufen = s.stufen_liste()
 	ergebnis = []
+	frei_rest, reserviert_je = {}, {}
 	for z in frappe.db.sql(
 		"""
 		select so.name as auftrag, so.customer_name as kunde, soi.item_code as artikel, soi.stock_qty as menge,
@@ -591,18 +667,25 @@ def aufgaben(station: str) -> list[dict]:
 				continue
 			ziel, faktor = passend[0]["artikel"], flt(passend[0]["menge"]) or 1
 		bestellt = flt(z.menge) * faktor
-		erledigt = flt(
-			frappe.db.sql(
-				"""select sum(sed.transfer_qty) from `tabStock Entry Detail` sed
-				join `tabStock Entry` se on se.name = sed.parent
-				where se.docstatus = 1 and se.kt_kundenauftrag = %s and sed.item_code = %s and sed.is_finished_item = 1""",
-				(z.auftrag, ziel),
-			)[0][0]
-		)
+		if ziel == z.artikel:
+			erledigt = _fertig_fuer(z.auftrag, ziel)
+		else:  # Vorstufe: was schon verpackt ist, plus was für den Auftrag gemacht im Lager liegt
+			if ziel not in reserviert_je:
+				reserviert_je[ziel] = _vorrat_je_auftrag(ziel)[0]
+			erledigt = _fertig_fuer(z.auftrag, z.artikel) * faktor + reserviert_je[ziel].get(z.auftrag, 0)
+		erledigt = flt(min(erledigt, bestellt), 3)
 		todo = max(flt(bestellt - erledigt, 3), 0)
 		if todo <= EPS:
 			continue
 		vor = _hauptzutat(ziel)
+		eigen = zugeteilt = 0.0
+		if vor:
+			if vor not in frei_rest:
+				reserviert_je[vor], frei_rest[vor] = _vorrat_je_auftrag(vor)
+			eigen = flt(reserviert_je[vor].get(z.auftrag, 0), 3)
+			if not cint(frappe.get_cached_value("Item", vor, "kt_nach_auftrag")):
+				zugeteilt = flt(min(frei_rest[vor], max(todo - eigen, 0)), 3)
+				frei_rest[vor] -= zugeteilt
 		ergebnis.append(
 			{
 				"auftrag": z.auftrag,
@@ -614,7 +697,9 @@ def aufgaben(station: str) -> list[dict]:
 				"erledigt": erledigt,
 				"todo": todo,
 				"vorstufe": frappe.get_cached_value("Item", vor, "item_name") if vor else None,
-				"verfuegbar": _verfuegbar(vor) if vor else None,
+				"verfuegbar": eigen + zugeteilt if vor else None,
+				"vorrat_eigen": eigen,
+				"vorrat_frei": zugeteilt,
 				"termin": formatdate(z.termin) if z.termin else None,
 			}
 		)
@@ -668,6 +753,42 @@ def zum_verpacken(station: str) -> list[dict]:
 				}
 			)
 	return ergebnis
+
+
+@frappe.whitelist()
+def verpacken_ziele(station: str, lose: str) -> dict:
+	"""Was aus dieser losen Ware werden kann: erst offene Kundenaufträge, die sie brauchen, dann alle Artikel
+	(jedes Gebinde, jeder Kundenartikel mit dieser losen Ware im Rezept)."""
+	ziele = {}
+	for b in frappe.db.sql(
+		"""select distinct bom.item as artikel from `tabBOM Item` bi join `tabBOM` bom on bom.name = bi.parent
+		join `tabItem` i on i.name = bom.item
+		where bi.item_code = %s and bom.is_default = 1 and bom.is_active = 1 and bom.docstatus = 1
+			and i.kt_chargen_stufe = 'Fertigware' and i.disabled = 0""",
+		lose,
+		as_dict=True,
+	):
+		ziele[b.artikel] = {
+			"artikel": b.artikel,
+			"name": frappe.get_cached_value("Item", b.artikel, "item_name"),
+		}
+	auftraege_ = [
+		{
+			"auftrag": z["auftrag"],
+			"kunde": z["kundenname"],
+			"artikel": z["artikel"],
+			"name": z["name"],
+			"bestellt": z["menge"],
+			"erledigt": z["verpackt"],
+			"todo": z["offen_verpacken"],
+			"einheit": z["einheit"],
+			"offen_text": z["offen_text"],
+			"termin": z["termin"],
+		}
+		for z in auftraege(station)
+		if z["artikel"] in ziele and z["offen_verpacken"] > EPS
+	]
+	return {"auftraege": auftraege_, "artikel": sorted(ziele.values(), key=lambda x: x["name"])}
 
 
 @frappe.whitelist()
@@ -1020,10 +1141,10 @@ def _zeile(code, menge, ziel=None, erlaubt=None):
 	}
 
 
-def _quellen(artikel: str) -> list[dict]:
+def _quellen(artikel: str, auftrag: str | None = None) -> list[dict]:
 	"""Wo liegt ein Artikel (ohne Silo/Vorrat/Lagerverkauf)? Behälter einzeln, älteste Ware zuerst."""
 	ergebnis = []
-	for c in _lager_chargen(artikel):
+	for c in _lager_chargen(artikel, auftrag):
 		rest = c["menge"]
 		for t in frappe.get_all(
 			"Produkttraeger", {"status": "Belegt", "charge": c["charge"]}, ["code", "menge"], order_by="code"
@@ -1045,7 +1166,9 @@ def auswahl(station: str, artikel: str) -> list[dict]:
 
 
 @frappe.whitelist()
-def vorschlag(station: str, ziel: str, menge: float, bevorzugt: str | None = None) -> dict:
+def vorschlag(
+	station: str, ziel: str, menge: float, bevorzugt: str | None = None, kundenauftrag: str | None = None
+) -> dict:
 	"""Zutaten für die Sollmenge vorschlagen statt scannen: Vorrat am Tisch, Behälter (Silo/Tank) und
 	sonst die älteste Ware zuerst, über mehrere Chargen bzw. Kisten verteilt. Jede Zeile ist geprüft."""
 	s = _station(station)
@@ -1057,7 +1180,9 @@ def vorschlag(station: str, ziel: str, menge: float, bevorzugt: str | None = Non
 		b = aufloesen(bevorzugt)
 		vorne = (b.get("artikel"), {"code": b["code"], "menge": flt(b.get("inhalt") or 0)})
 	for z in r["zutaten"]:
-		quellen = [{"code": z["silo"], "menge": z["menge"]}] if z["silo"] else _quellen(z["artikel"])
+		quellen = (
+			[{"code": z["silo"], "menge": z["menge"]}] if z["silo"] else _quellen(z["artikel"], kundenauftrag)
+		)
 		if vorne and vorne[0] == z["artikel"]:
 			quellen = [vorne[1]] + [q for q in quellen if q["code"] != vorne[1]["code"]]
 		offen = z["menge"]
@@ -1275,6 +1400,14 @@ def herstellen(
 	ausbringung = flt(ausbringung) or flt(summe * r["ausbeute"], 3)
 	if kundenauftrag and not _fuer_auftrag(kundenauftrag, ziel):
 		_fehler(_("{0} ist im Kundenauftrag {1} nicht bestellt.").format(ziel, kundenauftrag))
+	for z in eingaenge:  # für einen anderen Auftrag hergestellte Ware bleibt bei ihm
+		reserviert = _reserviert(z.get("charge"))
+		if reserviert and reserviert != kundenauftrag:
+			_fehler(
+				_("{0} ({1}) ist für Kundenauftrag {2} gemacht und dort reserviert.").format(
+					z["name"], z["charge"], reserviert
+				)
+			)
 	palette = paletten.finde(ziel_behaelter) if ziel_behaelter else None
 	if palette and not versandfaehig(ziel):
 		_fehler(_("Auf eine Palette kommen nur Fertigware und lose Ware im Karton."))
@@ -1300,6 +1433,9 @@ def herstellen(
 		charge = _neue_charge(ziel, getdate(nowdate()))
 		if vorgabe:
 			frappe.db.set_value("Batch", charge, "kt_mhd_vorgabe", vorgabe)
+	if kundenauftrag and r["stufe"] != "Fertigware":
+		# Vorstufe für einen Auftrag (z. B. garniertes Herz): reserviert, bis der Auftrag erledigt ist
+		frappe.db.set_value("Batch", charge, "kt_kundenauftrag", kundenauftrag)
 	jetzt = now_datetime()
 	ausgabe = _se_zeile(
 		{"artikel": ziel, "charge": charge, "menge": ausbringung, "behaelter": behaelter},

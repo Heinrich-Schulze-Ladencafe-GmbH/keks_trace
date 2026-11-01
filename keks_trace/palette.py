@@ -542,6 +542,79 @@ def lieferung_on_cancel(doc, method=None):
 			frappe.db.set_value("Palette", palette, {"status": "Geschlossen", "lieferschein": None})
 
 
+VERBRAUCH = ("Manufacture", "Repack", "Material Issue")
+
+
+def se_on_submit(doc, method=None):
+	"""Verbrauch eines Loses, das auf Paletten steht (z. B. lose Ware im Karton nach Bedarf verpackt, Rohlinge
+	garniert): was am Lager fehlt, geht von den Paletten ab (älteste Position zuerst), damit Palette und Lager
+	übereinstimmen. Umlagern und Lieferung buchen ihre Paletten selbst."""
+	if doc.purpose not in VERBRAUCH:
+		return
+	for charge in {r.batch_no or _charge_aus_bundle(r) for r in doc.items if r.s_warehouse}:
+		if not charge:
+			continue
+		zuviel = auf_paletten(charge) - lagerbestand(charge)
+		if zuviel <= 1e-4:
+			continue
+		paletten = frappe.db.sql_list(
+			"""select palette from `tabPaletten Bewegung` where charge = %s
+			group by palette having sum(if(richtung = 'Zugang', menge, -menge)) > 0.000001
+			order by min(zeitpunkt)""",
+			charge,
+		)
+		for palette in paletten:
+			for pos in inhalt(palette):
+				if zuviel <= 1e-4:
+					break
+				if pos["charge"] != charge:
+					continue
+				f = faktor(pos["artikel"], pos["einheit"])
+				nimm = min(zuviel, pos["menge"])
+				_bewegung(palette, "Abgang", "Verbrauch", charge, nimm / f, pos["einheit"],
+						  doc.get("kt_station"), "Stock Entry", doc.name)  # fmt: skip
+				zuviel -= nimm
+			_status_pruefen(palette)
+
+
+def abgleich() -> int:
+	"""Einmalig: Lose, die laut Paletten mehr sind als am Lager (Verbrauch vor diesem Abgleich gebucht),
+	auf den Paletten korrigieren. Gibt die Zahl der korrigierten Lose zurück."""
+	zahl = 0
+	for charge in frappe.db.sql_list(
+		"""select charge from `tabPaletten Bewegung` group by charge
+		having sum(if(richtung = 'Zugang', menge, -menge)) > 0.000001"""
+	):
+		zuviel = auf_paletten(charge) - lagerbestand(charge)
+		if zuviel <= 1e-4:
+			continue
+		zahl += 1
+		for palette in frappe.db.sql_list(
+			"select distinct palette from `tabPaletten Bewegung` where charge = %s order by palette", charge
+		):
+			for pos in inhalt(palette):
+				if zuviel <= 1e-4 or pos["charge"] != charge:
+					continue
+				nimm = min(zuviel, pos["menge"])
+				_bewegung(palette, "Abgang", "Korrektur", charge, nimm / faktor(pos["artikel"], pos["einheit"]),
+						  pos["einheit"])  # fmt: skip
+				zuviel -= nimm
+			_status_pruefen(palette)
+	return zahl
+
+
+def se_on_cancel(doc, method=None):
+	for b in frappe.get_all(
+		"Paletten Bewegung",
+		filters={"beleg_typ": "Stock Entry", "beleg": doc.name, "art": "Verbrauch"},
+		fields=["palette", "charge", "anzahl", "einheit"],
+	):
+		_bewegung(b.palette, "Zugang", "Storno Verbrauch", b.charge, b.anzahl, b.einheit,
+				  beleg_typ="Stock Entry", beleg=doc.name)  # fmt: skip
+		if frappe.db.get_value("Palette", b.palette, "status") == "Leer":
+			frappe.db.set_value("Palette", b.palette, "status", "Offen")
+
+
 def se_before_cancel(doc, method=None):
 	"""Eine Fertigung kann nicht storniert werden, solange ihr Los auf einer Palette steht."""
 	for r in doc.items:

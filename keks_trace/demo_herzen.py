@@ -1,4 +1,4 @@
-"""Demo Herzenboden: garnierte Lebkuchenherzen in Stück, drei Größen (Platzhalter).
+"""Demo Herzenboden: garnierte Lebkuchenherzen in Stück, Größen Gr. 3 bis Gr. 11, Varianten je Spruch.
 
     bench --site keks.localhost execute keks_trace.demo_herzen.anlegen
 
@@ -6,27 +6,48 @@ Ablauf: Rohling backen (Backstraße: Kneter, Verpackungs-PC bucht Rohlinge im Ka
 nach Gefühl) -> Lager lagert die Rohlinge an den Herzenboden um (wie für einen Kunden) -> Zuckerglasur kochen (eigene
 Rezeptur, Halbfabrikat, max. 2 Tage) -> Garnieren (Herzen Garnieren: Rohling + Glasur) ->
 Verpacken auf der Kalfass (Herzen Verpackung: Herz + Folie + Etikett + Schleife, Metallcheck Fe 2,8 mm).
-Gezählt wird in Stück; jede Größe ist ein eigener Artikel mit eigener Rezeptur.
+Gezählt wird in Stück. Je Größe eine Vorlage („Lebkuchenherz Gr. 9“) mit Rezept (gleicher Teig, Guss-Richtwert
+je Größe), je Spruch eine Variante („Gr. 9 · Ich liebe Dich“, siehe keks_trace.varianten). Der Wunschtext-Herz
+(„Sondertext“) ist eine Sonderanfertigung nach Auftrag: nur für den bestellenden Kunden.
 """
 
 import frappe
 from frappe.utils import add_days, nowdate
 
-from keks_trace import demo, pilot
+from keks_trace import demo, pilot, varianten
 
-# Größe: (Teig je Rohling kg, Glasur je Herz kg) - Platzhalter
-GROESSEN = {"12": (0.05, 0.01), "18": (0.12, 0.02), "25": (0.25, 0.04)}
-
-# Leistung je Größe in Stück: Garnieren (Stück/h), Kalfass (Stück/min) - Platzhalter
-STUECKGEWICHT = {"12": 0.08, "18": 0.2, "25": 0.42}  # kg je verpacktes Herz (Demo-Werte)
-LEISTUNG = {"12": (1200, 30), "18": (800, 25), "25": (500, 20)}
-
-# Rohlinge im Karton (Stück je Karton, Demo-Werte)
-STK_JE_KARTON = {"12": 40, "18": 24, "25": 12}
+# Größe: (Teig je Rohling kg, Guss-Richtwert je Herz kg) - Demo-Werte. Gleicher Teig für alle Größen; der Guss
+# schwankt mit Schrift und Deko, die Tagesmenge stimmt über „Leer melden“ am Guss-Behälter.
+GROESSEN = {
+	"3": (0.03, 0.008), "62": (0.04, 0.01), "63": (0.06, 0.014), "64": (0.08, 0.018), "65": (0.1, 0.022),
+	"6": (0.12, 0.026), "67": (0.16, 0.032), "9": (0.22, 0.04), "11": (0.35, 0.06),
+}  # fmt: skip
+STUECKGEWICHT = {g: round(teig + guss + 0.01, 3) for g, (teig, guss) in GROESSEN.items()}  # kg verpackt
+LEISTUNG = (800, 25)  # Garnieren Stück/h, Kalfass Stück/min (Demo)
+STK_JE_KARTON = {g: max(10, int(6 / teig) // 2 * 2) for g, (teig, _guss) in GROESSEN.items()}  # Rohlinge
 BACKSTRASSE = "Backstraße"
 
-# Demo-Kundenauftrag: der Kunde bestellt Herzen in Stück
-AUFTRAG = {"12": 3000, "18": 2000, "25": 1000}
+SPRUECHE = ["Ich liebe Dich", "Viel Glück", "Oma ist die Beste", "Du bist das Beste"]
+SONDER = "Sondertext"  # Wunschtext steht in der Auftragszeile; Sonderanfertigung nach Auftrag
+STANDARD = SPRUECHE[0]
+ALT = ("12", "18", "25")  # frühere Demo-Größen in cm: werden deaktiviert
+PO_NR = "DEMO-HERZEN-GR"  # Bestellnummer der Demo-Aufträge (Größen Gr.)
+
+# Demo-Kundenauftrag: der Kunde bestellt Herzen in Stück, (Größe, Spruch): Stück
+AUFTRAG = {("9", "Ich liebe Dich"): 300, ("6", "Viel Glück"): 500, ("11", "Du bist das Beste"): 100}
+
+
+def rohling(groesse: str) -> str:
+	return f"HZ-ROHLING-{groesse}"
+
+
+def garniert(groesse: str, spruch: str = STANDARD) -> str:
+	return varianten.variante(f"HZ-GARNIERT-{groesse}", {"Spruch": spruch})
+
+
+def herz(groesse: str, spruch: str = STANDARD) -> str:
+	return varianten.variante(f"HZ-{groesse}", {"Spruch": spruch})
+
 
 ROHSTOFFE = {
 	"HZ-PUDERZUCKER": ("Puderzucker", 730),
@@ -165,40 +186,40 @@ def anlegen(vorrat: int = 1) -> frappe._dict:
 
 	ctx = frappe._dict({**pilot.anlegen(), **demo_linie.stammdaten()})  # Grundteig 5812, Backstraße
 	_linie(ctx)
-	herz = {"kt_linie": LINIE}
+	hb = {"kt_linie": LINIE}
 	for code, (name, tage) in ROHSTOFFE.items():
 		_artikel(code, name, "Rohstoff", "Kg", tage)
 	for code, name in PACKMITTEL.items():
 		_artikel(code, name, "Packmittel", "Nos")
 	_artikel(
 		"HZ-GLASUR", "Zuckerglasur (eigene Herstellung)", "Halbfabrikat", "Kg", 2,
-		extra={"kt_mhd_nicht_begrenzend": 1, **herz},
+		extra={"kt_mhd_nicht_begrenzend": 1, **hb},
 	)  # fmt: skip
 	pilot._rezept(ctx.company, "HZ-GLASUR", 10, [("HZ-PUDERZUCKER", 9.5), ("HZ-EIWEISS", 0.5)])
+	varianten.merkmal("Spruch", [*SPRUECHE, SONDER])
+	_alte_demo_aufraeumen()
+	vorlage = {"has_variants": 1, "attributes": [{"attribute": "Spruch"}]}
+	garnieren, kalfass = LEISTUNG
 	for g, (teig, glasur) in GROESSEN.items():
 		# Rohlinge kommen von der Backstraße, im Karton ins Lager (lose Ware, auch direkt verkauft)
-		_artikel(f"HZ-ROHLING-{g}", f"Herz-Rohling {g} cm", "Ware lose", "Nos", 180,
+		_artikel(f"HZ-ROHLING-{g}", f"Herz-Rohling Gr. {g}", "Ware lose", "Nos", 180,
 				 extra={"kt_linie": BACKSTRASSE})  # fmt: skip
 		_einheiten(f"HZ-ROHLING-{g}", {"Karton": STK_JE_KARTON[g], "Palette": STK_JE_KARTON[g] * 40})
-		rohling = frappe.get_doc("Item", f"HZ-ROHLING-{g}")
-		if not rohling.get("kt_linienleistung"):  # Demo-Leistung der Backstraße für Rohlinge
-			rohling.append(
+		rohling_item = frappe.get_doc("Item", f"HZ-ROHLING-{g}")
+		if not rohling_item.get("kt_linienleistung"):  # Demo-Leistung der Backstraße für Rohlinge
+			rohling_item.append(
 				"kt_linienleistung", {"abschnitt": "Backen", "leistung": 3000, "einheit": "Stück/h"}
 			)
-			rohling.save()
+			rohling_item.save()
 		frappe.db.sql(
 			"update `tabBatch` set kt_chargen_stufe = 'Ware lose' where item = %s", f"HZ-ROHLING-{g}"
 		)
-		_artikel(f"HZ-GARNIERT-{g}", f"Herz {g} cm garniert", "Ware lose", "Nos", 180, extra=herz)
-		_artikel(f"HZ-{g}", f"Lebkuchenherz {g} cm", "Fertigware", "Nos", monate=9,
-				 extra={"kt_mhd_bezug": "Backtag", **herz})  # fmt: skip
-		pilot._rezept(ctx.company, f"HZ-ROHLING-{g}", 1, [("5812", teig)])
-		pilot._rezept(ctx.company, f"HZ-GARNIERT-{g}", 1, [(f"HZ-ROHLING-{g}", 1), ("HZ-GLASUR", glasur)])
-		pilot._rezept(
-			ctx.company, f"HZ-{g}", 1,
-			[(f"HZ-GARNIERT-{g}", 1), ("HZ-FOLIE", 1), ("HZ-ETIKETT", 1), ("HZ-SCHLEIFE", 1)],
-		)  # fmt: skip
-	for g, (garnieren, kalfass) in LEISTUNG.items():
+		_artikel(
+			f"HZ-GARNIERT-{g}", f"Herz Gr. {g} garniert", "Ware lose", "Nos", 180, extra={**hb, **vorlage}
+		)
+		_artikel(f"HZ-{g}", f"Lebkuchenherz Gr. {g}", "Fertigware", "Nos", monate=9,
+				 extra={"kt_mhd_bezug": "Backtag", "weight_per_unit": STUECKGEWICHT[g], "weight_uom": "Kg",
+				        **hb, **vorlage})  # fmt: skip
 		item = frappe.get_doc("Item", f"HZ-{g}")
 		if not item.get("kt_linienleistung"):
 			item.append(
@@ -208,8 +229,16 @@ def anlegen(vorrat: int = 1) -> frappe._dict:
 				"kt_linienleistung", {"abschnitt": "Kalfass", "leistung": kalfass, "einheit": "Stück/min"}
 			)
 			item.save()
-	for g, kg in STUECKGEWICHT.items():
-		frappe.db.set_value("Item", f"HZ-{g}", {"weight_per_unit": kg, "weight_uom": "Kg"})
+		pilot._rezept(ctx.company, f"HZ-ROHLING-{g}", 1, [("5812", teig)])
+		pilot._rezept(ctx.company, f"HZ-GARNIERT-{g}", 1, [(f"HZ-ROHLING-{g}", 1), ("HZ-GLASUR", glasur)])
+		pilot._rezept(
+			ctx.company, f"HZ-{g}", 1,
+			[(f"HZ-GARNIERT-{g}", 1), ("HZ-FOLIE", 1), ("HZ-ETIKETT", 1), ("HZ-SCHLEIFE", 1)],
+		)  # fmt: skip
+		for spruch in SPRUECHE:
+			herz(g, spruch)  # legt auch das garnierte Herz mit diesem Spruch an, je mit Rezept
+		for code in (garniert(g, SONDER), herz(g, SONDER)):
+			frappe.db.set_value("Item", code, "kt_nach_auftrag", 1)
 	_behaelter(ctx)
 	auftrag = kundenauftrag(ctx)
 	# Am Herzenboden wird direkt nach Kundenauftrag gearbeitet, ohne Tagesplan
@@ -229,7 +258,7 @@ def anlegen(vorrat: int = 1) -> frappe._dict:
 def kundenauftrag(ctx) -> str:
 	"""Der Kunde bestellt Herzen in Stück (Demo)."""
 	offen = frappe.db.get_value(
-		"Sales Order", {"po_no": "DEMO-HERZEN", "docstatus": 1, "status": ["not in", ["Completed", "Closed"]]}
+		"Sales Order", {"po_no": PO_NR, "docstatus": 1, "status": ["not in", ["Completed", "Closed"]]}
 	)
 	if offen:
 		return offen
@@ -239,13 +268,13 @@ def kundenauftrag(ctx) -> str:
 			"doctype": "Sales Order",
 			"customer": ctx.kunde,
 			"company": ctx.company,
-			"po_no": "DEMO-HERZEN",
+			"po_no": PO_NR,
 			"transaction_date": nowdate(),
 			"delivery_date": termin,
 			"items": [
-				{"item_code": f"HZ-{g}", "qty": n, "uom": "Nos", "conversion_factor": 1, "rate": 1.5,
+				{"item_code": herz(g, spruch), "qty": n, "uom": "Nos", "conversion_factor": 1, "rate": 1.5,
 				 "warehouse": ctx.fertig, "delivery_date": termin}
-				for g, n in AUFTRAG.items()
+				for (g, spruch), n in AUFTRAG.items()
 			],
 		}
 	)  # fmt: skip
@@ -254,11 +283,36 @@ def kundenauftrag(ctx) -> str:
 	return so.name
 
 
-# Weitere Kunden mit Herzen-Aufträgen (Demo): (Kunde, {Größe: Stück}, Tage bis Liefertermin, MHD höchstens Monate)
+# Weitere Kunden (Demo): (Kunde, {(Größe, Spruch): Stück}, Tage bis Liefertermin, MHD höchstens Monate).
+# Krause: 10 Standardherzen und 3 Sonderherzen mit Wunschtext nach Auftrag.
 WEITERE = [
-	("Markthändler Krause (Demo)", {"18": 400, "25": 150}, 10, 6),
-	("Schaustellerbetrieb Lange (Demo)", {"12": 800, "18": 300}, 14, None),
+	("Markthändler Krause (Demo)", {("6", "Oma ist die Beste"): 10, ("6", SONDER): 3}, 10, 6),
+	("Schaustellerbetrieb Lange (Demo)", {("3", "Viel Glück"): 800, ("9", "Ich liebe Dich"): 300}, 14, None),
 ]
+WUNSCHTEXT = "Für Erna zum 80."
+# Freier Vorrat garnierter Standardherzen (Demo): (Größe, Spruch)
+VORRAT = [
+	("3", "Viel Glück"),
+	("6", "Oma ist die Beste"),
+	("6", "Viel Glück"),
+	("9", "Ich liebe Dich"),
+	("11", "Du bist das Beste"),
+]
+
+
+def _alte_demo_aufraeumen():
+	"""Frühere Demo in cm (12/18/25): Artikel deaktivieren, offene Demo-Aufträge mit ihnen schließen."""
+	from erpnext.selling.doctype.sales_order.sales_order import update_status
+
+	alt = [f"{p}{g}" for g in ALT for p in ("HZ-", "HZ-GARNIERT-", "HZ-ROHLING-")]
+	for so in frappe.get_all(
+		"Sales Order Item", {"item_code": ["in", alt], "docstatus": 1}, pluck="parent", distinct=True
+	):
+		if frappe.db.get_value("Sales Order", so, "status") not in ("Completed", "Closed"):
+			update_status("Closed", so)
+	for code in alt:
+		if frappe.db.exists("Item", code):
+			frappe.db.set_value("Item", code, "disabled", 1)
 
 
 def weitere_auftraege(ctx) -> list[str]:
@@ -275,7 +329,7 @@ def weitere_auftraege(ctx) -> list[str]:
 			"Sales Order",
 			{
 				"customer": kunde,
-				"po_no": "DEMO-HERZEN",
+				"po_no": PO_NR,
 				"docstatus": 1,
 				"status": ["not in", ["Completed", "Closed"]],
 			},
@@ -285,10 +339,12 @@ def weitere_auftraege(ctx) -> list[str]:
 			continue
 		termin = add_days(nowdate(), tage)
 		so = frappe.get_doc(
-			{"doctype": "Sales Order", "customer": kunde, "company": ctx.company, "po_no": "DEMO-HERZEN",
+			{"doctype": "Sales Order", "customer": kunde, "company": ctx.company, "po_no": PO_NR,
 			 "transaction_date": nowdate(), "delivery_date": termin,
-			 "items": [{"item_code": f"HZ-{g}", "qty": n, "uom": "Nos", "conversion_factor": 1, "rate": 1.8,
-			            "warehouse": ctx.fertig, "delivery_date": termin} for g, n in groessen.items()]}
+			 "items": [{"item_code": herz(g, spruch), "qty": n, "uom": "Nos", "conversion_factor": 1, "rate": 1.8,
+			            "warehouse": ctx.fertig, "delivery_date": termin,
+			            "description": WUNSCHTEXT if spruch == SONDER else None}
+			           for (g, spruch), n in groessen.items()]}
 		)  # fmt: skip
 		so.insert()
 		so.submit()
@@ -352,20 +408,23 @@ def vorrat_anlegen(ctx=None) -> dict:
 		)  # fmt: skip
 
 	# Rohlinge und garnierte Herzen je Größe
-	for g, (_teig, glasur) in GROESSEN.items():
-		if _bestand(f"HZ-ROHLING-{g}") < 100:
-			rohlinge_backen(ctx, g, max(1, round(400 / STK_JE_KARTON[g])))
-		if _bestand(f"HZ-GARNIERT-{g}") < 100:
-			roh = _charge_mit("Herzen Garnieren", f"HZ-ROHLING-{g}", 200)
-			guss_bereit(200 * glasur)
+	for g in sorted({g for g, _s in VORRAT}, key=list(GROESSEN).index):
+		if _bestand(rohling(g)) < 300:
+			rohlinge_backen(ctx, g, max(1, round(600 / STK_JE_KARTON[g])))
+	for g, spruch in VORRAT:  # Standardherzen frei auf Vorrat garniert (nicht für einen Auftrag)
+		code = garniert(g, spruch)
+		if _bestand(code) < 50:
+			guss = GROESSEN[g][1]
+			roh = _charge_mit("Herzen Garnieren", rohling(g), 100)
+			guss_bereit(100 * guss)
 			terminal.herstellen(
-				"Herzen Garnieren", f"HZ-GARNIERT-{g}",
-				[{"code": roh, "menge": 200}, {"code": "Zuckerguss Herzenboden", "menge": round(200 * glasur, 3)}],
+				"Herzen Garnieren", code,
+				[{"code": roh, "menge": 100}, {"code": "Zuckerguss Herzenboden", "menge": round(100 * guss, 3)}],
 			)  # fmt: skip
-		ergebnis[g] = {"rohlinge": _bestand(f"HZ-ROHLING-{g}"), "garniert": _bestand(f"HZ-GARNIERT-{g}")}
+		ergebnis[f"Gr. {g} {spruch}"] = {"rohlinge": _bestand(rohling(g)), "garniert": _bestand(code)}
 	frappe.db.commit()
-	for g, e in ergebnis.items():
-		print(f"Herz {g} cm: {e['rohlinge']:.0f} Rohlinge, {e['garniert']:.0f} garniert")
+	for name, e in ergebnis.items():
+		print(f"{name}: {e['rohlinge']:.0f} Rohlinge, {e['garniert']:.0f} garniert frei")
 	return ergebnis
 
 
@@ -413,7 +472,7 @@ def rohlinge_backen(ctx, groesse: str, kartons: int) -> dict:
 
 
 @frappe.whitelist()
-def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
+def durchlauf(groesse: str = "9", stueck: int = 100, spruch: str = STANDARD) -> dict:
 	"""Ein Herz komplett durch alle Abteilungen, so wie es an den Terminals gebucht wird, mit Protokoll.
 
 	Lager (Wareneingang) → Backstube (Grundteig in den Kübel, Rohlinge backen) → Herzen Garnieren
@@ -491,7 +550,7 @@ def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
 		schritt("Backstraße", "Kneter", f"Kübel {kuebel} auf die Linie", f"Auftrag {pa.name}")
 		linienbuchung.waehlen("Verpackungs-PC", pa.name)
 		nve_roh = terminal.palette_neu("Verpackungs-PC")["nve"]
-		rohling = linienbuchung.palette_fertig("Verpackungs-PC", kartons, "Karton", nve_roh)
+		roh_e = linienbuchung.palette_fertig("Verpackungs-PC", kartons, "Karton", nve_roh)
 		linienbuchung.beenden("Verpackungs-PC", pa.name)
 	finally:
 		for st, auftrag in vorher.items():
@@ -500,13 +559,30 @@ def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
 	schritt(
 		"Backstraße",
 		"Verpackungs-PC",
-		f"Rohlinge {groesse} cm im Karton auf Palette ins Lager",
-		f"Charge {rohling['charge']}, {kartons} Karton",
+		f"Rohlinge Gr. {groesse} im Karton auf Palette ins Lager",
+		f"Charge {roh_e['charge']}, {kartons} Karton",
 	)
 	stueck = kartons * STK_JE_KARTON[groesse]
 	herzenboden = f"{HB_LAGER} - {ctx.abbr}"
 	terminal.umlagern("Lager", palette=nve_roh, ganz=1, nach=herzenboden)
 	schritt("Lager", "Lager", "Rohlinge an den Herzenboden umlagern", f"Palette …{nve_roh[-6:]}")
+
+	# Der Kundenauftrag läuft am Herzenboden durch: garniert und verpackt wird für ihn
+	artikel_herz, artikel_garniert = herz(groesse, spruch), garniert(groesse, spruch)
+	auftrag = next(
+		(
+			so
+			for so in frappe.get_all(
+				"Sales Order Item",
+				{"item_code": artikel_herz, "docstatus": 1},
+				pluck="parent",
+				order_by="creation desc",
+			)
+			if frappe.db.get_value("Sales Order", so, "status") not in ("Completed", "Closed")
+		),
+		ctx.herz_auftrag,
+	)
+	kunde = frappe.db.get_value("Sales Order", auftrag, "customer")
 
 	# 3. Herzen Garnieren: Zuckerguss morgens anmischen (geht in den Behälter), dann garnieren
 	guss_menge = round(stueck * guss_je, 3)
@@ -520,15 +596,16 @@ def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
 		"Zuckerguss anmischen → Zuckerguss Herzenboden",
 		f"Charge {guss['charge']}, {guss['menge']} kg",
 	)
-	garniert = terminal.herstellen(
-		"Herzen Garnieren", f"HZ-GARNIERT-{groesse}",
-		[{"code": rohling["charge"], "menge": stueck}, {"code": "Zuckerguss Herzenboden", "menge": guss_menge}],
+	garn_e = terminal.herstellen(
+		"Herzen Garnieren", artikel_garniert,
+		[{"code": roh_e["charge"], "menge": stueck}, {"code": "Zuckerguss Herzenboden", "menge": guss_menge}],
+		kundenauftrag=auftrag,
 	)  # fmt: skip
 	schritt(
 		"Herzenboden",
 		"Herzen Garnieren",
-		"Garnieren: Rohlinge + Guss aus dem Behälter",
-		f"Charge {garniert['charge']}, {garniert['menge']:.0f} Stk",
+		f"Garnieren für {kunde}: Rohlinge + Guss aus dem Behälter",
+		f"Charge {garn_e['charge']}, {garn_e['menge']:.0f} Stk",
 	)
 
 	# 4. Herzen Verpackung: Kartons an den Tisch, Metallcheck Kalfass, verpacken auf Palette für den Kunden
@@ -539,27 +616,14 @@ def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
 	)
 	demo.metalldetektor_ok("Herzen Verpackung")
 	schritt("Herzenboden", "Herzen Verpackung", "Metallcheck Kalfass (CCP)", "Prüfkörper erkannt")
-	kunde, _groessen, _tage, _mhd = WEITERE[0]
-	auftrag = frappe.db.get_value(
-		"Sales Order",
-		{
-			"customer": kunde,
-			"po_no": "DEMO-HERZEN",
-			"docstatus": 1,
-			"status": ["not in", ["Completed", "Closed"]],
-		},
-	)
-	if not frappe.db.exists("Sales Order Item", {"parent": auftrag, "item_code": f"HZ-{groesse}"}):
-		auftrag = ctx.herz_auftrag
-		kunde = frappe.db.get_value("Sales Order", auftrag, "customer")
-	r = terminal.rezept(f"HZ-{groesse}", menge=stueck, station="Herzen Verpackung")
-	zeilen = [{"code": garniert["charge"], "menge": stueck}] + [
+	r = terminal.rezept(artikel_herz, menge=stueck, station="Herzen Verpackung")
+	zeilen = [{"code": garn_e["charge"], "menge": stueck}] + [
 		{"code": z["vorrat"], "menge": z["menge"]} for z in r["zutaten"] if z["vorrat"]
 	]
 	palette = terminal.palette_neu("Herzen Verpackung", kunde=kunde)["nve"]
-	herz = terminal.herstellen(
+	herz_e = terminal.herstellen(
 		"Herzen Verpackung",
-		f"HZ-{groesse}",
+		artikel_herz,
 		zeilen,
 		ausbringung=stueck,
 		ziel_behaelter=palette,
@@ -569,7 +633,7 @@ def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
 		"Herzenboden",
 		"Herzen Verpackung",
 		f"Verpacken für {kunde}",
-		f"Los {herz['los']}, MHD {herz['mhd']}, Palette …{palette[-6:]}",
+		f"Los {herz_e['los']}, MHD {herz_e['mhd']}, Palette …{palette[-6:]}",
 	)
 
 	# 5. Versand
@@ -577,12 +641,12 @@ def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
 	schritt("Versand", "Versand", "Palette ganz auf den Lieferschein", f"Lieferschein {ls['lieferschein']}")
 
 	# 6. Rückverfolgung
-	rueck = rueckverfolgung(herz["charge"], "Rückwärts")
+	rueck = rueckverfolgung(herz_e["charge"], "Rückwärts")
 	stufen = sorted({c.get("stufe") or "" for c in rueck["chargen"]})
 	schritt(
 		"QS",
 		"Büro",
-		f"Rückwärts vom Los {herz['los']}",
+		f"Rückwärts vom Los {herz_e['los']}",
 		f"{len(rueck['chargen'])} Chargen: {', '.join(s for s in stufen if s)}",
 	)
 	vor = rueckverfolgung(puderzucker, "Vorwärts")
@@ -591,8 +655,8 @@ def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
 	frappe.db.commit()
 	return {
 		"protokoll": protokoll,
-		"los": herz["los"],
-		"charge": herz["charge"],
+		"los": herz_e["los"],
+		"charge": herz_e["charge"],
 		"palette": palette,
 		"lieferschein": ls["lieferschein"],
 		"puderzucker": puderzucker,

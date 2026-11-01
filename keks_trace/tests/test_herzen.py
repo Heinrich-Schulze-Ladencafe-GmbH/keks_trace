@@ -12,11 +12,19 @@ def _hash():
 	return frappe.generate_hash(length=5).upper()
 
 
+G = "9"  # Größe Gr. 9, Standardspruch
+
+
 class TestHerzen(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
 		cls.ctx = demo_herzen.anlegen(vorrat=0)
+		cls.herz, cls.garniert, cls.rohling = (
+			demo_herzen.herz(G),
+			demo_herzen.garniert(G),
+			demo_herzen.rohling(G),
+		)
 		cls.h = _hash()
 		mhd = add_days(nowdate(), 300)
 		cls.zucker = terminal.wareneingang("Lager", "HZ-PUDERZUCKER", f"PZ{cls.h}", 50, mhd)["charge"]
@@ -31,8 +39,8 @@ class TestHerzen(IntegrationTestCase):
 					ausgaenge=[("5812", cls.teig, 100, cls.kuebel)])  # fmt: skip
 
 	def test_herz_vom_teig_bis_zur_verpackung(self):
-		# Rohlinge backen: 100 Stück Herz 18 cm aus 12 kg Grundteig
-		rohling = terminal.herstellen("Backstube", "HZ-ROHLING-18", [{"code": self.kuebel, "menge": 12}], 100)
+		# Rohlinge backen: 100 Stück Gr. 9 aus 12 kg Grundteig
+		rohling = terminal.herstellen("Backstube", self.rohling, [{"code": self.kuebel, "menge": 12}], 100)
 		self.assertEqual(rohling["menge"], 100)
 		# Zuckerguss morgens frisch: Hauptmischung geht in den Behälter „Zuckerguss Herzenboden“ (ohne Code)
 		glasur = terminal.herstellen(
@@ -45,7 +53,7 @@ class TestHerzen(IntegrationTestCase):
 		)
 		# Garnieren: Rohling + Guss aus dem Behälter (Knopf statt Scan), Ausbringung in Stück aus dem Rezept
 		garniert = terminal.herstellen(
-			"Herzen Garnieren", "HZ-GARNIERT-18",
+			"Herzen Garnieren", self.garniert,
 			[{"code": rohling["charge"], "menge": 100}, {"code": "Zuckerguss Herzenboden", "menge": 2}],
 		)  # fmt: skip
 		self.assertEqual(garniert["menge"], 100)
@@ -56,7 +64,7 @@ class TestHerzen(IntegrationTestCase):
 		for c in self.pack.values():
 			a = terminal.anbrechen("Herzen Verpackung", c)
 			self.assertEqual(a["menge"], 500)
-		r = terminal.rezept("HZ-18", menge=100, station="Herzen Verpackung")
+		r = terminal.rezept(self.herz, menge=100, station="Herzen Verpackung")
 		vorrat = {z["artikel"]: z["vorrat"] for z in r["zutaten"] if z["vorrat"]}
 		self.assertEqual(vorrat["HZ-SCHLEIFE"], "Schleife Herzenboden")
 		# Verpacken auf der Kalfass: erst Metallcheck Fe 2,8 mm
@@ -64,7 +72,7 @@ class TestHerzen(IntegrationTestCase):
 		zeilen = [{"code": garniert["charge"], "menge": 100}] + [
 			{"code": v, "menge": 100} for v in vorrat.values()
 		]
-		herz = terminal.herstellen("Herzen Verpackung", "HZ-18", zeilen)
+		herz = terminal.herstellen("Herzen Verpackung", self.herz, zeilen)
 		self.assertEqual(herz["menge"], 100)
 		self.assertTrue(herz["los"])
 		self.assertEqual(
@@ -95,7 +103,7 @@ class TestHerzen(IntegrationTestCase):
 			self.assertTrue(artikel)
 			self.assertTrue(all(a.startswith("HZ-") for a in artikel), artikel)
 		self.assertNotIn("17846", {a["artikel"] for a in terminal.auftraege("Herzen Verpackung")})
-		self.assertNotIn("HZ-18", {r.artikel for r in terminal.rezepte("Verpackung")})
+		self.assertNotIn(self.herz, {r.artikel for r in terminal.rezepte("Verpackung")})
 		with self.assertRaisesRegex(frappe.ValidationError, "gehört nicht zur Linie"):
 			terminal.herstellen("Herzen Verpackung", "17846", [{"code": "X", "menge": 1}])
 		# Versand sieht weiterhin alle Aufträge
@@ -106,25 +114,25 @@ class TestHerzen(IntegrationTestCase):
 		"""Der Kunde bestellt Herzen in Stück; Leistung und Terminal rechnen in Stück."""
 		from keks_trace import planung
 
-		kg_h, engpass, anlage = planung.leistung("HZ-18")
+		kg_h, engpass, anlage = planung.leistung(self.herz)
 		self.assertEqual((kg_h, engpass, anlage), (800, "Garnieren", "Kalfass"))  # 25/min = 1.500/h
-		self.assertIn("Stk/h", frappe.db.get_value("Item", "HZ-18", "kt_engpass"))
+		self.assertIn("Stk/h", frappe.db.get_value("Item", self.herz, "kt_engpass"))
 		auftraege = {a["artikel"]: a for a in terminal.auftraege("Herzen Verpackung")}
-		self.assertIn("HZ-18", auftraege)
-		self.assertIn("Stk", auftraege["HZ-18"]["offen_text"] + " Stk")
+		self.assertIn(self.herz, auftraege)
+		self.assertIn("Stk", auftraege[self.herz]["offen_text"] + " Stk")
 		# Kein Tagesplan am Herzenboden: die Stationen arbeiten die Kundenaufträge direkt ab
 		garnieren = {(a["auftrag"], a["artikel"]): a for a in terminal.aufgaben("Herzen Garnieren")}
-		a = garnieren[(self.ctx.herz_auftrag, "HZ-GARNIERT-18")]
-		self.assertEqual(a["vorstufe"], "Herz-Rohling 18 cm")
+		a = garnieren[(self.ctx.herz_auftrag, self.garniert)]
+		self.assertEqual(a["vorstufe"], "Herz-Rohling Gr. 9")
 		self.assertGreater(a["todo"], 0)
 		verpacken = {(a["auftrag"], a["artikel"]) for a in terminal.aufgaben("Herzen Verpackung")}
-		self.assertIn((self.ctx.herz_auftrag, "HZ-18"), verpacken)
-		r = terminal.rezept("HZ-18", station="Herzen Verpackung")
+		self.assertIn((self.ctx.herz_auftrag, self.herz), verpacken)
+		r = terminal.rezept(self.herz, station="Herzen Verpackung")
 		self.assertEqual(r["einheit"], "Nos")
 
 	def test_durchlauf_alle_abteilungen(self):
 		"""Ein Herz vom Wareneingang bis zum Kunden, danach Rückverfolgung in beide Richtungen."""
-		d = demo_herzen.durchlauf("12", 20)
+		d = demo_herzen.durchlauf(G, 20)
 		self.assertEqual(
 			len(d["protokoll"]), 13
 		)  # mit Kneter, Verpackungs-PC (Rohlinge) und Umlagern an den Herzenboden
@@ -135,7 +143,7 @@ class TestHerzen(IntegrationTestCase):
 	def test_schnell_buchen_ohne_scannen(self):
 		"""Herzenboden: Auftrag antippen, Anzahl, buchen; Verbrauch automatisch. Manuelles Verpacken sieht keine Herzen."""
 		demo_herzen.vorrat_anlegen(self.ctx)
-		a = next(x for x in terminal.aufgaben("Herzen Garnieren") if x["artikel"] == "HZ-GARNIERT-12")
+		a = next(x for x in terminal.aufgaben("Herzen Garnieren") if x["artikel"] == self.garniert)
 		v = terminal.vorschlag("Herzen Garnieren", a["artikel"], 5)
 		self.assertFalse(v["hinweise"])
 		e = terminal.herstellen(
@@ -154,14 +162,14 @@ class TestHerzen(IntegrationTestCase):
 	def test_dhl_paket_mit_gewicht(self):
 		"""Herzen direkt per DHL: Lieferschein mit Paketen, gewogenem Gewicht und Sendungsnummer."""
 		demo_herzen.vorrat_anlegen(self.ctx)
-		# 10 Herzen 12 cm verpacken (für den Auftrag), dann als ein Paket liefern
-		r = terminal.vorschlag("Herzen Verpackung", "HZ-12", 10)
-		terminal.herstellen("Herzen Verpackung", "HZ-12", [{"code": z["code"], "menge": z["menge"]} for z in r["zeilen"]],
+		# 10 Herzen Gr. 9 verpacken (für den Auftrag), dann als ein Paket liefern
+		r = terminal.vorschlag("Herzen Verpackung", self.herz, 10, None, self.ctx.herz_auftrag)
+		terminal.herstellen("Herzen Verpackung", self.herz, [{"code": z["code"], "menge": z["menge"]} for z in r["zeilen"]],
 							ausbringung=10, kundenauftrag=self.ctx.herz_auftrag)  # fmt: skip
-		v = terminal.paket_vorschlag("Herzen Verpackung", "HZ-12", 10, 1)
-		self.assertAlmostEqual(v["erwartet_kg"], 10 * 0.08 + 0.3)
+		v = terminal.paket_vorschlag("Herzen Verpackung", self.herz, 10, 1)
+		self.assertAlmostEqual(v["erwartet_kg"], 10 * demo_herzen.STUECKGEWICHT[G] + 0.3)
 		e = terminal.paket_lieferung(
-			"Herzen Verpackung", self.ctx.herz_auftrag, "HZ-12", 10, [2.5], "00340434161234567890"
+			"Herzen Verpackung", self.ctx.herz_auftrag, self.herz, 10, [5.5], "00340434161234567890"
 		)
 		dn = frappe.db.get_value(
 			"Delivery Note",
@@ -169,9 +177,62 @@ class TestHerzen(IntegrationTestCase):
 			["kt_pakete", "kt_gewicht_kg", "kt_sendungsnummer"],
 			as_dict=True,
 		)
-		self.assertEqual((dn.kt_pakete, dn.kt_gewicht_kg), (1, 2.5))
-		self.assertTrue(any("erwartet" in h for h in e["hinweise"]))  # 2,5 kg statt ~1,1 kg: Hinweis
+		self.assertEqual((dn.kt_pakete, dn.kt_gewicht_kg), (1, 5.5))
+		self.assertTrue(any("erwartet" in h for h in e["hinweise"]))  # 5,5 kg statt ~3 kg: Hinweis
 		terminal.sendungsnummer("Herzen Verpackung", e["lieferschein"], "00340434161234567891")
 		self.assertEqual(
 			len(frappe.db.get_value("Delivery Note", e["lieferschein"], "kt_sendungsnummer").splitlines()), 2
 		)
+
+	def test_varianten_je_spruch(self):
+		"""Je Größe eine Vorlage mit Rezept, je Spruch eine Variante; das Rezept wird übertragen."""
+		item = frappe.get_doc("Item", self.herz)
+		self.assertEqual((item.variant_of, item.kt_chargen_stufe), (f"HZ-{G}", "Fertigware"))
+		r = {z["artikel"] for z in terminal.rezept(self.herz, station="Herzen Verpackung")["zutaten"]}
+		self.assertIn(self.garniert, r)  # nicht die Vorlage, sondern das garnierte Herz mit demselben Spruch
+		g = {z["artikel"] for z in terminal.rezept(self.garniert, station="Herzen Garnieren")["zutaten"]}
+		self.assertEqual(g, {self.rohling, "HZ-GLASUR"})
+		sonder = demo_herzen.herz(G, demo_herzen.SONDER)
+		self.assertEqual(frappe.db.get_value("Item", sonder, "kt_nach_auftrag"), 1)
+
+	def test_auftrag_laeuft_durch_standard_und_sonder(self):
+		"""Krause bestellt 10 Standardherzen und 3 Sonderherzen: Sonder nur für Krause, Standard auch aus Vorrat."""
+		demo_herzen.vorrat_anlegen(self.ctx)
+		std, sonder = demo_herzen.herz("6", "Oma ist die Beste"), demo_herzen.herz("6", demo_herzen.SONDER)
+		so = frappe.get_doc(
+			{"doctype": "Sales Order", "customer": demo_herzen.WEITERE[0][0], "company": self.ctx.company,
+			 "po_no": f"TEST-{_hash()}", "transaction_date": nowdate(), "delivery_date": add_days(nowdate(), 1),
+			 "items": [{"item_code": a, "qty": n, "rate": 2, "warehouse": self.ctx.fertig, "delivery_date": add_days(nowdate(), 1)}
+					   for a, n in ((std, 10), (sonder, 3))]}
+		).insert()  # fmt: skip
+		so.submit()
+		krause = so.name
+		g_sonder = demo_herzen.garniert("6", demo_herzen.SONDER)
+		# Sonder: erst für Krause garnieren, dann ist es für ihn reserviert
+		v = terminal.vorschlag("Herzen Garnieren", g_sonder, 3, None, krause)
+		self.assertFalse(v["hinweise"])
+		e = terminal.herstellen("Herzen Garnieren", g_sonder, [{"code": z["code"], "menge": z["menge"]} for z in v["zeilen"]],
+								ausbringung=3, kundenauftrag=krause)  # fmt: skip
+		self.assertEqual(frappe.db.get_value("Batch", e["charge"], "kt_kundenauftrag"), krause)
+		a = next(
+			x
+			for x in terminal.aufgaben("Herzen Verpackung")
+			if x["auftrag"] == krause and x["artikel"] == sonder
+		)
+		self.assertEqual((a["vorrat_eigen"], a["vorrat_frei"]), (3, 0))
+		garnieren = terminal.aufgaben("Herzen Garnieren")
+		self.assertFalse(any(x["auftrag"] == krause and x["artikel"] == g_sonder for x in garnieren))
+		# Ohne Auftrag kommt niemand an die reservierten Sonderherzen
+		self.assertTrue(terminal.vorschlag("Herzen Verpackung", sonder, 3)["hinweise"])
+		with self.assertRaisesRegex(frappe.ValidationError, "reserviert"):
+			terminal.herstellen(
+				"Herzen Verpackung", sonder, [{"code": e["charge"], "menge": 3}], ausbringung=3
+			)
+		# Für Krause: Sonder aus seiner Reservierung, Standard aus dem freien Vorrat
+		for artikel, n in ((sonder, 3), (std, 10)):
+			v = terminal.vorschlag("Herzen Verpackung", artikel, n, None, krause)
+			self.assertFalse(v["hinweise"], v["hinweise"])
+			terminal.herstellen("Herzen Verpackung", artikel, [{"code": z["code"], "menge": z["menge"]} for z in v["zeilen"]],
+								ausbringung=n, kundenauftrag=krause)  # fmt: skip
+		offen = {x["artikel"] for x in terminal.aufgaben("Herzen Verpackung") if x["auftrag"] == krause}
+		self.assertFalse(offen & {std, sonder})

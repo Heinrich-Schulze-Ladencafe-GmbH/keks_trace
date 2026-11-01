@@ -45,7 +45,7 @@
    "fieldname": "art",
    "fieldtype": "Select",
    "label": "Art",
-   "options": "Verpackung\nBeladen\nUmpacken\nLieferung\nUmlagerung\nStorno Lieferung\nUmlagerung\nKorrektur",
+   "options": "Verpackung\nBeladen\nUmpacken\nLieferung\nUmlagerung\nStorno Lieferung\nKorrektur\nVerbrauch\nStorno Verbrauch",
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1
@@ -137,7 +137,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-30 21:30:00.000000",
+ "modified": "2026-11-01 09:04:59.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Paletten Bewegung",

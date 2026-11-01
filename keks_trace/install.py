@@ -44,6 +44,13 @@ CUSTOM_FIELDS = {
 			"description": "Wo dieses Rework an der Linie abgenommen wird. Die Backstube wählt beim Buchen die Sorte nach dem Entnahmepunkt.",
 		},
 		{
+			"fieldname": "kt_nach_auftrag",
+			"label": "Sonderanfertigung nach Auftrag",
+			"fieldtype": "Check",
+			"insert_after": "kt_entnahmepunkt",
+			"description": "Wird nur für einen bestimmten Kundenauftrag hergestellt (z. B. Herz mit Wunschtext) und darf nur in diesen Auftrag. Ohne Häkchen: Standardware, auch aus freiem Vorrat.",
+		},
+		{
 			"fieldname": "kt_spezifikation",
 			"label": "Spezifikation (Link oder Nummer im Spezifikations-Tool)",
 			"fieldtype": "Data",
@@ -155,6 +162,15 @@ CUSTOM_FIELDS = {
 		},
 	],
 	"Batch": [
+		{
+			"fieldname": "kt_kundenauftrag",
+			"label": "Reserviert für Kundenauftrag",
+			"fieldtype": "Link",
+			"options": "Sales Order",
+			"read_only": 1,
+			"insert_after": "expiry_date",
+			"description": "Für diesen Auftrag hergestellt (z. B. am Herzenboden garniert). Solange der Auftrag offen ist, nimmt nur er diese Ware.",
+		},
 		{
 			"fieldname": "kt_mhd_vorgabe",
 			"label": "MHD gekürzt auf",

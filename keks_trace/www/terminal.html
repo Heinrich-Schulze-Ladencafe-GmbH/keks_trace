@@ -1035,13 +1035,12 @@
 				const liste = await api("aufgaben", { station: zustand.station });
 				suchListe("aufg", [["Auftrag", "auftrag"], ["Kunde", "kunde"], ["Artikel", "name"],
 					["Bestellt", (a) => zahlText(a.bestellt), 1], ["Erledigt", (a) => zahlText(a.erledigt), 1], ["ToDo", (a) => zahlText(a.todo), 1],
-					["Vorrat", (a) => a.vorstufe ? zahlText(a.verfuegbar) + " " + a.vorstufe : "", 1], ["Termin", "termin"]],
+					["Vorrat", (a) => !a.vorstufe ? "" : (a.vorrat_eigen ? zahlText(a.vorrat_eigen) + " für Auftrag" + (a.vorrat_frei ? " + " + zahlText(a.vorrat_frei) + " frei" : "") : zahlText(a.verfuegbar)) + " " + a.vorstufe, 1], ["Termin", "termin"]],
 					liste, (a) => schnellAnzahl(a), "Suchen: Kunde, Auftrag, Artikel …");
 			} else {
 				const liste = await api("zum_verpacken", { station: zustand.station });
 				suchListe("aufg", [["Wo", (q) => q.linienlager ? "Linienlager" : "Lager"], ["Ware", "name"], ["Kiste / Charge", (q) => q.behaelter ? "Kiste " + q.behaelter : q.charge],
-					["Backtag", "backtag"], ["MHD", (q) => q.mhd || ""], ["Menge", (q) => q.menge_text || mg(q.menge, q.einheit), 1],
-					["Wird zu", (q) => q.ziele.map((z) => z.name).join(", ")]],
+					["Backtag", "backtag"], ["MHD", (q) => q.mhd || ""], ["Menge", (q) => q.menge_text || mg(q.menge, q.einheit), 1]],
 					liste, (q) => zielWaehlen(q), "Suchen: Ware, Kiste, Charge …");
 			}
 		} catch (e) { meldung("rot", e.message); }
@@ -1057,19 +1056,27 @@
 			(n, e) => schnellBuchen(a.artikel, n * faktorVon(einheiten, e), { anzahl: n, einheit: e, auftrag: a }), () => zustand.zurueckZu());
 	}
 
+	// Was wird aus der losen Ware? Erst offene Kundenaufträge, die sie brauchen, dann jeder mögliche Artikel
 	async function zielWaehlen(q) {
-		if (q.ziele.length === 1) return verpackenAnzahl(q, q.ziele[0]);
-		app.innerHTML = kopf(q.name + ": verpacken als", true) + `<div class="raster">${q.ziele.map((z, i) =>
-			`<button class="knopf" data-a="ziel" data-i="${i}">${esc(z.name)}<small>${esc(z.artikel)}</small></button>`).join("")}</div>`;
-		aktionen((a, d) => (a === "ziel" ? verpackenAnzahl(q, q.ziele[+d.i]) : a === "zurueck" ? zustand.zurueckZu() : beiAllgemein(a)));
+		app.innerHTML = kopf(q.name + ": verpacken für", true) +
+			`<p><b>Kundenaufträge</b> – Zeile antippen</p><div id="ziel-auftraege">Lädt …</div>
+			<p style="margin-top:22px"><b>Ohne Auftrag (ins Lager)</b> – Artikel antippen</p><div id="ziel-artikel"></div>`;
+		aktionen((a) => (a === "zurueck" ? zustand.zurueckZu() : beiAllgemein(a)));
+		try {
+			const z = await api("verpacken_ziele", { station: zustand.station, lose: q.lose });
+			if (z.auftraege.length) suchListe("ziel-auftraege", [["Auftrag", "auftrag"], ["Kunde", "kunde"], ["Artikel", "name"],
+				["Offen", "offen_text", 1], ["Termin", "termin"]], z.auftraege, (au) => verpackenAnzahl(q, au, au), "Suchen: Kunde, Auftrag, Artikel …");
+			else document.getElementById("ziel-auftraege").innerHTML = `<span class="fehlt">Kein offener Kundenauftrag braucht diese Ware.</span>`;
+			suchListe("ziel-artikel", [["Artikel", "artikel"], ["Bezeichnung", "name"]], z.artikel, (ziel) => verpackenAnzahl(q, ziel), "Suchen: Artikel, Gebinde …");
+		} catch (e) { meldung("rot", e.message); }
 	}
 
-	async function verpackenAnzahl(q, ziel) {
+	async function verpackenAnzahl(q, ziel, au) {
 		let einheiten = [];
 		try { einheiten = await api("einheiten", { artikel: ziel.artikel }); } catch (x) { /* unten */ }
 		if (!einheiten || !einheiten.length) einheiten = [{ einheit: "Kg", faktor: 1 }];
-		anzahlAbfragen(ziel.name, `aus ${esc(q.name)} · ${esc(q.behaelter ? "Kiste " + q.behaelter : q.charge)} · ${esc(mg(q.menge, q.einheit))} im ${q.linienlager ? "Linienlager" : "Lager"}`,
-			einheiten, null, (n, e) => paletteFrage(ziel.name, (palette) => schnellBuchen(ziel.artikel, n * faktorVon(einheiten, e), { anzahl: n, einheit: e, bevorzugt: q.code, palette })),
+		anzahlAbfragen(ziel.name + (au ? " für " + au.kunde : ""), `aus ${esc(q.name)} · ${esc(q.behaelter ? "Kiste " + q.behaelter : q.charge)} · ${esc(q.menge_text || mg(q.menge, q.einheit))} im ${q.linienlager ? "Linienlager" : "Lager"}${au ? ` · Auftrag ${esc(au.auftrag)}, offen ${esc(au.offen_text)}` : ""}`,
+			einheiten, null, (n, e) => paletteFrage(ziel.name, (palette) => schnellBuchen(ziel.artikel, n * faktorVon(einheiten, e), { anzahl: n, einheit: e, bevorzugt: q.code, palette, auftrag: au })),
 			() => zustand.zurueckZu());
 	}
 
@@ -1092,7 +1099,7 @@
 	async function schnellBuchen(ziel, menge, o) {
 		const au = o.auftrag;
 		try {
-			const v = await api("vorschlag", { station: zustand.station, ziel, menge, bevorzugt: o.bevorzugt || null });
+			const v = await api("vorschlag", { station: zustand.station, ziel, menge, bevorzugt: o.bevorzugt || null, kundenauftrag: au ? au.auftrag : null });
 			if (v.hinweise.length) {
 				// Etwas fehlt oder passt nicht: Zutatenliste zum Selbst-Auswählen
 				ansatz = { rezept: await api("rezept", { artikel: ziel, menge, station: zustand.station }), zeilen: v.zeilen, offen: null, einheit: o.einheit,

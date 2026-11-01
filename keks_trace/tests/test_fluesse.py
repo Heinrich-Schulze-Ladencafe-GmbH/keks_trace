@@ -135,3 +135,27 @@ class TestFluesse(IntegrationTestCase):
 			anfrage._schluessel = alt
 		self.assertEqual(erste, zweite)
 		self.assertNotEqual(terminal.palette_neu(VPC)["nve"], erste)  # ohne Anfrage-ID normal
+
+	def test_f10_lose_ware_von_der_palette_verpacken(self):
+		"""F10: lose Ware im Karton steht auf einer Palette und wird nach Bedarf verpackt; was verbraucht wird,
+		geht automatisch von der Palette ab. Ziele: alle Artikel mit dieser losen Ware, Aufträge zuerst."""
+		_pa, _teig = self._auftrag()
+		nve = terminal.palette_neu(VPC)["nve"]
+		e = terminal.linie_lose(VPC, 5, None, "lager", nve)
+		ziele = terminal.verpacken_ziele(VPC, "5888-LOSE")
+		self.assertTrue({"17846", "17847"} <= {z["artikel"] for z in ziele["artikel"]})
+		self.assertTrue(all(a["artikel"] in ("17846", "17847") for a in ziele["auftraege"]))
+		v = terminal.vorschlag(VPC, "17846", 12, e["charge"])
+		self.assertFalse(v["hinweise"])
+		terminal.herstellen(
+			VPC,
+			"17846",
+			[{"code": z["code"], "menge": z["menge"]} for z in v["zeilen"]],
+			12,
+			None,
+			3,
+			"Karton",
+		)
+		pos = paletten.inhalt(nve)
+		self.assertAlmostEqual(pos[0]["menge"], 18, places=3)  # 30 kg auf der Palette, 12 kg verpackt
+		self.assertAlmostEqual(paletten.lose(e["charge"]), 0, places=3)

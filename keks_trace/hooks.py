@@ -35,9 +35,14 @@ doc_events = {
 			"keks_trace.genealogie.on_submit",
 			"keks_trace.traeger.on_submit",
 			"keks_trace.kennzeichnung.on_submit",
+			"keks_trace.palette.se_on_submit",
 		],
 		"before_cancel": "keks_trace.palette.se_before_cancel",
-		"on_cancel": ["keks_trace.genealogie.on_cancel", "keks_trace.traeger.on_cancel"],
+		"on_cancel": [
+			"keks_trace.genealogie.on_cancel",
+			"keks_trace.traeger.on_cancel",
+			"keks_trace.palette.se_on_cancel",
+		],
 		"on_trash": "keks_trace.schutz.beleg_on_trash",
 	},
 	"Delivery Note": {
@@ -54,6 +59,8 @@ doc_events = {
 		"on_trash": "keks_trace.schutz.beleg_on_trash",
 	},
 	"Stock Reconciliation": {"on_trash": "keks_trace.schutz.beleg_on_trash"},
+	# Rezept einer Vorlage (z. B. Lebkuchenherz Gr. 9) auf alle Varianten (je Spruch) übertragen
+	"BOM": {"on_submit": "keks_trace.varianten.bom_on_submit"},
 	"Item": {"validate": ["keks_trace.los.item_validate", "keks_trace.planung.item_validate"]},
 	"Batch": {
 		"before_insert": "keks_trace.sperre.batch_before_insert",
