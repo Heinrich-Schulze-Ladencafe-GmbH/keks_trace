@@ -3,17 +3,18 @@ from frappe import _
 from frappe.model.document import Document
 
 # Vorlagen je Typ: Funktionen und herstellbare Stufen. Anpassbar an jeder Station.
+# Rework bucht nur die Backstube (Flussschema F18): Behälter von der Linie wiegen, Sorte, kg.
 VORLAGEN = {
 	"Backstube": (
 		{"f_herstellen", "f_rework", "f_silo", "f_wareneingang"},
 		["Grundteig", "Teig veredelt", "Backware", "Ware lose", "Halbfabrikat"],
 	),
-	"Verpackung": ({"f_herstellen", "f_paletten", "f_rework"}, ["Fertigware"]),
+	"Verpackung": ({"f_herstellen", "f_paletten"}, ["Fertigware"]),
 	"Lager": ({"f_wareneingang", "f_paletten", "f_silo", "f_umlagern"}, []),
 	"Versand": ({"f_lieferung", "f_paletten"}, []),
-	"Herzen Garnieren": ({"f_herstellen", "f_rework", "f_silo"}, ["Halbfabrikat", "Ware lose"]),
+	"Herzen Garnieren": ({"f_herstellen", "f_silo"}, ["Halbfabrikat", "Ware lose"]),
 	"Herzen Verpackung": (
-		{"f_herstellen", "f_paletten", "f_rework", "f_silo", "f_lieferung"},
+		{"f_herstellen", "f_paletten", "f_silo", "f_lieferung"},
 		["Fertigware"],
 	),
 	"Lagerverkauf": ({"f_umlagern"}, []),
@@ -24,7 +25,7 @@ VORLAGEN = {
 	"Paletten-Terminal": ({"f_palette_fertig", "f_paletten"}, ["Fertigware"]),
 	# Ein PC am Ende der Linie: zeigt den Verpackungsauftrag und bucht Karton (auf Palette) und lose Ware;
 	# verpackt auch lose Ware aus dem Lager nach Bedarf
-	"Verpackungs-PC": ({"f_palette_fertig", "f_paletten", "f_herstellen", "f_rework"}, ["Fertigware"]),
+	"Verpackungs-PC": ({"f_palette_fertig", "f_paletten", "f_herstellen"}, ["Fertigware"]),
 	"Individuell": (set(), []),
 }
 # Hier wird nicht gescannt: das Terminal schlägt Ware und Packmittel vor (Scannen nur Backstube, Paletten, Kartons)

@@ -96,6 +96,13 @@ def stammdaten() -> frappe._dict:
 				"parent_warehouse": ctx.wurzel,
 			}
 		).insert()
+	# Linienlager: Puffer an der Linie, wenn die Verpackung nicht nachkommt (Kartons; Wannen ungebucht)
+	linienlager = f"Linienlager {LINIE} - {abbr}"
+	if not frappe.db.exists("Warehouse", linienlager):
+		frappe.get_doc(
+			{"doctype": "Warehouse", "warehouse_name": f"Linienlager {LINIE}", "company": ctx.company,
+			 "parent_warehouse": ctx.wurzel}
+		).insert()  # fmt: skip
 	if not frappe.db.exists("Linie", LINIE):
 		frappe.get_doc(
 			{
@@ -109,6 +116,8 @@ def stammdaten() -> frappe._dict:
 				"fertiglager": ctx.fertig,
 			}
 		).insert()
+	frappe.db.set_value("Linie", LINIE, "linienlager", linienlager)
+	frappe.clear_document_cache("Linie", LINIE)
 	# Kalfass verpackt die garnierten Herzen am Herzenboden (eigene Station, nicht an der Backstraße)
 	if not frappe.db.exists("Linienabschnitt", "Kalfass"):
 		frappe.get_doc(
@@ -176,6 +185,9 @@ def stammdaten() -> frappe._dict:
 		demo.neuer_traeger(f"KL-{n:03d}", "Kiste lose Ware")
 	for name in OHNE_TERMINAL:
 		frappe.db.set_value("Terminal Station", name, "aktiv", 0)
+	frappe.db.set_value("Terminal Station", "Verpackungs-PC", "f_rework", 0)  # Rework bucht die Backstube
+	for n in range(1, 11):
+		demo.neuer_traeger(f"RB-{n:03d}", "Rework-Behälter")
 	for n in range(1, KUEBEL + 1):
 		demo.neuer_traeger(f"K-{n:03d}", "Teigbehälter")
 	for name, _menge, _tage in GROSSKUNDEN:

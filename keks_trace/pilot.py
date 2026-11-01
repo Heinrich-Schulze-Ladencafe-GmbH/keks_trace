@@ -55,7 +55,14 @@ ARTIKEL = {
 	"17846": ("Honig Lebkuchen 200 g", "Fertigware", "Kg", None, 32, "Honigteig"),
 	"17847": ("Honig Lebkuchen 250 g", "Fertigware", "Kg", None, 32, "Honigteig"),
 	"RW-HONIG": ("Rework Honigteig / Bruch", "Rework", "Kg", 14, None, "Honigteig"),
+	"RW-HONIG-OFEN": ("Rework Honig nach dem Ofen", "Rework", "Kg", 14, None, "Honigteig"),
 }
+
+# Rework-Sorte je Entnahmepunkt an der Linie (Flussschema F18)
+ENTNAHMEPUNKT = {"RW-HONIG": "Am Ende der Linie", "RW-HONIG-OFEN": "Nach dem Ofen"}
+
+# Rework-Matrix: (Rework, Zielteig) -> max. Anteil in % (Demo-Werte)
+REWORK_REGELN = {("RW-HONIG", "5888"): 5, ("RW-HONIG-OFEN", "5888"): 5, ("RW-HONIG-OFEN", "5812"): 5}
 
 PREISE = {"4974": 0.45, "7853": 3.2, "1143": 2.0, "1146": 1.8, "4150": 1.5, "6200": 1.6, "7171": 9.0,
           "1700": 60.0, "4042": 1.9, "9101": 0.03, "9102": 0.01, "9103": 0.01}  # fmt: skip
@@ -81,6 +88,8 @@ VERPACKUNG = {
 		"Palette": (168.0, None),
 	},
 	"17847": {"Beutel": (0.25, None), "Karton": (5.0, None), "Lage": (40.0, None), "Palette": (240.0, None)},
+	# lose Ware im Karton: kg je Karton fest am Artikel (Demo-Wert)
+	"5888-LOSE": {"Karton": (6.0, None), "Palette": (360.0, None)},
 }
 
 SILO = ("Silo Weizenmehl 812", "4974", 150, 30000)
@@ -138,15 +147,14 @@ def anlegen(company: str | None = None) -> frappe._dict:
 	for artikel, (menge, zutaten) in REZEPTE.items():
 		_rezept(ctx.company, artikel, menge, zutaten)
 
-	if not frappe.db.exists("Rework Regel", {"rework_artikel": "RW-HONIG", "ziel_artikel": "5888"}):
-		frappe.get_doc(
-			{
-				"doctype": "Rework Regel",
-				"rework_artikel": "RW-HONIG",
-				"ziel_artikel": "5888",
-				"max_anteil_prozent": 5,
-			}
-		).insert()
+	for (rework, ziel), anteil in REWORK_REGELN.items():
+		if not frappe.db.exists("Rework Regel", {"rework_artikel": rework, "ziel_artikel": ziel}):
+			frappe.get_doc(
+				{"doctype": "Rework Regel", "rework_artikel": rework, "ziel_artikel": ziel,
+				 "max_anteil_prozent": anteil}
+			).insert()  # fmt: skip
+	for rework, punkt in ENTNAHMEPUNKT.items():
+		frappe.db.set_value("Item", rework, "kt_entnahmepunkt", punkt)
 
 	bezeichnung, artikel, nachlauf, kapazitaet = SILO
 	lager = f"{bezeichnung} - {ctx.abbr}"

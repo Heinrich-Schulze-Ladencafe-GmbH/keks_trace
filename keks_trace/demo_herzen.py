@@ -2,7 +2,8 @@
 
     bench --site keks.localhost execute keks_trace.demo_herzen.anlegen
 
-Ablauf: Rohling backen (Backstube, aus Grundteig Honig 5812) -> Zuckerglasur kochen (eigene
+Ablauf: Rohling backen (Backstraße: Kneter, Verpackungs-PC bucht Rohlinge im Karton ins Lager; vorproduziert
+nach Gefühl) -> Lager lagert die Rohlinge an den Herzenboden um (wie für einen Kunden) -> Zuckerglasur kochen (eigene
 Rezeptur, Halbfabrikat, max. 2 Tage) -> Garnieren (Herzen Garnieren: Rohling + Glasur) ->
 Verpacken auf der Kalfass (Herzen Verpackung: Herz + Folie + Etikett + Schleife, Metallcheck Fe 2,8 mm).
 Gezählt wird in Stück; jede Größe ist ein eigener Artikel mit eigener Rezeptur.
@@ -19,6 +20,10 @@ GROESSEN = {"12": (0.05, 0.01), "18": (0.12, 0.02), "25": (0.25, 0.04)}
 # Leistung je Größe in Stück: Garnieren (Stück/h), Kalfass (Stück/min) - Platzhalter
 STUECKGEWICHT = {"12": 0.08, "18": 0.2, "25": 0.42}  # kg je verpacktes Herz (Demo-Werte)
 LEISTUNG = {"12": (1200, 30), "18": (800, 25), "25": (500, 20)}
+
+# Rohlinge im Karton (Stück je Karton, Demo-Werte)
+STK_JE_KARTON = {"12": 40, "18": 24, "25": 12}
+BACKSTRASSE = "Backstraße"
 
 # Demo-Kundenauftrag: der Kunde bestellt Herzen in Stück
 AUFTRAG = {"12": 3000, "18": 2000, "25": 1000}
@@ -60,7 +65,19 @@ def _artikel(code, name, stufe, uom, tage=None, monate=None, extra=None):
 	).insert()
 
 
+def _einheiten(code, einheiten):
+	item = frappe.get_doc("Item", code)
+	for uom, faktor in einheiten.items():
+		vorhanden = next((u for u in item.uoms if u.uom == uom), None)
+		if vorhanden:
+			vorhanden.conversion_factor = faktor
+		else:
+			item.append("uoms", {"uom": uom, "conversion_factor": faktor})
+	item.save()
+
+
 LINIE = "Herzenboden"
+HB_LAGER = "Lager Herzenboden"
 
 
 def _linie(ctx):
@@ -102,9 +119,17 @@ def _linie(ctx):
 			}
 		).insert()
 	frappe.db.set_value("Linienabschnitt", "Kalfass", "linie", LINIE)
+	# Rohlinge kommen per Umlagern aus dem Lager an den Herzenboden (F13), in ein eigenes Lager dort
+	# (der Lagerort der Linie gehört den Produktionsaufträgen und wird nicht vorgeschlagen)
+	frappe.db.set_value("Warehouse", lager, "kt_umlagerziel", 0)
+	if not frappe.db.exists("Warehouse", f"{HB_LAGER} - {ctx.abbr}"):
+		frappe.get_doc(
+			{"doctype": "Warehouse", "warehouse_name": HB_LAGER, "company": ctx.company,
+			 "parent_warehouse": ctx.wurzel, "kt_umlagerziel": 1}
+		).insert()  # fmt: skip
 	for station in ("Herzen Garnieren", "Herzen Verpackung"):
 		if frappe.db.exists("Terminal Station", station):
-			frappe.db.set_value("Terminal Station", station, {"linie": LINIE, "f_silo": 1})
+			frappe.db.set_value("Terminal Station", station, {"linie": LINIE, "f_silo": 1, "f_rework": 0})
 			if station == "Herzen Verpackung":  # Pakete gehen auch direkt per DHL raus
 				frappe.db.set_value("Terminal Station", station, "f_lieferung", 1)
 			frappe.clear_document_cache("Terminal Station", station)
@@ -136,7 +161,9 @@ def _behaelter(ctx):
 
 @frappe.whitelist()
 def anlegen(vorrat: int = 1) -> frappe._dict:
-	ctx = pilot.anlegen()  # Grundteig Honig 5812, Allergengruppe Honigteig
+	from keks_trace import demo_linie
+
+	ctx = frappe._dict({**pilot.anlegen(), **demo_linie.stammdaten()})  # Grundteig 5812, Backstraße
 	_linie(ctx)
 	herz = {"kt_linie": LINIE}
 	for code, (name, tage) in ROHSTOFFE.items():
@@ -149,7 +176,19 @@ def anlegen(vorrat: int = 1) -> frappe._dict:
 	)  # fmt: skip
 	pilot._rezept(ctx.company, "HZ-GLASUR", 10, [("HZ-PUDERZUCKER", 9.5), ("HZ-EIWEISS", 0.5)])
 	for g, (teig, glasur) in GROESSEN.items():
-		_artikel(f"HZ-ROHLING-{g}", f"Herz-Rohling {g} cm", "Backware", "Nos", 180)
+		# Rohlinge kommen von der Backstraße, im Karton ins Lager (lose Ware, auch direkt verkauft)
+		_artikel(f"HZ-ROHLING-{g}", f"Herz-Rohling {g} cm", "Ware lose", "Nos", 180,
+				 extra={"kt_linie": BACKSTRASSE})  # fmt: skip
+		_einheiten(f"HZ-ROHLING-{g}", {"Karton": STK_JE_KARTON[g], "Palette": STK_JE_KARTON[g] * 40})
+		rohling = frappe.get_doc("Item", f"HZ-ROHLING-{g}")
+		if not rohling.get("kt_linienleistung"):  # Demo-Leistung der Backstraße für Rohlinge
+			rohling.append(
+				"kt_linienleistung", {"abschnitt": "Backen", "leistung": 3000, "einheit": "Stück/h"}
+			)
+			rohling.save()
+		frappe.db.sql(
+			"update `tabBatch` set kt_chargen_stufe = 'Ware lose' where item = %s", f"HZ-ROHLING-{g}"
+		)
 		_artikel(f"HZ-GARNIERT-{g}", f"Herz {g} cm garniert", "Ware lose", "Nos", 180, extra=herz)
 		_artikel(f"HZ-{g}", f"Lebkuchenherz {g} cm", "Fertigware", "Nos", monate=9,
 				 extra={"kt_mhd_bezug": "Backtag", **herz})  # fmt: skip
@@ -313,15 +352,9 @@ def vorrat_anlegen(ctx=None) -> dict:
 		)  # fmt: skip
 
 	# Rohlinge und garnierte Herzen je Größe
-	for g, (teig, glasur) in GROESSEN.items():
+	for g, (_teig, glasur) in GROESSEN.items():
 		if _bestand(f"HZ-ROHLING-{g}") < 100:
-			kuebel = demo.neuer_traeger(f"HZK-{g}-{h}", "Teigbehälter")
-			t = demo.neue_charge("5812", f"5812-HZ{g}-{h}", add_days(nowdate(), -20))
-			demo.buchen(ctx, "Material Receipt", add_days(nowdate(), -20), "05:00:00",
-			            ausgaenge=[("5812", t, round(400 * teig, 3), kuebel)])  # fmt: skip
-			terminal.herstellen(
-				"Backstube", f"HZ-ROHLING-{g}", [{"code": kuebel, "menge": round(400 * teig, 3)}], 400
-			)
+			rohlinge_backen(ctx, g, max(1, round(400 / STK_JE_KARTON[g])))
 		if _bestand(f"HZ-GARNIERT-{g}") < 100:
 			roh = _charge_mit("Herzen Garnieren", f"HZ-ROHLING-{g}", 200)
 			guss_bereit(200 * glasur)
@@ -334,6 +367,49 @@ def vorrat_anlegen(ctx=None) -> dict:
 	for g, e in ergebnis.items():
 		print(f"Herz {g} cm: {e['rohlinge']:.0f} Rohlinge, {e['garniert']:.0f} garniert")
 	return ergebnis
+
+
+def rohlinge_backen(ctx, groesse: str, kartons: int) -> dict:
+	"""Rohlinge auf Lager (nach Gefühl): Produktionsauftrag der Backstraße, am Kneter den Grundteig-Kübel
+	auf die Linie (F4), am Verpackungs-PC Kartons auf Palette ins Lager (F6), Auftrag beenden.
+	Die Stationen arbeiten danach wieder an ihrem vorherigen Auftrag."""
+	from keks_trace import demo, linienbuchung, terminal
+
+	stueck = kartons * STK_JE_KARTON[groesse]
+	teig = round(stueck * GROESSEN[groesse][0], 3)
+	vorher = {
+		st: frappe.db.get_value("Terminal Station", st, "aktueller_auftrag")
+		for st in ("Kneter", "Verpackungs-PC")
+	}
+	pa = frappe.get_doc(
+		{"doctype": "Produktionsauftrag", "linie": BACKSTRASSE, "datum": nowdate(), "artikel": f"HZ-ROHLING-{groesse}",
+		 "menge": kartons, "einheit": "Karton", "status": "Freigegeben",
+		 "bemerkung": "Herzen-Rohlinge auf Lager (Demo)"}
+	).insert()  # fmt: skip
+	h = frappe.generate_hash(length=4).upper()
+	kuebel = demo.neuer_traeger(f"HZK-{groesse}-{h}", "Teigbehälter")
+	t = demo.neue_charge("5812", f"5812-HZ{groesse}-{h}", add_days(nowdate(), -20))
+	demo.buchen(
+		ctx, "Material Receipt", add_days(nowdate(), -20), "05:00:00", ausgaenge=[("5812", t, teig, kuebel)]
+	)
+	try:
+		linienbuchung.waehlen("Kneter", pa.name)
+		linienbuchung.zufuehren("Kneter", kuebel)
+		linienbuchung.waehlen("Verpackungs-PC", pa.name)
+		nve = terminal.palette_neu("Verpackungs-PC")["nve"]
+		karton = linienbuchung.palette_fertig("Verpackungs-PC", kartons, "Karton", nve)
+		linienbuchung.beenden("Verpackungs-PC", pa.name)
+	finally:
+		for st, auftrag in vorher.items():
+			frappe.db.set_value("Terminal Station", st, "aktueller_auftrag", auftrag)
+			frappe.clear_document_cache("Terminal Station", st)
+	return {
+		"auftrag": pa.name,
+		"charge": karton["charge"],
+		"palette": nve,
+		"stueck": stueck,
+		"kuebel": kuebel,
+	}
 
 
 @frappe.whitelist()
@@ -389,7 +465,9 @@ def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
 	schritt("Lager", "Lager", "Wareneingang Honig, Puderzucker, Eiweiß, Packmittel",
 	        f"{len(roh) + 2 + len(pack)} Lieferantenchargen, u. a. Puderzucker {puderzucker}")  # fmt: skip
 
-	# 2. Backstube: Grundteig in den Kübel, Rohlinge backen
+	# 2. Backstube: Grundteig in den Kübel (F3); Backstraße: Kneter (F4), Verpackungs-PC Rohlinge im Karton (F6)
+	from keks_trace import linienbuchung
+
 	kuebel = demo.neuer_traeger(f"HZK-{h}", "Teigbehälter")
 	teig = terminal.herstellen("Backstube", "5812", zeilen_teig, ziel_behaelter=kuebel)
 	schritt(
@@ -398,15 +476,37 @@ def durchlauf(groesse: str = "18", stueck: int = 100) -> dict:
 		f"Grundteig Honig in Kübel {kuebel}",
 		f"Charge {teig['charge']}, {teig['menge']} kg",
 	)
-	rohling = terminal.herstellen(
-		"Backstube", f"HZ-ROHLING-{groesse}", [{"code": kuebel, "menge": teig["menge"]}], stueck
-	)
+	kartons = -(-stueck // STK_JE_KARTON[groesse])
+	vorher = {
+		st: frappe.db.get_value("Terminal Station", st, "aktueller_auftrag")
+		for st in ("Kneter", "Verpackungs-PC")
+	}
+	pa = frappe.get_doc(
+		{"doctype": "Produktionsauftrag", "linie": BACKSTRASSE, "datum": nowdate(), "artikel": f"HZ-ROHLING-{groesse}",
+		 "menge": kartons, "einheit": "Karton", "status": "Freigegeben"}
+	).insert()  # fmt: skip
+	try:
+		linienbuchung.waehlen("Kneter", pa.name)
+		linienbuchung.zufuehren("Kneter", kuebel)
+		schritt("Backstraße", "Kneter", f"Kübel {kuebel} auf die Linie", f"Auftrag {pa.name}")
+		linienbuchung.waehlen("Verpackungs-PC", pa.name)
+		nve_roh = terminal.palette_neu("Verpackungs-PC")["nve"]
+		rohling = linienbuchung.palette_fertig("Verpackungs-PC", kartons, "Karton", nve_roh)
+		linienbuchung.beenden("Verpackungs-PC", pa.name)
+	finally:
+		for st, auftrag in vorher.items():
+			frappe.db.set_value("Terminal Station", st, "aktueller_auftrag", auftrag)
+			frappe.clear_document_cache("Terminal Station", st)
 	schritt(
-		"Backstube",
-		"Backstube",
-		f"Rohlinge {groesse} cm backen (Kübel leer)",
-		f"Charge {rohling['charge']}, {stueck} Stk",
+		"Backstraße",
+		"Verpackungs-PC",
+		f"Rohlinge {groesse} cm im Karton auf Palette ins Lager",
+		f"Charge {rohling['charge']}, {kartons} Karton",
 	)
+	stueck = kartons * STK_JE_KARTON[groesse]
+	herzenboden = f"{HB_LAGER} - {ctx.abbr}"
+	terminal.umlagern("Lager", palette=nve_roh, ganz=1, nach=herzenboden)
+	schritt("Lager", "Lager", "Rohlinge an den Herzenboden umlagern", f"Palette …{nve_roh[-6:]}")
 
 	# 3. Herzen Garnieren: Zuckerguss morgens anmischen (geht in den Behälter), dann garnieren
 	guss_menge = round(stueck * guss_je, 3)

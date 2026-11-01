@@ -125,7 +125,9 @@ class TestHerzen(IntegrationTestCase):
 	def test_durchlauf_alle_abteilungen(self):
 		"""Ein Herz vom Wareneingang bis zum Kunden, danach Rückverfolgung in beide Richtungen."""
 		d = demo_herzen.durchlauf("12", 20)
-		self.assertEqual(len(d["protokoll"]), 11)
+		self.assertEqual(
+			len(d["protokoll"]), 13
+		)  # mit Kneter, Verpackungs-PC (Rohlinge) und Umlagern an den Herzenboden
 		self.assertTrue(frappe.db.exists("Delivery Note", d["lieferschein"]))
 		kette = {z["charge"] for z in rueckwaerts(d["charge"])}
 		self.assertIn(d["puderzucker"], kette)

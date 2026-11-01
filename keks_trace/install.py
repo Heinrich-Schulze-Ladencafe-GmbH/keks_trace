@@ -35,6 +35,15 @@ KOMPONENTEN_STUFEN = ["Rohstoff", "Halbfabrikat"]
 CUSTOM_FIELDS = {
 	"Item": [
 		{
+			"fieldname": "kt_entnahmepunkt",
+			"label": "Rework: Entnahmepunkt an der Linie",
+			"fieldtype": "Select",
+			"options": "\nNach dem Ofen\nNach dem Sprühen\nAm Ende der Linie",
+			"insert_after": "description",
+			"depends_on": "eval:doc.kt_chargen_stufe=='Rework'",
+			"description": "Wo dieses Rework an der Linie abgenommen wird. Die Backstube wählt beim Buchen die Sorte nach dem Entnahmepunkt.",
+		},
+		{
 			"fieldname": "kt_spezifikation",
 			"label": "Spezifikation (Link oder Nummer im Spezifikations-Tool)",
 			"fieldtype": "Data",

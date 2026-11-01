@@ -46,6 +46,15 @@ def artikel_stufe(item_code: str) -> str | None:
 	return frappe.get_cached_value("Item", item_code, "kt_chargen_stufe")
 
 
+# Was im Karton auf Paletten, ins Lager und zum Kunden geht: verpackte Ware und lose Ware im Karton
+# (Kiloware, Herzen-Rohlinge)
+VERSANDFAEHIG = ("Fertigware", "Ware lose")
+
+
+def versandfaehig(item_code: str) -> bool:
+	return artikel_stufe(item_code) in VERSANDFAEHIG
+
+
 def allergene(gruppe: str | None) -> set[str]:
 	"""Allergene einer Allergengruppe als Menge (Groß-/Kleinschreibung egal)."""
 	if not gruppe:

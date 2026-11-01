@@ -1,0 +1,178 @@
+<title>Keks Flussschema</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<style>
+/* Ein Bild von oben nach unten: Bestände als Kästen, Flüsse als nummerierte Pfeile; darunter dieselbe Liste als Tabelle */
+:root {
+	--bg: #f3f6fa; --fg: #1b1f24; --muted: #5a6573; --rand: #b9c8db; --kasten: #ffffff; --kasten2: #fff7d6;
+	--scan: #2a6fd0; --tipp: #2f8a3a; --nix: #8a94a3; --auto: #b86b00; --halo: #f3f6fa;
+	--fs-body: "IBM Plex Sans", system-ui, sans-serif;
+	--fs-titel: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+	--bg: #141a22; --fg: #e8edf3; --muted: #9aa6b4; --rand: #3a4d66; --kasten: #1d2632; --kasten2: #2a2617;
+	--scan: #6ea4f0; --tipp: #6fd07c; --nix: #8794a6; --auto: #f0b04a; --halo: #141a22; color-scheme: dark } }
+:root[data-theme="dark"] {
+	--bg: #141a22; --fg: #e8edf3; --muted: #9aa6b4; --rand: #3a4d66; --kasten: #1d2632; --kasten2: #2a2617;
+	--scan: #6ea4f0; --tipp: #6fd07c; --nix: #8794a6; --auto: #f0b04a; --halo: #141a22; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.5 var(--fs-body);
+	padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
+main { max-width: 1120px; margin: 0 auto; display: grid; gap: 24px; }
+h1 { font: 600 32px/1.15 var(--fs-titel); margin: 0; text-wrap: balance; }
+h2 { font: 600 22px/1.2 var(--fs-titel); margin: 0 0 10px; }
+p { margin: 0; max-width: 72ch; }
+.leise { color: var(--muted); }
+.bild { overflow-x: auto; }
+svg { display: block; width: 100%; min-width: 860px; height: auto; font-family: var(--fs-body); }
+.k rect { fill: var(--kasten); stroke: var(--rand); stroke-width: 1.5; }
+.k.lager rect { fill: var(--kasten2); }
+.k.aus rect { stroke-dasharray: 6 5; fill: none; }
+.k .t { font: 600 16px var(--fs-titel); fill: var(--fg); }
+.k .u { font-size: 12px; fill: var(--muted); }
+.f { fill: none; stroke-width: 2.2; }
+.f.auto { stroke: var(--auto); stroke-dasharray: 2 4; stroke-linecap: round; } .f.scan { stroke: var(--scan); } .f.tipp { stroke: var(--tipp); } .f.nix { stroke: var(--nix); stroke-dasharray: 6 5; }
+.l { font-size: 12px; fill: var(--muted); paint-order: stroke; stroke: var(--halo); stroke-width: 5px; stroke-linejoin: round; }
+.l .n { font-weight: 600; fill: var(--fg); }
+.l.auto .n { fill: var(--auto); } .l.scan .n { fill: var(--scan); } .l.tipp .n { fill: var(--tipp); } .l.nix .n { fill: var(--nix); }
+.legende { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 14px; }
+.legende span { display: inline-flex; align-items: center; gap: 8px; }
+.legende i { display: inline-block; width: 30px; border-top: 3px solid; }
+.tab { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 760px; }
+th { text-align: left; padding: 8px 10px; border-bottom: 2px solid var(--rand); font-weight: 600; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--rand); vertical-align: top; }
+td:first-child { font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+tr.auto td:first-child { color: var(--auto); } tr.scan td:first-child { color: var(--scan); } tr.tipp td:first-child { color: var(--tipp); } tr.nix td:first-child { color: var(--nix); }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 75ch; }
+</style>
+
+<main>
+	<header style="display:grid;gap:8px">
+		<h1>Flussschema Keksproduktion</h1>
+		<p class="leise">Kästen sind Bestände, also Orte, an denen Ware liegt. Pfeile sind Flüsse. Jeder Fluss hat eine Nummer und sagt, wo und wie er gebucht wird.</p>
+		<div class="legende">
+			<span><i style="border-color:var(--scan)"></i>Scannen</span>
+			<span><i style="border-color:var(--tipp)"></i>Antippen am Terminal/PC</span>
+			<span><i style="border-color:var(--auto);border-top-style:dotted"></i>automatisch mitgebucht</span>
+			<span><i style="border-color:var(--nix);border-top-style:dashed"></i>nicht gebucht</span>
+		</div>
+	</header>
+
+	<div class="bild">
+	<svg viewBox="0 0 1120 1250" role="img" aria-label="Flussschema von Lieferant bis Kunde">
+		<defs>
+			<marker id="ps" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--scan)"/></marker>
+			<marker id="pt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--tipp)"/></marker>
+			<marker id="pn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--nix)"/></marker>
+			<marker id="pa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill:var(--auto)"/></marker>
+		</defs>
+		<path class="f tipp" marker-end="url(#pt)" d="M610,398 H648"/>
+		<path class="f scan" marker-end="url(#ps)" d="M650,430 H612"/>
+		<path class="f nix" marker-end="url(#pn)" d="M308,396 H290 V272 H252"/>
+		<path class="f scan" marker-end="url(#ps)" d="M400,84 V138"/>
+		<path class="f scan" marker-end="url(#ps)" d="M490,52 H810 V138"/>
+		<path class="f scan" marker-end="url(#ps)" d="M400,204 V258"/>
+		<path class="f scan" marker-end="url(#ps)" d="M400,324 V378"/>
+		<path class="f auto" marker-end="url(#pa)" d="M810,204 V340 H520 V378"/>
+		<path class="f tipp" marker-end="url(#pt)" d="M440,444 V558"/>
+		<path class="f nix" marker-end="url(#pn)" d="M330,444 C330,510 140,500 140,558"/>
+		<path class="f tipp" marker-end="url(#pt)" d="M30,592 H14 V412 H308"/>
+		<path class="f tipp" marker-end="url(#pt)" d="M560,558 V446"/>
+		<path class="f tipp" marker-end="url(#pt)" d="M670,624 V738"/>
+		<path class="f tipp" marker-start="url(#pt)" marker-end="url(#pt)" d="M762,592 H848"/>
+		<path class="f tipp" marker-end="url(#pt)" d="M740,624 C740,700 940,680 940,738"/>
+		<path class="f auto" marker-end="url(#pa)" d="M900,172 H1100 V772 H1032"/>
+		<path class="f tipp" marker-end="url(#pt)" d="M940,804 V898"/>
+		<path class="f tipp" marker-end="url(#pt)" d="M850,932 H700 V806"/>
+		<path class="f tipp" marker-end="url(#pt)" d="M1030,950 H1090 V1168"/>
+		<path class="f scan" marker-end="url(#ps)" d="M400,624 V1038"/>
+		<path class="f scan" marker-end="url(#ps)" d="M670,804 V1038"/>
+		<path class="f scan" marker-end="url(#ps)" d="M670,1104 V1168"/>
+		<text class="l tipp" x="629" y="390" text-anchor="middle"><tspan class="n">F18</tspan></text>
+		<text class="l tipp" x="740" y="370" text-anchor="middle"><tspan class="n">Backstube bucht, Waage</tspan></text>
+		<text class="l scan" x="629" y="452" text-anchor="middle"><tspan class="n">F19</tspan></text>
+		<text class="l nix" x="40" y="330"><tspan class="n">F20 · nicht gebucht</tspan><tspan x="40" dy="16">ergibt sich aus der Bilanz</tspan></text>
+		<text class="l scan" x="414" y="106"><tspan class="n">F1 · Wareneingang</tspan><tspan x="414" dy="16">Etikett scannen</tspan></text>
+		<text class="l scan" x="820" y="100"><tspan class="n">F2 · Wareneingang</tspan><tspan x="820" dy="16">Etikett scannen</tspan></text>
+		<text class="l scan" x="414" y="226"><tspan class="n">F3 · Backstube</tspan><tspan x="414" dy="16">Rohstoffe und Kübel scannen</tspan></text>
+		<text class="l scan" x="414" y="346"><tspan class="n">F4 · Kneter</tspan><tspan x="414" dy="16">Kübel scannen</tspan></text>
+		<text class="l auto" x="820" y="250"><tspan class="n">F5 · automatisch</tspan><tspan x="820" dy="16">beim Buchen am Verpackungs-PC</tspan></text>
+		<text class="l tipp" x="432" y="496" text-anchor="end"><tspan class="n">F6, F7</tspan><tspan x="432" dy="16">Verpackungs-PC</tspan></text>
+		<text class="l tipp" x="570" y="490"><tspan class="n">F10 · lose Ware</tspan><tspan x="570" dy="16">zurück zum Verpacken</tspan></text>
+		<text class="l nix" x="290" y="462" text-anchor="end"><tspan class="n">F8 · Verpackung zu langsam</tspan><tspan x="290" dy="16">Wanne ungebucht, Karton gebucht</tspan></text>
+		<text class="l tipp" x="24" y="378"><tspan class="n">F9 · zurück in die Verpackung</tspan><tspan x="24" dy="16">Wanne selber Tag, Karton auch später</tspan></text>
+		<text class="l tipp" x="656" y="672" text-anchor="end"><tspan class="n">F11 · Paletten-Terminal</tspan><tspan x="656" dy="16">einwickeln, NVE</tspan></text>
+		<text class="l tipp" x="805" y="582" text-anchor="middle"><tspan class="n">F12</tspan></text>
+		<text class="l tipp" x="805" y="612" text-anchor="middle">hin/zurück</text>
+		<text class="l tipp" x="960" y="676"><tspan class="n">F13 · Rohlinge</tspan><tspan x="960" dy="16">umlagern</tspan></text>
+		<text class="l auto" x="1090" y="196" text-anchor="end"><tspan class="n">F14 · Karton anbrechen</tspan><tspan x="1090" dy="16">dann automatisch</tspan></text>
+		<text class="l tipp" x="954" y="846"><tspan class="n">F15 · Herzen Garnieren</tspan><tspan x="954" dy="16">Auftrag, Anzahl</tspan></text>
+		<text class="l tipp" x="716" y="922"><tspan class="n">F16 · Palette</tspan></text>
+		<text class="l tipp" x="1080" y="996" text-anchor="end"><tspan class="n">F16 · DHL-Paket</tspan><tspan x="1080" dy="16">gewogen</tspan></text>
+		<text class="l scan" x="414" y="840"><tspan class="n">Karton, Palette, Kiloware</tspan></text>
+		<text class="l scan" x="684" y="1142"><tspan class="n">F17 · Versand</tspan><tspan x="684" dy="16">Palette scannen, Lieferschein</tspan></text>
+		<g class="k "><rect x="310" y="20" width="180" height="64" rx="8"/><text class="t" x="400" y="49" text-anchor="middle">Lieferant</text><text class="u" x="400" y="68" text-anchor="middle">Mühle, Zucker, Verpackung</text></g>
+		<g class="k lager"><rect x="310" y="140" width="180" height="64" rx="8"/><text class="t" x="400" y="169" text-anchor="middle">Rohstoffe</text><text class="u" x="400" y="188" text-anchor="middle">Sack, Big Bag, Silo</text></g>
+		<g class="k lager"><rect x="720" y="140" width="220" height="64" rx="8"/><text class="t" x="830" y="169" text-anchor="middle">Packmittel</text><text class="u" x="830" y="188" text-anchor="middle">Beutel, Folie, Etikett, Clip, Eimer, Box</text></g>
+		<g class="k lager"><rect x="310" y="260" width="180" height="64" rx="8"/><text class="t" x="400" y="289" text-anchor="middle">Grundteig-Kübel</text><text class="u" x="400" y="308" text-anchor="middle">bis 1 Jahr</text></g>
+		<g class="k "><rect x="310" y="380" width="300" height="64" rx="8"/><text class="t" x="460" y="409" text-anchor="middle">Linie</text><text class="u" x="460" y="428" text-anchor="middle">Backstraße mit Verpackung</text></g>
+		<g class="k lager"><rect x="30" y="560" width="220" height="64" rx="8"/><text class="t" x="140" y="589" text-anchor="middle">Linienlager</text><text class="u" x="140" y="608" text-anchor="middle">Wanne bis Tagesende, Karton länger</text></g>
+		<g class="k lager"><rect x="310" y="560" width="450" height="64" rx="8"/><text class="t" x="535" y="589" text-anchor="middle">Lager</text><text class="u" x="535" y="608" text-anchor="middle">Kartons mit Beuteln und lose Ware, Paletten mit NVE</text></g>
+		<g class="k "><rect x="850" y="560" width="180" height="64" rx="8"/><text class="t" x="940" y="589" text-anchor="middle">Lagerverkauf</text><text class="u" x="940" y="608" text-anchor="middle">Laden</text></g>
+		<g class="k lager"><rect x="580" y="740" width="180" height="64" rx="8"/><text class="t" x="670" y="769" text-anchor="middle">Lager versandbereit</text><text class="u" x="670" y="788" text-anchor="middle">Palette eingewickelt</text></g>
+		<g class="k "><rect x="850" y="740" width="180" height="64" rx="8"/><text class="t" x="940" y="769" text-anchor="middle">Herzenboden</text><text class="u" x="940" y="788" text-anchor="middle">Rohlinge, Guss, Deko</text></g>
+		<g class="k "><rect x="850" y="900" width="180" height="64" rx="8"/><text class="t" x="940" y="929" text-anchor="middle">Herzen fertig</text><text class="u" x="940" y="948" text-anchor="middle">je Kundenauftrag</text></g>
+		<g class="k"><rect x="300" y="1040" width="740" height="64" rx="8"/><text class="t" x="670" y="1069" text-anchor="middle">Versand</text><text class="u" x="670" y="1088" text-anchor="middle">Kommissionieren, Lieferschein</text></g>
+		<g class="k"><rect x="40" y="1170" width="1060" height="64" rx="8"/><text class="t" x="570" y="1199" text-anchor="middle">Kunde</text><text class="u" x="570" y="1218" text-anchor="middle">Spedition, DHL, Abholung</text></g>
+		<g class="k"><rect x="30" y="240" width="220" height="64" rx="8"/><text class="t" x="140" y="269" text-anchor="middle">Biogasanlage</text><text class="u" x="140" y="288" text-anchor="middle">Bruch, nicht verwertbar</text></g>
+		<g class="k lager"><rect x="650" y="380" width="180" height="64" rx="8"/><text class="t" x="740" y="409" text-anchor="middle">Rework-Behälter</text><text class="u" x="740" y="428" text-anchor="middle">nach Ofen, Sprühen, Ende</text></g>
+	</svg>
+	</div>
+
+	<section>
+		<h2>Flussliste</h2>
+		<div class="tab">
+		<table>
+			<thead><tr><th>Nr</th><th>von</th><th>nach</th><th>Träger</th><th>wo gebucht</th><th>Eingabe</th></tr></thead>
+			<tbody>
+				<tr class="scan"><td>F1</td><td>Lieferant</td><td>Rohstoffe</td><td>Sack, Big Bag, Silo</td><td>Wareneingang</td><td>Etikett scannen</td></tr>
+				<tr class="scan"><td>F2</td><td>Lieferant</td><td>Packmittel</td><td>Karton, Rolle, Palette</td><td>Wareneingang</td><td>Etikett scannen</td></tr>
+				<tr class="scan"><td>F3</td><td>Rohstoffe</td><td>Grundteig-Kübel</td><td>Kübel</td><td>Backstube</td><td>Rohstoffe und Kübel scannen</td></tr>
+				<tr class="scan"><td>F4</td><td>Grundteig-Kübel</td><td>Linie</td><td>–</td><td>Kneter</td><td>Kübel scannen</td></tr>
+				<tr class="auto"><td>F5</td><td>Packmittel</td><td>Linie (Verpackung)</td><td>–</td><td>automatisch beim Buchen am Verpackungs-PC</td><td>nichts, laut Rezept, älteste zuerst</td></tr>
+				<tr class="tipp"><td>F6</td><td>Linie</td><td>Lager</td><td>Beutel im Karton auf Palette mit NVE, auch Herzen-Rohlinge</td><td>Verpackungs-PC</td><td>Auftrag, Anzahl</td></tr>
+				<tr class="tipp"><td>F7</td><td>Linie</td><td>Lager</td><td>lose Ware im Karton, kg fest je Artikel, auf Palette</td><td>Verpackungs-PC</td><td>Auftrag, Anzahl Kartons</td></tr>
+				<tr class="nix"><td>F8</td><td>Linie</td><td>Linienlager</td><td>Wanne ohne Nummer oder Karton</td><td>Wanne: nicht gebucht. Karton: Verpackungs-PC</td><td>Karton: Anzahl, Ziel Linienlager</td></tr>
+				<tr class="tipp"><td>F9</td><td>Linienlager</td><td>Linie (Verpackung), dann wie F6</td><td>Wanne oder Karton</td><td>Verpackungs-PC; Wanne am selben Tag, Karton auch später</td><td>Karton antippen; Wanne läuft im Auftrag mit</td></tr>
+				<tr class="tipp"><td>F10</td><td>Lager (lose Ware)</td><td>Linie (Verpackung), dann wie F6</td><td>Karton</td><td>Verpackungs-PC, nach Bedarf</td><td>Ware antippen, Anzahl</td></tr>
+				<tr class="tipp"><td>F11</td><td>Lager</td><td>Lager versandbereit</td><td>Palette eingewickelt</td><td>Paletten-Terminal</td><td>Palette antippen oder scannen</td></tr>
+				<tr class="tipp"><td>F12</td><td>Lager</td><td>Lagerverkauf und zurück</td><td>Karton</td><td>Lager / Lagerverkauf</td><td>antippen</td></tr>
+				<tr class="tipp"><td>F13</td><td>Lager (Rohlinge)</td><td>Herzenboden</td><td>Karton</td><td>Umlagern, wie ein Kunde</td><td>antippen</td></tr>
+				<tr class="auto"><td>F14</td><td>Packmittel</td><td>Herzenboden</td><td>Karton, Rolle</td><td>Herzen Verpackung</td><td>Karton anbrechen, dann automatisch</td></tr>
+				<tr class="tipp"><td>F15</td><td>Herzenboden</td><td>Herzen fertig</td><td>–</td><td>Herzen Garnieren</td><td>Auftrag, Anzahl; Guss und Deko automatisch</td></tr>
+				<tr class="tipp"><td>F16</td><td>Herzen fertig</td><td>Lager versandbereit oder direkt zum Kunden (DHL)</td><td>Palette oder Paket</td><td>Herzen Verpackung</td><td>Auftrag, Anzahl, Paketgewicht</td></tr>
+				<tr class="scan"><td>F17</td><td>Lager, Lager versandbereit</td><td>Versand, dann Kunde</td><td>Palette, Karton, Kiloware</td><td>Versand</td><td>Palette scannen, Lieferschein</td></tr>
+				<tr class="tipp"><td>F18</td><td>Linie (nach Ofen, nach Sprühen oder am Ende)</td><td>Rework-Behälter</td><td>Behälter</td><td>Backstube, mit Waage</td><td>Behälter antippen oder scannen, Rework-Sorte (Entnahmepunkt), kg von der Waage; Behälter-Etikett</td></tr>
+				<tr class="scan"><td>F19</td><td>Rework-Behälter</td><td>Linie (nur Kneter)</td><td>Behälter</td><td>Kneter</td><td>Behälter scannen, kg. Filter: nur die passende Rework-Sorte für diesen Teig (Regel, Allergene), höchstens der Anteil je Rezept</td></tr>
+				<tr class="nix"><td>F20</td><td>Linie</td><td>Biogasanlage</td><td>Tonne, Container</td><td>nicht gebucht</td><td>– (Rechnung: Teig rein minus Ware raus minus Rework, beim Auftragsende als Linienrest)</td></tr>
+			</tbody>
+		</table>
+		</div>
+	</section>
+
+	<section>
+		<h2>Zum Prüfen</h2>
+		<ul>
+			<li>Die lose Ware liegt im normalen Lager, als Karton mit festen kg je Artikel.</li>
+			<li>Zum Kunden geht alles über den Versand. Nur das DHL-Paket vom Herzenboden geht direkt.</li>
+			<li>Für den Versand produziert heißt: F6 und gleich danach F11 am Paletten-Terminal. Dafür braucht es keinen eigenen Pfeil.</li>
+			<li>Lose Ware wird nur an der Linie verpackt: aus dem Linienlager (F9) und nach Bedarf aus dem Lager (F10).</li>
+			<li>Packmittel werden nicht gescannt. Beim Buchen am Verpackungs-PC gehen sie laut Rezept automatisch ab (F5). Am Herzenboden wird ein Karton angebrochen, danach läuft es automatisch (F14).</li>
+			<li>Rework bucht die Backstube: Behälter wiegen, Sorte und kg erfassen, Etikett. Am Kneter wird der Behälter nur noch gescannt.</li>
+			<li>Rework geht nur am Kneter zurück in den Teig (F19). Wo es entnommen wird, hängt vom Artikel ab: ohne Veredelung am Ende, sonst auch nach dem Ofen oder nach dem Sprühen. Der Entnahmepunkt bestimmt die Rework-Sorte, und am Kneter lässt der Filter nur die passende Sorte bis zum Höchstanteil zu.</li>
+			<li>Am Herzenboden gibt es kein Rework.</li>
+			<li>Bruch für die Biogasanlage wird weder gewogen noch gebucht (F20). Er ergibt sich beim Auftragsende aus der Rechnung: Teig auf die Linie minus Kartons, lose Ware und Rework. Der Rest wird als Linienrest ausgebucht. Darin steckt auch der Backverlust, deshalb ist eine Soll-Ausbeute je Artikel der Maßstab.</li>
+			<li>Wannen bleiben ungebucht, müssen aber am selben Tag leer sein. Kartons im Linienlager werden gebucht, weil sie über Nacht stehen können.</li>
+		</ul>
+	</section>
+</main>

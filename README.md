@@ -26,6 +26,25 @@ Lieferschein     an den Kunden
 Füllungen werden gekauft (Chargenstufe **Rohstoff**) oder selbst hergestellt (Chargenstufe
 **Halbfabrikat**, eigene Charge mit eigener Rückverfolgung).
 
+## Flussschema (F1–F20)
+
+Alle Warenflüsse stehen im Flussschema (Bestände und nummerierte Flüsse, je mit Buchungspunkt). Neu dazu:
+
+- **F7 lose Ware im Karton:** Am Verpackungs-PC „Lose Ware buchen“, gezählt in Kartons (kg je Karton fest am
+  Artikel, Einheit „Karton“), auf Palette mit NVE ins Lager. Lose Ware darf auf Paletten, umgelagert und
+  geliefert werden (Kiloware).
+- **F8/F9 Linienlager:** Kommt die Verpackung nicht nach, gehen Kartons ins Linienlager (Feld „Linienlager“ an
+  der Linie). Der Verpackungs-PC zeigt, was dort wartet, und verpackt es zuerst („Lose Ware verpacken“).
+  Wannen werden nicht gebucht und müssen am selben Tag leer sein.
+- **F13 Herzen-Rohlinge:** normaler Auftrag der Backstraße (lose Ware im Karton), Herzenboden holt per Umlagern.
+- **F18/F19 Rework:** nur die Backstube bucht Rework: Auftrag an der Linie, Sorte nach Entnahmepunkt (nach dem
+  Ofen, nach dem Sprühen, am Ende; Feld am Rework-Artikel), Behälter, Gewicht von der Waage, Etikett. Der Teig
+  der Linie wird dabei zu Rework (kein Linienrest). Am Kneter geht es zurück; der Filter lässt nur passende
+  Sorten (Rework-Regel, Allergene) bis zum Höchstanteil zu, und es geht mit dem Teig in die Ware ein.
+- **F20 Bruch/Biogas:** wird nicht gebucht; er ist der Linienrest beim Auftragsende.
+- **Doppelbuchungen:** Jede Buchung vom Terminal trägt eine Anfrage-ID (`anfrage.py`). Geht eine Antwort im
+  WLAN verloren und es wird nochmal getippt, liefert der Server das erste Ergebnis statt doppelt zu buchen.
+
 ## Was die App kann
 
 - **Rework-Regeln (Rework-Matrix):** welches Rework in welchen Grundteig oder veredelten Teig,

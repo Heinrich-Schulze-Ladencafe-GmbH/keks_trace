@@ -198,7 +198,7 @@
 	function speichern(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* privat */ } }
 	function laden(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
-	const BUCHUNGEN = /^(herstellen|linie_|palette|pruefung_erfassen|umlagern|lieferung|anbrechen|wareneingang|rework|silo_leer|packstation)/;
+	const BUCHUNGEN = /^(herstellen|linie_|palette|pruefung_erfassen|umlagern|lieferung|paket_lieferung|anbrechen|wareneingang|rework_erfassen|rework_linie$|silo_leer)/;
 	async function api(methode, args) {
 		let r;
 		try {
@@ -214,16 +214,24 @@
 		if (methode !== "kopfdaten" && BUCHUNGEN.test(methode)) setTimeout(kopfLaden, 400);
 		return r;
 	}
+	// Doppelbuchung verhindern: eine Buchung behält ihre Anfrage-ID, bis sie geklappt hat. Geht die Antwort
+	// unterwegs verloren und es wird nochmal getippt, liefert der Server das erste Ergebnis (anfrage.py).
+	let anfrageId = null;
+	function neueId() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2); }
 	async function apiRoh(methode, args) {
+		const buchung = BUCHUNGEN.test(methode) && methode !== "kopfdaten";
+		if (buchung && !anfrageId) anfrageId = neueId();
 		const r = await fetch(API + methode, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				Accept: "application/json",
 				"X-Frappe-CSRF-Token": app.dataset.csrf || (window.frappe && frappe.csrf_token) || "",
+				...(buchung ? { "X-KT-Anfrage": anfrageId } : {}),
 			},
 			body: JSON.stringify(args || {}),
 		});
+		if (buchung && r.ok) anfrageId = null;
 		let daten = {};
 		try { daten = await r.json(); } catch (e) { /* leer */ }
 		if (!r.ok || daten.exc_type || daten.exception) {
@@ -534,7 +542,7 @@
 		const f = zustand.funktionen || [];
 		if (zustand.typ === "Verpackungs-PC") return [
 			["vpc", "Linie verpacken", "Verpackungsauftrag der Backstraße: Karton auf Palette und lose Ware buchen"],
-			["vpc_lose", "Lose Ware verpacken", "nach Bedarf aus dem Lager in Beutel / Karton"],
+			["vpc_lose", "Lose Ware verpacken", "erst das Linienlager leer, sonst nach Bedarf aus dem Lager in Beutel / Karton"],
 			["paletten", "Paletten", "Neue Palette, Etikett, umpacken"],
 			["info", "Info-Scan", "Charge, Behälter oder Palette"],
 		];
@@ -553,7 +561,7 @@
 		else if (f.includes("lieferung")) m.push(["lieferung", "Lieferung", "Paletten und Kartons an einen Kunden"]);
 		if (f.includes("umlagern")) m.push(["umlagern", "Umlagern", zustand.umlager_ziel ? "in den Lagerverkauf oder zurück ins Lager" : "in ein anderes Lager oder in den Lagerverkauf"]);
 		if (f.includes("paletten")) m.push(["paletten", "Paletten", "Neue Palette, Etikett, anbrechen, umpacken"]);
-		if (f.includes("rework")) m.push(["rework", fw ? "Packbruch" : "Rework / Bruch", "In einen Rework-Behälter"]);
+		if (f.includes("rework")) m.push(["rework", "Rework", "Behälter von der Linie wiegen: Sorte, kg, Etikett"]);
 		if (zustand.vorraete) m.push(["anbrechen", "Karton anbrechen", "Neue Rolle / neuer Karton an den Tisch (Folie, Etikett, Schleife)"]);
 		if (f.includes("silo")) m.push(["silo", zustand.vorraete ? "Leer melden" : "Silo leer melden", zustand.vorraete ? "Behälter oder Vorrat ist leer" : "Silo oder Tank ist leergefahren"]);
 		if (f.includes("linie") && !kneter) m.push(["linie", "An die Linie", "Kübel einkippen, Füllung, Glasur, Schokolade nachfüllen"]);
@@ -781,8 +789,9 @@
 				<div class="wert">Beutel je Karton<div>${esc(d.beutel_je_karton || "–")}</div></div>
 				<div class="wert">Karton je Palette<div>${esc(d.karton_je_palette || "–")}</div></div>
 				<div class="wert">Spezifikation<div style="font-size:20px">${spez}</div></div></div>
+			${linienlagerPanel(d)}
 			<div class="reihe"><button class="knopf gruen" data-a="karton">Karton auf Palette buchen<small>gebucht bisher ${esc(d.gebucht_text)} von ${esc(d.menge_text)}</small></button>
-				${d.lose_artikel ? `<button class="knopf blau" data-a="lose">Lose Ware buchen<small>${esc(d.lose_name)} in Kisten ins Lager</small></button>` : ""}</div>
+				${d.lose_artikel ? `<button class="knopf blau" data-a="lose">Lose Ware buchen<small>${esc(d.lose_name)} im ${esc(ein(d.lose_einheit))} ins Lager oder Linienlager</small></button>` : ""}</div>
 			<div class="reihe"><button class="knopf" data-a="label">Kartonetiketten drucken</button><button class="knopf" data-a="beenden">Auftrag beenden</button></div>
 			<div class="reiter"><button class="an" type="button">Registrierungen</button></div><div class="panel" style="margin-top:0" id="registrierungen">Lädt …</div>`;
 		if (hinweis) meldung("gruen", hinweis);
@@ -791,31 +800,63 @@
 			if (a === "pa-wechseln") return auftragWaehlen("Verpacken", vpcStart);
 			if (a === "karton") return paletteFertigStart(vpcStart);
 			if (a === "lose") return loseBuchen(d);
+			if (a === "linienlager-verpacken") return schnellStart(true);
 			if (a === "label") return window.open("/karton_etikett?druck=1&station=" + encodeURIComponent(zustand.station) + "&anzahl=" + (d.karton_je_palette || 20), "_blank");
 			if (a === "beenden") { const i = await api("linie_info", { station: zustand.station }); return auftragBeenden(i); }
 			beiAllgemein(a);
 		});
 	}
 
+	// Was im Linienlager auf die Verpackung wartet (Wannen werden nicht gebucht)
+	function linienlagerPanel(d) {
+		if (!d.linienlager) return "";
+		const l = d.im_linienlager || [];
+		if (!l.length) return `<div class="panel"><b>Linienlager</b> <span class="fehlt">leer · Wannen sind nicht gebucht, bitte heute noch leer fahren</span></div>`;
+		return `<div class="panel"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><b>Linienlager: wartet auf die Verpackung</b>
+			<button class="knopf blau" style="min-height:0;padding:10px 18px" data-a="linienlager-verpacken">Jetzt verpacken</button></div>
+			${l.map((z) => `<div class="zeile"><div>${esc(z.name)} · ${esc(z.charge)}</div><div class="rechts ${z.alt ? "fehlt" : ""}">${esc(z.menge_text)} · seit ${esc(z.seit)}</div></div>`).join("")}</div>`;
+	}
+
+	// Lose Ware vom laufenden Auftrag: Kartons (kg je Karton fest) ins Lager auf Palette (F5) oder ins Linienlager (F6)
 	async function loseBuchen(d) {
-		let kisten = [];
-		try { kisten = await api("freie_kisten", { station: zustand.station }); } catch (e) { /* ohne Kiste */ }
+		let ziel = "lager";
+		const je = d.lose_je_einheit && d.lose_einheit !== "Kg" ? ` (${zahlText(d.lose_je_einheit)} kg je ${esc(ein(d.lose_einheit))})` : "";
 		app.innerHTML = kopf("Lose Ware: " + d.lose_name, true) + auftragKopf(d) +
-			zahlFeld("kg", "Wie viel kg?") + textFeld("scan", "Kiste scannen oder unten antippen (leer = ohne Kiste)") +
-			(kisten.length ? `<div class="einheiten" id="kisten">${kisten.slice(0, 24).map((k) => `<button type="button" data-a="kiste" data-code="${esc(k.code)}">${esc(k.code)}</button>`).join("")}</div>` : "") +
+			`<div class="einheiten" id="ziele"><button type="button" class="an" data-a="ziel" data-z="lager">Ins Lager<small> parallel abgenommen</small></button>` +
+			(d.linienlager ? `<button type="button" data-a="ziel" data-z="linienlager">Ins Linienlager<small> Verpackung kommt nicht nach</small></button>` : "") + `</div>` +
+			zahlFeld("anzahl", `Wie viele ${esc(ein(d.lose_einheit || "Kg"))}?${je}`) +
+			`<div id="pal-feld">${textFeld("scan", "Palette scannen (leer = neue Palette)")}</div>` +
 			`<div class="reihe"><button class="knopf" data-a="zurueck-vpc">← Zurück</button><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
 		aktionen(async (a, x) => {
 			if (a === "zurueck-vpc") return vpcStart();
-			if (a === "kiste") { document.getElementById("scan").value = x.code; app.querySelectorAll("#kisten button").forEach((b) => b.classList.toggle("an", b.dataset.code === x.code)); return; }
+			if (a === "ziel") {
+				ziel = x.z;
+				app.querySelectorAll("#ziele button").forEach((b) => b.classList.toggle("an", b.dataset.z === ziel));
+				document.getElementById("pal-feld").hidden = ziel !== "lager";
+				return fokus("anzahl");
+			}
 			if (a !== "buchen") return beiAllgemein(a);
+			const knopf = app.querySelector('[data-a="buchen"]');
+			knopf.disabled = true; knopf.textContent = "Bucht …";
 			try {
-				const e = await api("linie_lose", { station: zustand.station, kg: zahl(document.getElementById("kg").value), kiste: document.getElementById("scan").value.trim() || null });
-				ergebnis(e.name, ["Charge: " + e.charge, "Menge: " + kg(e.menge), e.kiste ? "Kiste: " + e.kiste : "", e.mhd ? "Verwendbar bis: " + e.mhd : "",
-					e.gesperrt ? "Gesperrt bis zur Freigabe durch die QS" : "", "Verbraucht: " + e.verbraucht.map((v) => v.name + " " + v.charge).join(", ")].filter(Boolean),
+				let palette = null;
+				if (ziel === "lager") {
+					palette = document.getElementById("scan").value.trim();
+					if (!palette) palette = (await api("palette_neu", { station: zustand.station, typ: "Lagerpalette" })).nve;
+				}
+				const e = await api("linie_lose", { station: zustand.station, anzahl: zahl(document.getElementById("anzahl").value), einheit: d.lose_einheit, ziel, palette });
+				if (e.palette) etikettDrucken(e.palette);
+				ergebnis(e.name, ["Charge: " + e.charge, "Menge: " + stk(e.anzahl, ein(e.einheit)) + (e.einheit !== "Kg" ? " (" + kg(e.menge) + ")" : ""),
+					e.ziel === "linienlager" ? "Ins Linienlager, wird später verpackt" : "Ins Lager" + (e.palette ? " auf Palette " + e.palette : ""),
+					e.mhd ? "Verwendbar bis: " + e.mhd : "", e.gesperrt ? "Gesperrt bis zur Freigabe durch die QS" : "",
+					"Verbraucht: " + e.verbraucht.map((v) => v.name + " " + v.charge).join(", ")].filter(Boolean),
 					e.hinweise, `<button class="knopf gruen" data-a="weiter">Zurück zum Auftrag</button>`)((b) => (b === "weiter" ? vpcStart() : beiAllgemein(b)));
-			} catch (err) { meldung("rot", err.message); }
+			} catch (err) { knopf.disabled = false; knopf.textContent = "Buchen"; meldung("rot", err.message); }
 		});
-		fokus("kg");
+		const buchen = () => app.querySelector('[data-a="buchen"]').click();
+		enter("anzahl", () => (ziel === "lager" ? fokus("scan") : buchen()));
+		enter("scan", buchen);
+		fokus("anzahl");
 	}
 
 	// ------------------------------------------------------------------ Paketversand DHL (Herzenboden)
@@ -948,7 +989,7 @@
 	function auftragBeenden(i) {
 		const rest = i.zutaten.filter((z) => z.auf_linie > 0);
 		app.innerHTML = kopf("Auftrag beenden", true) + auftragKopf(i) +
-			(rest.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Rest auf der Linie wird als Linienrest ausgebucht</div>${rest.map((z) => `<div class="zeile"><div>${esc(z.name)}</div><div class="rechts">${esc(mg(z.auf_linie, z.einheit))}</div></div>`).join("")}</div>` : `<p>Nichts mehr auf der Linie.</p>`) +
+			(rest.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Rest auf der Linie wird als Linienrest ausgebucht (Bruch, Biogas). Wannen vorher leer verpacken!</div>${rest.map((z) => `<div class="zeile"><div>${esc(z.name)}</div><div class="rechts">${esc(mg(z.auf_linie, z.einheit))}</div></div>`).join("")}</div>` : `<p>Nichts mehr auf der Linie.</p>`) +
 			`<div class="reihe"><button class="knopf" data-a="zurueck-pf">← Zurück</button><button class="knopf gruen" data-a="ja">Auftrag beenden</button></div>`;
 		aktionen(async (a) => {
 			if (a === "zurueck-pf") return paletteFertigStart();
@@ -998,8 +1039,8 @@
 					liste, (a) => schnellAnzahl(a), "Suchen: Kunde, Auftrag, Artikel …");
 			} else {
 				const liste = await api("zum_verpacken", { station: zustand.station });
-				suchListe("aufg", [["Ware", "name"], ["Kiste / Charge", (q) => q.behaelter ? "Kiste " + q.behaelter : q.charge],
-					["Backtag", "backtag"], ["MHD", (q) => q.mhd || ""], ["Menge", (q) => mg(q.menge, q.einheit), 1],
+				suchListe("aufg", [["Wo", (q) => q.linienlager ? "Linienlager" : "Lager"], ["Ware", "name"], ["Kiste / Charge", (q) => q.behaelter ? "Kiste " + q.behaelter : q.charge],
+					["Backtag", "backtag"], ["MHD", (q) => q.mhd || ""], ["Menge", (q) => q.menge_text || mg(q.menge, q.einheit), 1],
 					["Wird zu", (q) => q.ziele.map((z) => z.name).join(", ")]],
 					liste, (q) => zielWaehlen(q), "Suchen: Ware, Kiste, Charge …");
 			}
@@ -1027,8 +1068,25 @@
 		let einheiten = [];
 		try { einheiten = await api("einheiten", { artikel: ziel.artikel }); } catch (x) { /* unten */ }
 		if (!einheiten || !einheiten.length) einheiten = [{ einheit: "Kg", faktor: 1 }];
-		anzahlAbfragen(ziel.name, `aus ${esc(q.name)} · ${esc(q.behaelter ? "Kiste " + q.behaelter : q.charge)} · ${esc(mg(q.menge, q.einheit))} im Lager`,
-			einheiten, null, (n, e) => schnellBuchen(ziel.artikel, n * faktorVon(einheiten, e), { anzahl: n, einheit: e, bevorzugt: q.code }), () => zustand.zurueckZu());
+		anzahlAbfragen(ziel.name, `aus ${esc(q.name)} · ${esc(q.behaelter ? "Kiste " + q.behaelter : q.charge)} · ${esc(mg(q.menge, q.einheit))} im ${q.linienlager ? "Linienlager" : "Lager"}`,
+			einheiten, null, (n, e) => paletteFrage(ziel.name, (palette) => schnellBuchen(ziel.artikel, n * faktorVon(einheiten, e), { anzahl: n, einheit: e, bevorzugt: q.code, palette })),
+			() => zustand.zurueckZu());
+	}
+
+	// Kartons auf eine Palette (jede Palette hat eine NVE): scannen, neue Palette oder lose ins Lager
+	function paletteFrage(titel, weiter) {
+		app.innerHTML = kopf(titel + ": wohin?", true) + textFeld("scan", "Palette scannen") +
+			`<div class="reihe"><button class="knopf gruen" data-a="neu">Neue Palette<small>NVE-Etikett wird gedruckt</small></button>
+			<button class="knopf" data-a="ohne">Ohne Palette<small>Kartons lose ins Lager</small></button></div>`;
+		aktionen(async (a) => {
+			if (a === "ohne") return weiter(null);
+			if (a === "neu") {
+				try { return weiter((await api("palette_neu", { station: zustand.station, typ: "Lagerpalette" })).nve); } catch (e) { return meldung("rot", e.message); }
+			}
+			beiAllgemein(a);
+		});
+		enter("scan", (v) => v && weiter(v));
+		fokus("scan");
 	}
 
 	async function schnellBuchen(ziel, menge, o) {
@@ -1044,8 +1102,9 @@
 			}
 			const e = await api("herstellen", {
 				station: zustand.station, ziel, zeilen: v.zeilen.map((z) => ({ code: z.code, menge: z.menge })),
-				ausbringung: menge, anzahl: o.anzahl, einheit: o.einheit, kundenauftrag: au ? au.auftrag : null,
+				ausbringung: menge, anzahl: o.anzahl, einheit: o.einheit, kundenauftrag: au ? au.auftrag : null, ziel_behaelter: o.palette || null,
 			});
+			if (o.palette) etikettDrucken(o.palette);
 			ergebnis(e.name, [
 				e.los ? "Los: " + e.los : "Charge: " + e.charge,
 				"Menge: " + (e.anzahl ? stk(e.anzahl, ein(e.einheit)) : mg(e.menge, e.einheit)),
@@ -1360,8 +1419,60 @@
 	}
 
 	// ------------------------------------------------------------------ Rework / Bruch
+	// Backstube: Rework-Behälter von der Linie wiegen und buchen (F18). Erst der Auftrag, dann die Sorte
+	// (nur passende: Regel und Allergene), Behälter, Gewicht von der Waage. Etikett für den Behälter.
 	async function reworkStart() {
-		app.innerHTML = kopf(zustand.nur_fertigware ? "Packbruch" : "Rework / Bruch", true) + `<p>In welchen Rework-Behälter?</p><div id="liste">Lädt …</div>`;
+		app.innerHTML = kopf("Rework", true) + `<p><b>Von welchem Auftrag an der Linie?</b> – Zeile antippen</p><div id="liste">Lädt …</div>
+			<div class="reihe"><button class="knopf" data-a="ohne-linie">Ohne Linie<small>Teigrest aus Kübel oder Charge</small></button></div>`;
+		aktionen((a) => (a === "ohne-linie" ? reworkOhneLinie() : beiAllgemein(a)));
+		try {
+			const liste = await api("rework_linie_auftraege", { station: zustand.station });
+			if (liste.length === 1) return reworkLinie(liste[0]);
+			if (!liste.length) { document.getElementById("liste").innerHTML = `<span class="fehlt">Auf keiner Linie läuft gerade ein Auftrag.</span>`; return; }
+			suchListe("liste", [["Linie", "linie"], ["Auftrag", "auftrag"], ["Artikel", "name"], ["Sorten", (x) => x.sorten.map((y) => y.punkt || y.name).join(", ")]],
+				liste, (x) => reworkLinie(x), "Suchen …");
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	async function reworkLinie(a) {
+		if (!a.sorten.length) return meldung("rot", "Für " + a.name + " ist kein Rework zugelassen (keine Rework-Regel).");
+		let sorte = a.sorten.length === 1 ? a.sorten[0].artikel : null, behaelter = null, frei = [];
+		try { frei = await api("freie_rework_behaelter", { station: zustand.station }); } catch (e) { /* nur scannen */ }
+		app.innerHTML = kopf("Rework: " + a.name, true) + `<div class="panel">${esc(a.linie)} · Auftrag ${esc(a.auftrag)}</div>
+			<label>Sorte (Entnahmepunkt)</label><div class="einheiten" id="sorten">${a.sorten.map((x) =>
+				`<button type="button" data-a="sorte" data-s="${esc(x.artikel)}" class="${x.artikel === sorte ? "an" : ""}">${esc(x.punkt || x.name)}<small> ${esc(x.name)}</small></button>`).join("")}</div>` +
+			textFeld("scan", "Rework-Behälter scannen oder unten antippen") +
+			(frei.length ? `<div class="einheiten" id="beh">${frei.slice(0, 24).map((b) => `<button type="button" data-a="beh" data-c="${esc(b.code)}">${esc(b.code)}</button>`).join("")}</div>` : "") +
+			zahlFeld("kg", "Gewicht von der Waage (kg, ohne Behälter)") +
+			`<div class="reihe"><button class="knopf" data-a="zurueck-rw">← Aufträge</button><button class="knopf gruen" data-a="buchen">Buchen und Etikett drucken</button></div>`;
+		aktionen(async (x, d) => {
+			if (x === "zurueck-rw") return reworkStart();
+			if (x === "sorte") { sorte = d.s; app.querySelectorAll("#sorten button").forEach((b) => b.classList.toggle("an", b.dataset.s === sorte)); return; }
+			if (x === "beh") { behaelter = d.c; document.getElementById("scan").value = d.c; app.querySelectorAll("#beh button").forEach((b) => b.classList.toggle("an", b.dataset.c === d.c)); return fokus("kg"); }
+			if (x !== "buchen") return beiAllgemein(x);
+			if (!sorte) return meldung("rot", "Bitte die Sorte wählen.");
+			const knopf = app.querySelector('[data-a="buchen"]');
+			knopf.disabled = true;
+			try {
+				const e = await api("rework_linie", { station: zustand.station, auftrag: a.auftrag, rework_artikel: sorte,
+					kg: zahl(document.getElementById("kg").value), behaelter: document.getElementById("scan").value.trim() || behaelter });
+				window.open("/gebinde_etikett?druck=1&codes=" + encodeURIComponent(e.behaelter), "_blank");
+				ergebnis(e.name, ["Behälter: " + e.behaelter, "Menge: " + kg(e.menge), e.punkt ? "Entnahmepunkt: " + e.punkt : "", "Charge: " + e.charge,
+					e.mhd ? "Verwendbar bis: " + e.mhd : "", "Von Auftrag " + e.auftrag], [],
+					`<button class="knopf" data-a="etikett">Etikett nochmal</button><button class="knopf gruen" data-a="weiter">Nächster Behälter</button>`)((b) => {
+					if (b === "etikett") return window.open("/gebinde_etikett?druck=1&codes=" + encodeURIComponent(e.behaelter), "_blank");
+					if (b === "weiter") return reworkLinie(a);
+					beiAllgemein(b);
+				});
+			} catch (err) { knopf.disabled = false; meldung("rot", err.message); }
+		});
+		enter("scan", (v) => { behaelter = v; fokus("kg"); });
+		enter("kg", () => app.querySelector('[data-a="buchen"]').click());
+		fokus(frei.length ? "kg" : "scan");
+	}
+
+	async function reworkOhneLinie() {
+		app.innerHTML = kopf("Rework ohne Linie", true) + `<p>In welchen Rework-Behälter?</p><div id="liste">Lädt …</div>`;
 		aktionen(beiAllgemein);
 		try {
 			const liste = await api("rework_artikel");

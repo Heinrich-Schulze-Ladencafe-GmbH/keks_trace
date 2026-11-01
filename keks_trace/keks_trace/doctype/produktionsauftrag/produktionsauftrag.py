@@ -9,9 +9,14 @@ FEST_AB_START = ("linie", "artikel", "menge", "einheit", "kundenauftrag")
 class Produktionsauftrag(Document):
 	def validate(self):
 		from keks_trace import palette
+		from keks_trace.utils import versandfaehig
 
-		if frappe.get_cached_value("Item", self.artikel, "kt_chargen_stufe") != "Fertigware":
-			frappe.throw(_("Ein Produktionsauftrag ist für Fertigware. {0} ist keine.").format(self.artikel))
+		if not versandfaehig(self.artikel):  # Fertigware oder lose Ware im Karton (z. B. Herzen-Rohlinge)
+			frappe.throw(
+				_(
+					"Ein Produktionsauftrag ist für Fertigware oder lose Ware im Karton. {0} ist keins von beiden."
+				).format(self.artikel)
+			)
 		if flt(self.menge) <= 0:
 			frappe.throw(_("Bitte eine Menge größer 0 angeben."))
 		self.menge_kg = flt(flt(self.menge) * palette.faktor(self.artikel, self.einheit), 3)

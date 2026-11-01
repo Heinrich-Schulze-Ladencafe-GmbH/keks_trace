@@ -1,0 +1,137 @@
+"""Flussschema F1 bis F20: die neuen Flüsse einzeln durchgespielt (lose Ware im Karton, Linienlager, Rework).
+
+Siehe Artifact „Keks Flussschema“. Andere Flüsse prüfen test_terminal, test_linie und test_herzen.
+"""
+
+import frappe
+from frappe.tests import IntegrationTestCase
+from frappe.utils import add_days, nowdate
+
+from keks_trace import anfrage, demo, demo_linie, linienbuchung, terminal
+from keks_trace import palette as paletten
+from keks_trace.linienbuchung import LinienFehler
+
+VPC = "Verpackungs-PC"
+
+
+def _hash():
+	return frappe.generate_hash(length=5).upper()
+
+
+class TestFluesse(IntegrationTestCase):
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.ctx = demo_linie.stammdaten()
+		demo_linie.packmittel(cls.ctx)
+		cls.linie = frappe.get_doc("Linie", demo_linie.LINIE)
+		cls.kunde = demo_linie.GROSSKUNDEN[0][0]
+
+	def _auftrag(self, kg_teig=200):
+		"""Laufender Auftrag Honig Lebkuchen: Kübel 5888 am Kneter auf die Linie (F4), Verpackungs-PC dran."""
+		kuebel = demo.neuer_traeger(f"TF-{_hash()}", "Teigbehälter")
+		teig = demo.neue_charge("5888", f"T5888-F-{kuebel}", add_days(nowdate(), -1))
+		demo.buchen(
+			self.ctx,
+			"Material Receipt",
+			add_days(nowdate(), -1),
+			"04:00:00",
+			ausgaenge=[("5888", teig, kg_teig, kuebel)],
+		)
+		pa = frappe.get_doc(
+			{"doctype": "Produktionsauftrag", "linie": demo_linie.LINIE, "datum": nowdate(), "artikel": "17846",
+			 "menge": 50, "einheit": "Karton", "status": "Freigegeben"}
+		).insert()  # fmt: skip
+		linienbuchung.waehlen("Kneter", pa.name)
+		linienbuchung.zufuehren("Kneter", kuebel)
+		linienbuchung.waehlen(VPC, pa.name)
+		return pa, teig
+
+	def _auf_linie(self, pa):
+		return sum(z["menge"] for z in linienbuchung.bestand(pa.name))
+
+	def test_f07_lose_ware_im_karton_auf_palette_und_versand(self):
+		"""F7: lose Ware im Karton (kg fest je Artikel) auf Palette ins Lager; F17: über den Versand zum Kunden."""
+		pa, _teig = self._auftrag()
+		self.assertEqual(linienbuchung.info(pa.name)["lose_einheit"], "Karton")
+		nve = terminal.palette_neu(VPC)["nve"]
+		e = terminal.linie_lose(VPC, 5, None, "lager", nve)
+		self.assertEqual((e["einheit"], e["menge"], e["lager"]), ("Karton", 30, self.linie.fertiglager))
+		self.assertEqual(paletten.inhalt(nve)[0]["anzahl"], 5)
+		ls = terminal.lieferung("Versand", self.kunde, [{"palette": nve, "ganz": 1}])
+		zeilen = frappe.get_all(
+			"Delivery Note Item", {"parent": ls["lieferschein"]}, ["item_code", "qty", "batch_no"]
+		)
+		self.assertEqual([(z.item_code, z.batch_no) for z in zeilen], [("5888-LOSE", e["charge"])])
+
+	def test_f08_f09_linienlager_und_zurueck_in_die_verpackung(self):
+		"""F8: Kartons ins Linienlager (Wannen werden nicht gebucht); F9: zuerst aus dem Linienlager verpacken."""
+		pa, _teig = self._auftrag()
+		with self.assertRaisesRegex(LinienFehler, "keine Palette"):
+			terminal.linie_lose(VPC, 1, None, "linienlager", terminal.palette_neu(VPC)["nve"])
+		e = terminal.linie_lose(VPC, 3, None, "linienlager")
+		self.assertEqual((e["lager"], e["menge"]), (self.linie.linienlager, 18))
+		self.assertIn(e["charge"], {z["charge"] for z in linienbuchung.info(pa.name)["im_linienlager"]})
+		liste = [q for q in terminal.zum_verpacken(VPC) if q["lose"] == "5888-LOSE"]
+		self.assertTrue(liste[0]["linienlager"], "Linienlager steht vorne")
+		self.assertIn(e["charge"], {q["charge"] for q in liste if q["linienlager"]})
+		v = terminal.vorschlag(VPC, "17846", 12, e["charge"])
+		self.assertFalse(v["hinweise"])
+		self.assertEqual(v["zeilen"][0]["lager"], self.linie.linienlager)
+		terminal.herstellen(
+			VPC,
+			"17846",
+			[{"code": z["code"], "menge": z["menge"]} for z in v["zeilen"]],
+			12,
+			None,
+			3,
+			"Karton",
+		)
+		self.assertAlmostEqual(terminal.charge_lager(e["charge"]).get(self.linie.linienlager, 0), 6, places=3)
+
+	def test_f18_f19_rework_von_der_backstube_zurueck_am_kneter(self):
+		"""F18: Backstube bucht den gewogenen Behälter von der Linie (Filter Sorte, Teig der Linie wird Rework);
+		F19: am Kneter zurück, höchstens bis zum Anteil laut Regel, und es geht in die Ware ein."""
+		pa, teig = self._auftrag()
+		sorten = {s["artikel"]: s["punkt"] for s in linienbuchung.rework_sorten(pa.name)}
+		self.assertEqual(sorten.get("RW-HONIG-OFEN"), "Nach dem Ofen")
+		self.assertIn("RW-HONIG", sorten)
+		rb = demo.neuer_traeger(f"RBF-{_hash()}", "Rework-Behälter")
+		with self.assertRaisesRegex(LinienFehler, "kein Rework-Behälter"):
+			terminal.rework_linie(
+				"Backstube", pa.name, "RW-HONIG", 6, demo.neuer_traeger(f"TX-{_hash()}", "Teigbehälter")
+			)
+		vorher = self._auf_linie(pa)
+		r = terminal.rework_linie("Backstube", pa.name, "RW-HONIG-OFEN", 6, rb)
+		self.assertAlmostEqual(vorher - self._auf_linie(pa), 6, places=3)  # zählt nicht als Linienrest
+		quellen = frappe.get_all(
+			"Stock Entry Detail", {"parent": r["buchung"], "s_warehouse": ["is", "set"]}, pluck="batch_no"
+		)
+		self.assertEqual(quellen, [teig])
+		self.assertEqual(frappe.db.get_value("Produkttraeger", rb, "charge"), r["charge"])
+		# F19: zu viel Rework wird abgewiesen
+		rb2 = demo.neuer_traeger(f"RBF-{_hash()}", "Rework-Behälter")
+		gross = terminal.rework_linie("Backstube", pa.name, "RW-HONIG-OFEN", 40, rb2)
+		linienbuchung.zufuehren("Kneter", rb)
+		with self.assertRaisesRegex(LinienFehler, "Zu viel Rework"):
+			linienbuchung.zufuehren("Kneter", rb2)
+		self.assertTrue(gross["charge"])
+		# Alles verpacken: das Rework geht mit dem Teig in die Ware ein (Rückverfolgung)
+		rest = self._auf_linie(pa)
+		kartons = int(rest / linienbuchung.linienrezept("17846")["5888"] / 4)
+		k = linienbuchung.palette_fertig(VPC, kartons, "Karton", terminal.palette_neu(VPC)["nve"])
+		self.assertIn(r["charge"], {v["charge"] for v in k["verbraucht"]})
+		self.assertLess(self._auf_linie(pa), 4.5)
+
+	def test_doppelbuchung_wird_verhindert(self):
+		"""Gleiche Anfrage zweimal (Antwort ging verloren, nochmal getippt): nur eine Buchung."""
+		alt = anfrage._schluessel
+		schluessel = f"kt_anfrage:test:{_hash()}"
+		anfrage._schluessel = lambda methode: schluessel
+		try:
+			erste = terminal.palette_neu(VPC)["nve"]
+			zweite = terminal.palette_neu(VPC)["nve"]
+		finally:
+			anfrage._schluessel = alt
+		self.assertEqual(erste, zweite)
+		self.assertNotEqual(terminal.palette_neu(VPC)["nve"], erste)  # ohne Anfrage-ID normal

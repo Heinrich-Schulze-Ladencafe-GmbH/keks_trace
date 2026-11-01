@@ -147,7 +147,7 @@ class TestTerminal(IntegrationTestCase):
 		demo.buchen(
 			self.ctx, "Material Receipt", nowdate(), "06:00:00", ausgaenge=[("KT-FW-KAKAO-NOUGAT", fw, 30)]
 		)
-		with self.assertRaisesRegex(TerminalFehler, "keine Fertigware"):
+		with self.assertRaisesRegex(TerminalFehler, "weder Fertigware"):
 			terminal.pruefe_lieferzeile("Versand", self.nuss, 1)
 		e = terminal.lieferung("Versand", self.ctx.kunde, [{"code": fw, "menge": 12}])
 		self.assertEqual(frappe.db.get_value("Delivery Note", e["lieferschein"], "kt_station"), "Versand")
@@ -452,7 +452,7 @@ class TestTerminal(IntegrationTestCase):
 				"company": self.ctx.company,
 			}
 		).insert()
-		self.assertEqual((s.f_herstellen, s.f_rework, s.f_lieferung), (1, 1, 0))
+		self.assertEqual((s.f_herstellen, s.f_rework, s.f_lieferung), (1, 0, 0))  # Rework nur Backstube
 		self.assertEqual(s.stufen_liste(), ["Halbfabrikat", "Ware lose"])
 		with self.assertRaises(frappe.ValidationError):
 			s.stufen = "Quatsch"

@@ -277,9 +277,11 @@ class TestLinie(IntegrationTestCase):
 		nve = terminal.palette_neu("Verpackungs-PC")["nve"]
 		k = terminal.linie_palette("Verpackungs-PC", 5, "Karton", nve)
 		self.assertEqual(k["menge"], 20)
-		kiste = demo.neuer_traeger(f"KLV-{self.h}", "Kiste lose Ware")
-		lose = terminal.linie_lose("Verpackungs-PC", 30, kiste)
-		self.assertEqual(frappe.db.get_value("Produkttraeger", kiste, "charge"), lose["charge"])
+		# lose Ware im Karton (6 kg je Karton fest am Artikel) auf eine eigene Palette ins Lager (F7)
+		nve_lose = terminal.palette_neu("Verpackungs-PC")["nve"]
+		lose = terminal.linie_lose("Verpackungs-PC", 5, "Karton", "lager", nve_lose)
+		self.assertEqual((lose["menge"], lose["palette"]), (30, nve_lose))
+		self.assertEqual(paletten_modul.inhalt(nve_lose)[0]["charge"], lose["charge"])
 		reg = {r["charge"] for r in terminal.registrierungen("Verpackungs-PC", produktionsauftrag=pa.name)}
 		self.assertEqual(reg, {k["charge"], lose["charge"]})  # Teig vom Kneter zählt nicht als verpackt
 		self.assertIn(nve, {p["nve"] for p in terminal.offene_paletten("Paletten-Terminal")})

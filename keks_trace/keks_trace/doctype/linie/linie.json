@@ -16,6 +16,7 @@
   "section_lager",
   "lagerort",
   "fertiglager",
+  "linienlager",
   "rest_buchung"
  ],
  "fields": [
@@ -95,6 +96,13 @@
    "reqd": 1
   },
   {
+   "fieldname": "linienlager",
+   "fieldtype": "Link",
+   "label": "Linienlager",
+   "options": "Warehouse",
+   "description": "Zwischenlager an der Linie, wenn die Verpackung nicht nachkommt: Kartons mit loser Ware werden hierhin gebucht und später verpackt. Wannen werden nicht gebucht, sie müssen am selben Tag leer sein."
+  },
+  {
    "fieldname": "rest_buchung",
    "fieldtype": "Select",
    "label": "Rest bei Auftragsende",
@@ -104,7 +112,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-10-31 10:00:00.000000",
+ "modified": "2026-11-01 07:41:26.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Linie",

@@ -17,7 +17,7 @@ from frappe import _
 from frappe.model.naming import getseries
 from frappe.utils import cint, flt, formatdate, getdate, now_datetime
 
-from keks_trace.utils import artikel_stufe
+from keks_trace.utils import artikel_stufe, versandfaehig
 
 EPS = 1e-6
 # Nummernkreis für eingeschränkte Verwendung (GS1 „02“): taugt zum Testen, nie für Kunden.
@@ -340,8 +340,8 @@ def beladen(
 	artikel = frappe.db.get_value("Batch", charge, "item")
 	if not artikel:
 		_fehler(_("Charge {0} gibt es nicht.").format(charge))
-	if artikel_stufe(artikel) != "Fertigware":
-		_fehler(_("Auf Paletten kommt nur Fertigware, nicht {0}.").format(artikel))
+	if not versandfaehig(artikel):
+		_fehler(_("Auf Paletten kommen nur Fertigware und lose Ware im Karton, nicht {0}.").format(artikel))
 	anzahl = flt(anzahl)
 	if anzahl <= EPS:
 		_fehler(_("Bitte eine Anzahl größer 0 eingeben."))
@@ -467,7 +467,7 @@ def pruefe_lieferung(doc, method=None):
 				_fehler(_("Palette {0} ist {1}.").format(r.kt_palette, (status or "unbekannt").lower()))
 			anzahl, einheit = _gezaehlt(r)
 			von_palette[(r.kt_palette, r.batch_no, einheit)] += anzahl
-		elif artikel_stufe(r.item_code) == "Fertigware":
+		elif versandfaehig(r.item_code):
 			lose_bedarf[r.batch_no] += menge
 
 	for (palette, charge, einheit), anzahl in von_palette.items():

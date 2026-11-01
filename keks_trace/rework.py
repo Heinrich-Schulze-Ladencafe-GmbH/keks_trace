@@ -37,6 +37,11 @@ def pruefe(doc):
 		return
 
 	rework_zeilen = [r for r in eingaenge if artikel_stufe(r.item_code) == "Rework"]
+	if doc.get("kt_produktionsauftrag") and doc.purpose == "Manufacture":
+		# Rework, das am Kneter auf die Linie kam, ist dort schon geprüft (Regel, Allergene, Anteil) und
+		# geht mit dem Teig in die Ware ein
+		linie = set(frappe.get_all("Linie", pluck="lagerort"))
+		rework_zeilen = [r for r in rework_zeilen if r.s_warehouse not in linie]
 	if not rework_zeilen:
 		return
 
