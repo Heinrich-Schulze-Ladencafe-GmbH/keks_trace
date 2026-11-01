@@ -1,0 +1,351 @@
+<title>Keks Soll-Prozess</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: Kopf mit Legende, Flussbild (breit, scrollt seitlich auf dem Handy), dann Tabelle, Gedanken, Offenes */
+:root {
+	--bg: #f4f6f5;
+	--papier: #ffffff;
+	--tinte: #1c2422;
+	--leise: #5b6763;
+	--linie: #c9d1ce;
+	--honig: #a8650a;         /* Akzent: Lebkuchen/Honig */
+	--neu: #0d7468;           /* heute gebaut */
+	--neu-hell: #dff1ee;
+	--offen: #b45309;         /* Entscheidung / noch offen */
+	--offen-hell: #fbeedb;
+	--steht: #4b5b67;         /* stand schon */
+	--steht-hell: #e7ecef;
+	--qs: #3f4f8f;
+	--qs-hell: #e6e9f6;
+	--f-titel: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+	--f-text: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+	--f-code: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #121816; --papier: #1a2220; --tinte: #e4ebe8; --leise: #9aa8a3; --linie: #34413d;
+		--honig: #e0a24a; --neu: #4cc7b6; --neu-hell: #15302c; --offen: #f0a650; --offen-hell: #34260f;
+		--steht: #a5b4bf; --steht-hell: #232c31; --qs: #9fb0f0; --qs-hell: #1f2440; color-scheme: dark;
+	}
+}
+:root[data-theme="dark"] {
+	--bg: #121816; --papier: #1a2220; --tinte: #e4ebe8; --leise: #9aa8a3; --linie: #34413d;
+	--honig: #e0a24a; --neu: #4cc7b6; --neu-hell: #15302c; --offen: #f0a650; --offen-hell: #34260f;
+	--steht: #a5b4bf; --steht-hell: #232c31; --qs: #9fb0f0; --qs-hell: #1f2440; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--tinte); font-family: var(--f-text); font-size: 16px; line-height: 1.5; }
+.seite { max-width: 1280px; margin: 0 auto; padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 36px; }
+h1, h2 { font-family: var(--f-titel); font-weight: 700; letter-spacing: .01em; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 4vw, 44px); line-height: 1.05; }
+h2 { font-size: 26px; }
+.unter { color: var(--leise); max-width: 68ch; margin: 8px 0 0; }
+.legende { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 14px; font-size: 14px; }
+.legende span { display: inline-flex; align-items: center; gap: 8px; }
+.punkt { width: 14px; height: 14px; border-radius: 3px; border: 2px solid; }
+.punkt.steht { border-color: var(--steht); background: var(--steht-hell); }
+.punkt.neu { border-color: var(--neu); background: var(--neu-hell); }
+.punkt.offen { border-color: var(--offen); background: var(--offen-hell); }
+.punkt.qs { border-color: var(--qs); background: var(--qs-hell); }
+.bild { background: var(--papier); border: 1px solid var(--linie); border-radius: 10px; overflow-x: auto; }
+.bild svg { display: block; min-width: 1060px; width: 100%; height: auto; }
+.bild p { margin: 0; padding: 10px 16px 14px; font-size: 13px; color: var(--leise); }
+
+/* SVG */
+.kasten { fill: var(--papier); stroke: var(--steht); stroke-width: 1.5; }
+.tor { stroke-width: 1.5; }
+.tor.neu, .kn.neu { fill: var(--neu-hell); stroke: var(--neu); }
+.tor.steht, .kn.steht { fill: var(--steht-hell); stroke: var(--steht); }
+.tafel { stroke-width: 1.2; stroke-dasharray: 5 4; }
+.tafel.offen { fill: var(--offen-hell); stroke: var(--offen); }
+.tafel.neu { fill: var(--neu-hell); stroke: var(--neu); }
+.tafel.steht { fill: var(--steht-hell); stroke: var(--steht); }
+.qsband { fill: var(--qs-hell); stroke: var(--qs); stroke-width: 1.2; }
+.chip { fill: var(--papier); stroke-width: 1.2; }
+.chip.steht { stroke: var(--steht); }
+.chip.offen { stroke: var(--offen); }
+.chip.neu { stroke: var(--neu); }
+.pfeil { stroke: var(--tinte); stroke-width: 1.6; fill: none; }
+.bogen { stroke: var(--honig); stroke-width: 1.6; fill: none; }
+.strich { stroke: var(--leise); stroke-width: 1.2; fill: none; }
+.zum-qs { stroke: var(--qs); stroke-width: 1.2; stroke-dasharray: 4 3; fill: none; }
+.t-titel { font-family: var(--f-titel); font-weight: 700; font-size: 16px; fill: var(--tinte); }
+.t { font-family: var(--f-text); font-size: 12px; fill: var(--tinte); }
+.t-leise { font-family: var(--f-text); font-size: 11.5px; fill: var(--leise); }
+.t-honig { font-family: var(--f-text); font-size: 12px; fill: var(--honig); font-weight: 700; }
+.t-qs { font-family: var(--f-titel); font-weight: 700; font-size: 18px; fill: var(--qs); }
+.nr { font-family: var(--f-titel); font-weight: 700; font-size: 13px; fill: var(--honig); }
+.spitze { fill: var(--tinte); }
+.spitze-honig { fill: var(--honig); }
+.spitze-leise { fill: var(--leise); }
+
+/* Tabelle */
+.tab { overflow-x: auto; background: var(--papier); border: 1px solid var(--linie); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--linie); }
+th { font-family: var(--f-titel); font-weight: 600; font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: var(--leise); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-family: var(--f-titel); font-weight: 700; font-size: 18px; white-space: nowrap; }
+td ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.mk { display: inline-block; font-size: 12px; font-weight: 700; padding: 0 6px; border-radius: 4px; margin-left: 4px; vertical-align: 1px; }
+.mk.neu { color: var(--neu); background: var(--neu-hell); }
+.mk.offen { color: var(--offen); background: var(--offen-hell); }
+code { font-family: var(--f-code); font-size: .88em; }
+
+/* Gedanken */
+.gedanken { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.gedanke { background: var(--papier); border: 1px solid var(--linie); border-radius: 10px; padding: 16px 18px; min-width: 0; }
+.gedanke h3 { font-family: var(--f-titel); font-size: 20px; margin: 0 0 6px; text-wrap: balance; }
+.gedanke p { margin: 0; color: var(--tinte); }
+.stufen { display: grid; gap: 8px; margin-top: 10px; font-size: 14px; }
+.stufen div { display: grid; grid-template-columns: 92px 1fr; gap: 10px; }
+.stufen b { font-family: var(--f-titel); font-size: 15px; }
+
+/* Offen */
+.offenliste { display: grid; gap: 10px; counter-reset: o; padding: 0; margin: 0; list-style: none; }
+.offenliste li { background: var(--papier); border: 1px solid var(--linie); border-left: 4px solid var(--offen); border-radius: 8px; padding: 12px 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; }
+.offenliste .wer { font-size: 13px; color: var(--offen); font-weight: 700; white-space: nowrap; }
+.offenliste small { grid-column: 1 / -1; color: var(--leise); font-size: 14px; }
+@media (max-width: 560px) { .offenliste li { grid-template-columns: 1fr; } .stufen div { grid-template-columns: 1fr; } }
+</style>
+
+<main class="seite">
+	<header>
+		<h1>Soll-Prozess vom Wareneingang bis zur Rechnung</h1>
+		<p class="unter">Wie die Ware fließt, wo gescannt wird, wo das System eine Schranke setzt und was als Nachweis bleibt. Grundlage ist das Flussschema F1–F20; hier geht es um die Prüfstellen, nicht um jeden Fluss einzeln.</p>
+		<div class="legende" aria-label="Legende">
+			<span><i class="punkt steht"></i>stand schon</span>
+			<span><i class="punkt neu"></i>heute gebaut</span>
+			<span><i class="punkt offen"></i>offen / Entscheidung</span>
+			<span><i class="punkt qs"></i>QS</span>
+		</div>
+	</header>
+
+	<section class="bild" aria-label="Flussbild">
+		<svg viewBox="0 0 1240 570" role="img" aria-labelledby="bild-titel">
+			<title id="bild-titel">Fluss: Wareneingang, Rohstofflager, Backstube, Linie, Verpackung, Palette und Versand, mit Prüfstellen, QS und Behälter-Kreislauf</title>
+			<defs>
+				<marker id="sp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="spitze"/></marker>
+				<marker id="sp-h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="spitze-honig"/></marker>
+				<marker id="sp-l" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="spitze-leise"/></marker>
+			</defs>
+
+			<!-- Bögen oben: Silo direkt in die Backstube, Rework von der Linie zurück -->
+			<path class="bogen" d="M125 110 C 125 50, 495 50, 495 110" marker-end="url(#sp-h)"/>
+			<text class="t-honig" x="310" y="54" text-anchor="middle">Silo / Tank: FIFO automatisch</text>
+			<path class="bogen" d="M740 110 C 740 50, 540 50, 540 110" marker-end="url(#sp-h)"/>
+			<text class="t-honig" x="640" y="54" text-anchor="middle">Rework: gewogen, Regel, Anteil</text>
+
+			<!-- Stationen -->
+			<g>
+				<rect class="kasten" x="20" y="110" width="170" height="96" rx="8"/>
+				<text class="nr" x="32" y="130">1</text><text class="t-titel" x="46" y="131">Wareneingang</text>
+				<text class="t" x="32" y="153">Lieferanten-Etikett</text>
+				<text class="t" x="32" y="169">scannen (GS1-128)</text>
+				<text class="t" x="32" y="185">Charge = Lieferanten-Ch.</text>
+			</g>
+			<g>
+				<rect class="kasten" x="225" y="110" width="170" height="96" rx="8"/>
+				<text class="nr" x="237" y="130">2</text><text class="t-titel" x="251" y="131">Rohstofflager</text>
+				<text class="t" x="237" y="153">Sack, Karton, Gebinde</text>
+				<text class="t" x="237" y="169">Bericht MHD Rohstoffe:</text>
+				<text class="t" x="237" y="185">was läuft bald ab?</text>
+			</g>
+			<g>
+				<rect class="kasten" x="430" y="110" width="170" height="96" rx="8"/>
+				<text class="nr" x="442" y="130">3</text><text class="t-titel" x="456" y="131">Backstube</text>
+				<text class="t" x="442" y="153">Sollmenge (½ Masse)</text>
+				<text class="t" x="442" y="169">Zutaten scannen</text>
+				<text class="t" x="442" y="185">→ Kübel mit festem Code</text>
+			</g>
+			<g>
+				<rect class="kasten" x="635" y="110" width="170" height="96" rx="8"/>
+				<text class="nr" x="647" y="130">4</text><text class="t-titel" x="661" y="131">Linie</text>
+				<text class="t" x="647" y="153">Kübel → Kneter → Ofen</text>
+				<text class="t" x="647" y="169">Veredeln (Glasur …)</text>
+				<text class="t" x="647" y="185">Bruch: aus der Bilanz</text>
+			</g>
+			<g>
+				<rect class="kasten" x="840" y="110" width="170" height="96" rx="8"/>
+				<text class="nr" x="852" y="130">5</text><text class="t-titel" x="866" y="131">Verpackung</text>
+				<text class="t" x="852" y="153">Terminal schlägt vor</text>
+				<text class="t" x="852" y="169">Los JWWT + MHD</text>
+				<text class="t" x="852" y="185">Linienlager als Puffer</text>
+			</g>
+			<g>
+				<rect class="kasten" x="1045" y="110" width="170" height="96" rx="8"/>
+				<text class="nr" x="1057" y="130">6</text><text class="t-titel" x="1071" y="131">Palette, Versand</text>
+				<text class="t" x="1057" y="153">NVE, GS1-gerecht</text>
+				<text class="t" x="1057" y="169">Lieferschein</text>
+				<text class="t" x="1057" y="185">Etikett mit Inhalt</text>
+			</g>
+
+			<!-- Hauptfluss -->
+			<path class="pfeil" d="M190 158 H 223" marker-end="url(#sp)"/>
+			<path class="pfeil" d="M395 158 H 428" marker-end="url(#sp)"/>
+			<path class="pfeil" d="M600 158 H 633" marker-end="url(#sp)"/>
+			<path class="pfeil" d="M805 158 H 838" marker-end="url(#sp)"/>
+			<path class="pfeil" d="M1010 158 H 1043" marker-end="url(#sp)"/>
+
+			<!-- Prüfstellen (Schranken) -->
+			<g>
+				<path class="strich" d="M105 206 V 250"/><path class="strich" d="M310 206 V 250"/><path class="strich" d="M515 206 V 250"/>
+				<path class="strich" d="M720 206 V 250"/><path class="strich" d="M925 206 V 250"/><path class="strich" d="M1130 206 V 250"/>
+				<rect class="tor neu" x="20" y="250" width="170" height="56" rx="28"/>
+				<text class="t" x="105" y="274" text-anchor="middle">Charge im Strichcode?</text>
+				<text class="t-leise" x="105" y="291" text-anchor="middle">nein → Gebinde-Etikett</text>
+				<rect class="tor neu" x="225" y="250" width="170" height="56" rx="28"/>
+				<text class="t" x="310" y="274" text-anchor="middle">Älteres MHD im Lager?</text>
+				<text class="t-leise" x="310" y="291" text-anchor="middle">ja → Grund nötig</text>
+				<rect class="tor neu" x="430" y="250" width="170" height="56" rx="28"/>
+				<text class="t" x="515" y="274" text-anchor="middle">Einwaage in Toleranz?</text>
+				<text class="t-leise" x="515" y="291" text-anchor="middle">nein → Grund nötig</text>
+				<rect class="tor steht" x="635" y="250" width="170" height="56" rx="28"/>
+				<text class="t" x="720" y="274" text-anchor="middle">Rework: Regel, Anteil?</text>
+				<text class="t-leise" x="720" y="291" text-anchor="middle">nein → gesperrt</text>
+				<rect class="tor steht" x="840" y="250" width="170" height="56" rx="28"/>
+				<text class="t" x="925" y="274" text-anchor="middle">Metalldetektor fällig?</text>
+				<text class="t-leise" x="925" y="291" text-anchor="middle">ja → Station sperrt</text>
+				<rect class="tor steht" x="1045" y="250" width="170" height="56" rx="28"/>
+				<text class="t" x="1130" y="274" text-anchor="middle">Charge gesperrt?</text>
+				<text class="t-leise" x="1130" y="291" text-anchor="middle">ja → nicht auslieferbar</text>
+			</g>
+
+			<!-- Gründe gehen an die QS -->
+			<path class="zum-qs" d="M310 306 V 332"/>
+			<path class="zum-qs" d="M515 306 V 332"/>
+			<text class="t-leise" x="412" y="324" text-anchor="middle">Grund, Station, Zeit</text>
+
+			<!-- QS-Band -->
+			<rect class="qsband" x="20" y="332" width="1195" height="78" rx="8"/>
+			<text class="t-qs" x="34" y="377">QS</text>
+			<g>
+				<rect class="chip steht" x="80" y="355" width="210" height="32" rx="16"/>
+				<text class="t" x="185" y="375" text-anchor="middle">Freigabe vor Verwendung</text>
+				<rect class="chip steht" x="308" y="355" width="210" height="32" rx="16"/>
+				<text class="t" x="413" y="375" text-anchor="middle">Sperren · Rückrufsperre</text>
+				<rect class="chip offen" x="536" y="355" width="210" height="32" rx="16"/>
+				<text class="t" x="641" y="375" text-anchor="middle">Tagesliste Abweichungen</text>
+				<rect class="chip steht" x="764" y="355" width="210" height="32" rx="16"/>
+				<text class="t" x="869" y="375" text-anchor="middle">Rückverfolgungstest · Bilanz</text>
+				<rect class="chip neu" x="992" y="355" width="210" height="32" rx="16"/>
+				<text class="t" x="1097" y="375" text-anchor="middle">Regeln als Einstellungen</text>
+			</g>
+
+			<!-- Unten: Lieferant, Behälter-Kreislauf, nach dem Versand -->
+			<g>
+				<rect class="tafel offen" x="20" y="440" width="375" height="112" rx="8"/>
+				<text class="t-titel" x="36" y="464">Vom Lieferanten</text>
+				<text class="t" x="36" y="486">Einkauf fordert GS1-128 mit (01) (10) (15)</text>
+				<text class="t" x="36" y="504">Scanner sendet FNC1 als ASCII 29</text>
+				<text class="t" x="36" y="522">Ohne GS1: Charge abtippen, Etikett je Gebinde</text>
+				<text class="t-leise" x="36" y="540">Unbekannter Code: im Büro am Artikel eintragen</text>
+			</g>
+			<g>
+				<rect class="tafel neu" x="430" y="440" width="375" height="112" rx="8"/>
+				<text class="t-titel" x="446" y="464">Behälter-Kreislauf (je Art einstellbar)</text>
+				<rect class="kn steht" x="448" y="478" width="64" height="28" rx="14"/><text class="t" x="480" y="496" text-anchor="middle">Frei</text>
+				<path class="pfeil" d="M512 492 H 530" marker-end="url(#sp)"/>
+				<rect class="kn steht" x="532" y="478" width="76" height="28" rx="14"/><text class="t" x="570" y="496" text-anchor="middle">Belegt</text>
+				<path class="pfeil" d="M608 492 H 624" marker-end="url(#sp)"/>
+				<rect class="kn steht" x="626" y="478" width="58" height="28" rx="14"/><text class="t" x="655" y="496" text-anchor="middle">Leer</text>
+				<path class="pfeil" d="M684 492 H 700" marker-end="url(#sp)"/>
+				<rect class="kn neu" x="702" y="478" width="88" height="28" rx="14"/><text class="t" x="746" y="496" text-anchor="middle">Reinigung</text>
+				<path class="strich" d="M746 506 V 524 H 480 V 508" marker-end="url(#sp-l)"/>
+				<text class="t-leise" x="613" y="542" text-anchor="middle">„gereinigt“ im Info-Scan, mit Zeit und Station</text>
+			</g>
+			<g>
+				<rect class="tafel steht" x="840" y="440" width="375" height="112" rx="8"/>
+				<text class="t-titel" x="856" y="464">Nach dem Versand</text>
+				<text class="t" x="856" y="486">Rechnung aus dem Lieferschein</text>
+				<text class="t" x="856" y="504">XRechnung / ZUGFeRD, geprüft nach EN 16931</text>
+				<text class="t" x="856" y="522">DATEV-Export für den Steuerberater</text>
+				<text class="t-leise" x="856" y="540">Im Testsystem durchgespielt, nicht in Betrieb</text>
+			</g>
+		</svg>
+		<p>Auf dem Handy seitlich wischen. Schwarze Pfeile: Warenfluss. Honigfarbene Bögen: Nebenwege. Gestrichelt nach unten: Gründe landen bei der QS.</p>
+	</section>
+
+	<section>
+		<h2>Schritt für Schritt</h2>
+		<div class="tab" style="margin-top:12px">
+			<table>
+				<thead><tr><th>Station</th><th>Mensch tut</th><th>System prüft</th><th>Bleibt als Nachweis</th></tr></thead>
+				<tbody>
+					<tr><td>1 Wareneingang</td>
+						<td><ul><li>Lieferanten-Etikett scannen <span class="mk neu">neu</span></li><li>vorbelegte Werte mit dem Etikett vergleichen, Anzahl Gebinde</li><li>Prüfwerte eingeben (Temperatur, Brix)</li></ul></td>
+						<td><ul><li>Charge plausibel, kein „Präsentkarton“ <span class="mk neu">neu</span></li><li>Etikett passt zum Artikel <span class="mk neu">neu</span></li><li>Bio-Zertifikat des Lieferanten</li><li>Prüfwert außerhalb → Annahme verweigert</li></ul></td>
+						<td><ul><li>Charge = Lieferanten-Charge</li><li>Freigabe-Artikel gesperrt bis QS</li><li>Prüfprotokoll</li></ul></td></tr>
+					<tr><td>2 Rohstofflager</td>
+						<td><ul><li>einlagern, älteres MHD nach vorn</li></ul></td>
+						<td><ul><li>Bericht MHD Rohstoffe: läuft ab, voraussichtlicher Rest <span class="mk neu">neu</span></li></ul></td>
+						<td><ul><li>Bestand je Charge und Lagerort</li></ul></td></tr>
+					<tr><td>3 Backstube</td>
+						<td><ul><li>Sollmenge eingeben, halbe Masse = halbe Sollmenge</li><li>Gebinde, Lieferanten-Etikett oder Silo scannen</li><li>bei Abweichung Grund wählen <span class="mk neu">neu</span></li><li>Ziel-Kübel scannen</li></ul></td>
+						<td><ul><li>Rezept, Sperre, Verfall, Allergene, Bio</li><li>älteres MHD im Lager → Grund <span class="mk neu">neu</span></li><li>Einwaage je Zutat ± Toleranz → Grund; Soll an den Kübel anpassen <span class="mk neu">neu</span></li><li>Rework: Regel, Anteil, Alter, Allergene</li><li>Kübel frei bzw. gereinigt <span class="mk neu">neu</span></li></ul></td>
+						<td><ul><li>Genealogie Eingang → Ausgang</li><li>FEFO- und Rezept-Abweichung an der Buchung <span class="mk neu">neu</span></li></ul></td></tr>
+					<tr><td>4 Linie</td>
+						<td><ul><li>Kübel einkippen (ältester zuerst)</li><li>Rework-Behälter wiegen (Backstube)</li></ul></td>
+						<td><ul><li>Hinweis, wenn ein älterer Kübel da ist</li><li>Rework-Anteil laut Regel</li></ul></td>
+						<td><ul><li>Verbrauch aus dem Linienrezept</li><li>Bruch ergibt sich aus der Bilanz</li></ul></td></tr>
+					<tr><td>5 Verpackung</td>
+						<td><ul><li>Anzahl Kartons, Ziel Lager oder Linienlager</li><li>Metalldetektor prüfen</li></ul></td>
+						<td><ul><li>Terminal nimmt die älteste Ware (FEFO automatisch)</li><li>Metalldetektor fällig → Station sperrt</li></ul></td>
+						<td><ul><li>Los JWWT, MHD aus Backtag und Komponenten</li><li>CCP-Protokoll</li></ul></td></tr>
+					<tr><td>6 Palette, Versand</td>
+						<td><ul><li>Kartons auf Palette scannen</li><li>Palette oder Los zum Kunden scannen</li></ul></td>
+						<td><ul><li>gesperrte Charge nicht auslieferbar</li><li>NVE mit Reserveziffer (GS1)</li></ul></td>
+						<td><ul><li>Lieferschein mit Charge</li><li>Paletten-Etikett (02) (37) (10) (15)</li><li>neu drucken bei Änderung <span class="mk offen">offen</span></li></ul></td></tr>
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<section>
+		<h2>Gedanken dazu</h2>
+		<div class="gedanken" style="margin-top:12px">
+			<div class="gedanke">
+				<h3>Papier hatte Nachweise, aber keine Schranken</h3>
+				<p>Auf den Back-Protokollen stehen Werte außerhalb der Toleranz und leere Korrekturfelder. Das Papier hat es festgehalten, aber niemand wurde aufgehalten. Der Fluss oben setzt deshalb an jeder Station eine Prüfstelle genau dort, wo erfasst wird.</p>
+			</div>
+			<div class="gedanke">
+				<h3>Drei Stärken von Schranken</h3>
+				<p>Nicht jede Abweichung ist gleich. Die Stärke richtet sich nach dem Risiko:</p>
+				<div class="stufen">
+					<div><b>hart</b><span>gesperrt, abgelaufen, Allergen, Rework ohne Regel, Metalldetektor. Kein Weg vorbei.</span></div>
+					<div><b>mit Grund</b><span>FEFO, Einwaage. Die Praxis braucht Ausnahmen; die Ausnahme wird sichtbar.</span></div>
+					<div><b>Hinweis</b><span>älterer Kübel. Lenkt, ohne zu bremsen.</span></div>
+				</div>
+			</div>
+			<div class="gedanke">
+				<h3>Ein Grund ohne Namen</h3>
+				<p>Die Terminals haben bewusst keinen Personenbezug. Ein Grund steht deshalb mit Station und Zeit an der Buchung, aber ohne Person. Über den Schichtplan lässt sich das meist zuordnen. Reicht das der QS, oder soll bei einem Grund ein Kürzel abgefragt werden (keine Anmeldung, nur zwei Buchstaben)?</p>
+			</div>
+			<div class="gedanke">
+				<h3>Ein Grund nützt nur, wenn ihn jemand liest</h3>
+				<p>Heute steht er an der Buchung. Es fehlt die Tagesliste für die QS: alle FEFO- und Einwaage-Abweichungen, Prüfwerte außerhalb, gesperrte Lose. Ohne sie werden Gründe zur Formsache, besonders „Sonstiges“.</p>
+			</div>
+			<div class="gedanke">
+				<h3>Der Wareneingang ist so gut wie die Lieferanten</h3>
+				<p>Die Fotos zeigen es: Butter und Palmfett nur mit EAN, Kokos ganz ohne Strichcode, Eigelb mit GS1. Der Scan erkennt fast immer den Artikel, die Charge aber nur bei GS1-128. Den Hebel hat der Einkauf, nicht das ERP.</p>
+			</div>
+			<div class="gedanke">
+				<h3>Zwei Lücken im Fluss</h3>
+				<p>FEFO greift beim Herstellen, aber noch nicht, wenn am Kneter ein Gebinde direkt an die Linie geht. Und eine geänderte Palette bekommt noch kein neues Etikett; die Zahl wird heute weiter von Hand korrigiert.</p>
+			</div>
+		</div>
+	</section>
+
+	<section>
+		<h2>Was entschieden werden muss</h2>
+		<ol class="offenliste" style="margin-top:12px">
+			<li><span>Toleranzen je Rezeptzeile festlegen (Standard jetzt 5 %, mindestens 10 g)</span><span class="wer">QS</span><small>Gewürze und Triebmittel eher enger, Wasser und Zucker weiter.</small></li>
+			<li><span>Welche Behälter nach dem Leeren zur Reinigung</span><span class="wer">QS, Hygiene</span><small>Teigkübel, Rework-Behälter, Kisten lose Ware. Standard ist aus, also wie bisher.</small></li>
+			<li><span>Kürzel bei Gründen, ja oder nein</span><span class="wer">QS, Malte</span><small>Ohne Kürzel: Station und Zeit. Mit Kürzel: zwei Buchstaben, keine Anmeldung.</small></li>
+			<li><span>Lieferanten um GS1-128 bitten</span><span class="wer">Einkauf</span><small>Mit (01) GTIN, (10) Charge, (15) MHD, bei Gewichtsware (310x).</small></li>
+			<li><span>Scanner auf FNC1 als ASCII 29 einstellen</span><span class="wer">IT</span><small>Sonst verschluckt eine Charge in der Mitte des Codes die folgenden Felder.</small></li>
+			<li><span>Druckersprache PM43 und PX6i, Inhalt eines FOBIS-QR-Codes</span><span class="wer">Malte</span><small>Für den Direktdruck und für die Übernahme des Bestands am Stichtag.</small></li>
+		</ol>
+	</section>
+</main>

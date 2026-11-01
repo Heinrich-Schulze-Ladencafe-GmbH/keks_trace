@@ -45,6 +45,9 @@ Alle Warenflüsse stehen im Flussschema (Bestände und nummerierte Flüsse, je m
 - **Doppelbuchungen:** Jede Buchung vom Terminal trägt eine Anfrage-ID (`anfrage.py`). Geht eine Antwort im
   WLAN verloren und es wird nochmal getippt, liefert der Server das erste Ergebnis statt doppelt zu buchen.
 
+
+Prüfstellen im Fluss (Scan, Schranke, Nachweis), QS und Behälter-Kreislauf: [docs/soll-prozess.html](docs/soll-prozess.html).
+
 ## Was die App kann
 
 - **Rework-Regeln (Rework-Matrix):** welches Rework in welchen Grundteig oder veredelten Teig,
