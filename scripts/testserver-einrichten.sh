@@ -313,6 +313,7 @@ if [ "$DEMO" -eq 1 ] && [ ! -f "$MARKE" ]; then
 	demo demo_herzen.durchlauf "{'groesse': '9', 'stueck': 100}"
 	demo demo_einkauf.anlegen
 	demo demo_erechnung.einrichten
+	demo demo_erechnung.datev        # DATEV-Testfirma mit SKR04-Kontonummern und Beispielbelegen
 	sudo -u "$BENCH_USER" touch "$MARKE"
 fi
 

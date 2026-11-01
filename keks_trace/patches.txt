@@ -6,3 +6,4 @@
 # Patches added in this section will be executed after doctypes are migrated
 keks_trace.patches.paletten_abgleich
 keks_trace.patches.einstellungen_neue_regeln
+keks_trace.patches.anfragetypen_test
