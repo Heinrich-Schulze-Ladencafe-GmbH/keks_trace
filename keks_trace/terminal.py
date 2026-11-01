@@ -1765,7 +1765,7 @@ KARTON_TARA_KG = 0.3  # Versandkarton je Paket, für den Plausibilitäts-Vorschl
 
 @frappe.whitelist()
 def paket_vorschlag(station: str, artikel: str, stueck: float, pakete: int = 1) -> dict:
-	"""Erwartetes Gewicht (Stückgewicht am Artikel × Stück + Karton) und was vom verpackten Bestand da ist."""
+	"""Erwartetes Gewicht (Stückgewicht am Artikel mal Stück + Karton) und was vom verpackten Bestand da ist."""
 	_station(station)
 	je, einheit = frappe.get_cached_value("Item", artikel, ["weight_per_unit", "weight_uom"])
 	faktor = 0.001 if (einheit or "").lower() in ("g", "gram", "gramm") else 1
