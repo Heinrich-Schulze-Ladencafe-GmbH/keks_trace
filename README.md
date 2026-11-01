@@ -401,6 +401,12 @@ Eingekauft wird nach Auftragslage und Börse, nicht nach Bestellvorschlag. ERPNe
 
 Demo: `bench --site keks.localhost execute keks_trace.demo_einkauf.anlegen` (50 t Zucker-Kontrakt, zwei Abrufe).
 
+## E-Rechnung und DATEV
+
+Mit den Apps `eu_einvoice` und `erpnext_datev` (ALYF, GPLv3): XRechnung und ZUGFeRD aus der Rechnung, Prüfung nach
+EN 16931, Eingangsrechnungen einlesen, DATEV-Export. Testlauf, Pflichtfelder und Stolpersteine:
+[docs/E-RECHNUNG.md](docs/E-RECHNUNG.md), Demo `keks_trace/demo_erechnung.py`.
+
 ## Lasttest (Datenflut)
 
 Wie schnell bleibt das System, wenn Jahre an Daten drin sind? Auf dem Demo-Server:
