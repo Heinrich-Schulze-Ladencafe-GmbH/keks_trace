@@ -549,7 +549,8 @@
 		if (kneter) m.push(["herstellen", "Kneten", "Grundteig-Kübel und Zutaten → Teig direkt in den Former"]);
 		else if (f.includes("herstellen")) m.push(["herstellen", fw ? "Verpacken" : "Herstellen", fw ? "Los mit MHD, nach Kundenauftrag, auf Palette" : (zustand.stufen || []).join(", ")]);
 		if (f.includes("wareneingang")) m.push(["wareneingang", "Wareneingang", "Anlieferung buchen, ins Silo oder als Gebinde"]);
-		if (f.includes("lieferung")) m.push(["lieferung", "Lieferung", "Paletten und Kartons an einen Kunden"]);
+		if (f.includes("lieferung") && zustand.typ === "Herzen Verpackung") m.push(["dhl", "Lieferung (DHL)", "Pakete packen, wiegen, Lieferschein, Sendungsnummer"]);
+		else if (f.includes("lieferung")) m.push(["lieferung", "Lieferung", "Paletten und Kartons an einen Kunden"]);
 		if (f.includes("umlagern")) m.push(["umlagern", "Umlagern", zustand.umlager_ziel ? "in den Lagerverkauf oder zurück ins Lager" : "in ein anderes Lager oder in den Lagerverkauf"]);
 		if (f.includes("paletten")) m.push(["paletten", "Paletten", "Neue Palette, Etikett, anbrechen, umpacken"]);
 		if (f.includes("rework")) m.push(["rework", fw ? "Packbruch" : "Rework / Bruch", "In einen Rework-Behälter"]);
@@ -660,6 +661,7 @@
 			if (a === "silo") return siloLeer();
 			if (a === "anbrechen") return anbrechenStart();
 			if (a === "vpc") return vpcStart();
+			if (a === "dhl") return dhlStart();
 			if (a === "vpc_lose") return schnellStart(true);
 			if (a === "einwickeln") return einwickelnStart();
 			if (a === "info") return infoScan();
@@ -814,6 +816,73 @@
 			} catch (err) { meldung("rot", err.message); }
 		});
 		fokus("kg");
+	}
+
+	// ------------------------------------------------------------------ Paketversand DHL (Herzenboden)
+	async function dhlStart() {
+		app.innerHTML = kopf("Lieferung (DHL)", true) + `<p><b>Offene Aufträge</b> – Zeile antippen</p><div id="dhl">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		try {
+			const liste = (await api("auftraege", { station: zustand.station })).map((z) => ({ ...z, offen: Math.max(rund(z.menge - z.geliefert), 0) })).filter((z) => z.offen > 0);
+			suchListe("dhl", [["Auftrag", "auftrag"], ["Kunde", "kundenname"], ["Artikel", "name"], ["Bestellt", (z) => zahlText(z.menge), 1],
+				["Geliefert", (z) => zahlText(z.geliefert), 1], ["Offen", (z) => zahlText(z.offen), 1], ["Termin", "termin"]],
+				liste, (z) => dhlErfassen(z), "Suchen: Kunde, Auftrag, Artikel …");
+		} catch (e) { meldung("rot", e.message); }
+	}
+
+	async function dhlErfassen(z) {
+		app.innerHTML = kopf("DHL: " + z.kundenname, true) +
+			`<div class="panel"><b>${esc(z.name)}</b> · Auftrag ${esc(z.auftrag)} · offen ${esc(zahlText(z.offen))} Stk<div id="dhl-info" class="fehlt" style="font-size:16px"></div></div>` +
+			`<div class="reihe" style="margin-top:0"><div>${zahlFeld("stk", "Stück im Paket bzw. in allen Paketen", z.offen)}</div><div>${zahlFeld("pakete", "Anzahl Pakete", 1)}</div></div>
+			<div id="gewichte"></div>` + textFeld("sendung", "Sendungsnummer (optional, vom DHL-Label scannen – geht auch später)") +
+			`<div class="reihe"><button class="knopf" data-a="zurueck-dhl">← Aufträge</button><button class="knopf gruen" data-a="buchen">Lieferschein buchen</button></div>`;
+		let erwartet = null;
+		const neu = async () => {
+			const stk = zahl(document.getElementById("stk").value), n = Math.max(1, Math.min(20, Math.round(zahl(document.getElementById("pakete").value) || 1)));
+			try {
+				const v = await api("paket_vorschlag", { station: zustand.station, artikel: z.artikel, stueck: stk, pakete: n });
+				erwartet = v.erwartet_kg;
+				document.getElementById("dhl-info").textContent = `Verpackt im Lager: ${zahlText(v.verfuegbar)} Stk` + (erwartet ? ` · erwartet etwa ${zahlText(erwartet)} kg gesamt` : " · Stückgewicht am Artikel fehlt");
+			} catch (e) { /* nur Info */ }
+			// von Hand eingetragene Gewichte bleiben, sonst Vorschlag aus dem Stückgewicht
+			const alt = [...document.querySelectorAll("#gewichte input")].map((f) => (f.dataset.hand ? f.value : ""));
+			document.getElementById("gewichte").innerHTML = Array.from({ length: n }, (_, i) =>
+				zahlFeld("gw" + i, `Paket ${i + 1}: Gewicht von der Paketwaage (kg)`, alt[i] || (erwartet ? rund(erwartet / n, 2) : ""))).join("");
+			document.querySelectorAll("#gewichte input").forEach((f, i) => { if (alt[i]) f.dataset.hand = "1"; f.addEventListener("input", () => { f.dataset.hand = "1"; }); });
+		};
+		document.getElementById("stk").addEventListener("change", neu);
+		document.getElementById("pakete").addEventListener("change", neu);
+		enter("pakete", neu);
+		await neu();
+		aktionen(async (a) => {
+			if (a === "zurueck-dhl") return dhlStart();
+			if (a !== "buchen") return beiAllgemein(a);
+			const gewichte = [...document.querySelectorAll("#gewichte input")].map((f) => zahl(f.value));
+			try {
+				const e = await api("paket_lieferung", { station: zustand.station, kundenauftrag: z.auftrag, artikel: z.artikel,
+					stueck: zahl(document.getElementById("stk").value), gewichte, sendungsnummer: document.getElementById("sendung").value.trim() || null });
+				ergebnis("Lieferung " + e.kunde, ["Lieferschein: " + e.lieferschein, "Pakete: " + e.pakete + ", gewogen " + zahlText(e.gewicht_kg) + " kg",
+					"Lose: " + e.lose.join(", "), e.adresse ? "Adresse: " + e.adresse.replace(/\n/g, ", ") : "Adresse fehlt im Kundenstamm"], e.hinweise,
+					`<button class="knopf" data-a="sendung">Sendungsnummer scannen</button><button class="knopf" data-a="weiter">Nächste Lieferung</button>`)((b) => {
+					if (b === "sendung") return sendungScannen(e.lieferschein);
+					if (b === "weiter") return dhlStart();
+					beiAllgemein(b);
+				});
+			} catch (err) { meldung("rot", err.message); }
+		});
+	}
+
+	function sendungScannen(lieferschein, liste) {
+		app.innerHTML = kopf("Sendungsnummer " + lieferschein, true) + textFeld("scan", "DHL-Label scannen (je Paket einmal)") +
+			(liste && liste.length ? `<div class="panel">${liste.map((x) => `<div class="zeile"><div>${esc(x)}</div></div>`).join("")}</div>` : "") +
+			`<div class="reihe"><button class="knopf gruen" data-a="fertig">Fertig</button></div>`;
+		aktionen((a) => (a === "fertig" ? dhlStart() : beiAllgemein(a)));
+		enter("scan", async (v) => {
+			if (!v) return;
+			try { const r = await api("sendungsnummer", { station: zustand.station, lieferschein, nummer: v }); sendungScannen(lieferschein, r.sendungsnummern); meldung("gruen", "Sendungsnummer gespeichert"); }
+			catch (e) { meldung("rot", e.message); }
+		});
+		fokus("scan");
 	}
 
 	// Paletten-Terminal: Palette eingewickelt → abschließen, NVE-Etikett, versandbereit

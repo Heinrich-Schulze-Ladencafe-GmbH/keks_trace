@@ -12,7 +12,10 @@ VORLAGEN = {
 	"Lager": ({"f_wareneingang", "f_paletten", "f_silo", "f_umlagern"}, []),
 	"Versand": ({"f_lieferung", "f_paletten"}, []),
 	"Herzen Garnieren": ({"f_herstellen", "f_rework", "f_silo"}, ["Halbfabrikat", "Ware lose"]),
-	"Herzen Verpackung": ({"f_herstellen", "f_paletten", "f_rework", "f_silo"}, ["Fertigware"]),
+	"Herzen Verpackung": (
+		{"f_herstellen", "f_paletten", "f_rework", "f_silo", "f_lieferung"},
+		["Fertigware"],
+	),
 	"Lagerverkauf": ({"f_umlagern"}, []),
 	"Former": ({"f_linie"}, []),
 	"Kneter": ({"f_herstellen", "f_linie"}, ["Teig veredelt"]),

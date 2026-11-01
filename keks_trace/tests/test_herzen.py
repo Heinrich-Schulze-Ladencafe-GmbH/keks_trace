@@ -148,3 +148,28 @@ class TestHerzen(IntegrationTestCase):
 		)
 		self.assertEqual(b["erledigt"], a["erledigt"] + 5)
 		self.assertFalse(any(q["lose"].startswith("HZ-") for q in terminal.zum_verpacken("Verpackung")))
+
+	def test_dhl_paket_mit_gewicht(self):
+		"""Herzen direkt per DHL: Lieferschein mit Paketen, gewogenem Gewicht und Sendungsnummer."""
+		demo_herzen.vorrat_anlegen(self.ctx)
+		# 10 Herzen 12 cm verpacken (für den Auftrag), dann als ein Paket liefern
+		r = terminal.vorschlag("Herzen Verpackung", "HZ-12", 10)
+		terminal.herstellen("Herzen Verpackung", "HZ-12", [{"code": z["code"], "menge": z["menge"]} for z in r["zeilen"]],
+							ausbringung=10, kundenauftrag=self.ctx.herz_auftrag)  # fmt: skip
+		v = terminal.paket_vorschlag("Herzen Verpackung", "HZ-12", 10, 1)
+		self.assertAlmostEqual(v["erwartet_kg"], 10 * 0.08 + 0.3)
+		e = terminal.paket_lieferung(
+			"Herzen Verpackung", self.ctx.herz_auftrag, "HZ-12", 10, [2.5], "00340434161234567890"
+		)
+		dn = frappe.db.get_value(
+			"Delivery Note",
+			e["lieferschein"],
+			["kt_pakete", "kt_gewicht_kg", "kt_sendungsnummer"],
+			as_dict=True,
+		)
+		self.assertEqual((dn.kt_pakete, dn.kt_gewicht_kg), (1, 2.5))
+		self.assertTrue(any("erwartet" in h for h in e["hinweise"]))  # 2,5 kg statt ~1,1 kg: Hinweis
+		terminal.sendungsnummer("Herzen Verpackung", e["lieferschein"], "00340434161234567891")
+		self.assertEqual(
+			len(frappe.db.get_value("Delivery Note", e["lieferschein"], "kt_sendungsnummer").splitlines()), 2
+		)

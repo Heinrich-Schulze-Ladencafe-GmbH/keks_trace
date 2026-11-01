@@ -1757,6 +1757,111 @@ def lieferung(station: str, kunde: str, zeilen, kundenauftrag: str | None = None
 
 
 # ---------------------------------------------------------------------------
+# Paketversand (DHL) direkt vom Herzenboden: Lieferschein mit Paketen, gewogenem Gewicht, Sendungsnummer
+# ---------------------------------------------------------------------------
+
+KARTON_TARA_KG = 0.3  # Versandkarton je Paket, für den Plausibilitäts-Vorschlag
+
+
+@frappe.whitelist()
+def paket_vorschlag(station: str, artikel: str, stueck: float, pakete: int = 1) -> dict:
+	"""Erwartetes Gewicht (Stückgewicht am Artikel × Stück + Karton) und was vom verpackten Bestand da ist."""
+	_station(station)
+	je, einheit = frappe.get_cached_value("Item", artikel, ["weight_per_unit", "weight_uom"])
+	faktor = 0.001 if (einheit or "").lower() in ("g", "gram", "gramm") else 1
+	netto = flt(je) * faktor * flt(stueck)
+	return {
+		"erwartet_kg": flt(netto + KARTON_TARA_KG * max(cint(pakete), 1), 2) if je else None,
+		"verfuegbar": _verfuegbar(artikel),
+		"adresse": None,
+	}
+
+
+def _kundenadresse(artikel=None, kunde=None) -> str | None:
+	if not kunde:
+		return None
+	from frappe.contacts.doctype.address.address import get_address_display, get_default_address
+
+	name = get_default_address("Customer", kunde)
+	return frappe.utils.strip_html(get_address_display(name)).strip() if name else None
+
+
+@frappe.whitelist()
+def paket_lieferung(
+	station: str, kundenauftrag: str, artikel: str, stueck: float, gewichte, sendungsnummer: str | None = None
+) -> dict:
+	"""Herzen direkt per DHL: Lieferschein über die Stückzahl (älteste Lose zuerst), dazu Pakete und das
+	auf der Paketwaage abgelesene Gewicht je Paket. Die Sendungsnummer kann auch später nachgetragen werden."""
+	s = _station(station)
+	_darf(s, "lieferung")
+	gewichte = [flt(g, 3) for g in _liste(gewichte) if flt(g) > 0]
+	if not gewichte:
+		_fehler(_("Bitte das Gewicht jedes Pakets von der Paketwaage eintragen."))
+	kunde = frappe.db.get_value("Sales Order", kundenauftrag, "customer")
+	if not kunde:
+		_fehler(_("Kundenauftrag {0} gibt es nicht.").format(kundenauftrag))
+	einheit = frappe.get_cached_value("Item", artikel, "stock_uom")
+	offen, zeilen = flt(stueck), []
+	for c in _lager_chargen(artikel):
+		if offen <= EPS:
+			break
+		frei = min(c["menge"], paletten.lose(c["charge"]))
+		n = min(offen, frei)
+		if n > EPS:
+			zeilen.append({"code": c["charge"], "anzahl": n, "einheit": einheit})
+			offen -= n
+	if offen > EPS:
+		_fehler(
+			_("Verpackt im Lager sind nur {0}. Erst verpacken.").format(
+				paletten._n(flt(stueck) - offen, einheit)
+			)
+		)
+	erg = lieferung(s.name, kunde, zeilen, kundenauftrag)
+	gesamt = flt(sum(gewichte), 3)
+	frappe.db.set_value(
+		"Delivery Note",
+		erg["lieferschein"],
+		{
+			"kt_pakete": len(gewichte),
+			"kt_gewicht_kg": gesamt,
+			"kt_paket_gewichte": " / ".join(f"{g:g}".replace(".", ",") for g in gewichte),
+			"kt_sendungsnummer": (sendungsnummer or "").strip() or None,
+		},
+	)
+	vorschlag = paket_vorschlag(s.name, artikel, stueck, len(gewichte))
+	hinweise = erg["hinweise"]
+	erwartet = vorschlag["erwartet_kg"]
+	if erwartet and abs(gesamt - erwartet) > erwartet * 0.15:
+		hinweise.append(
+			_("Gewogen {0} kg, erwartet etwa {1} kg. Bitte Stückzahl im Paket prüfen.").format(
+				f"{gesamt:g}".replace(".", ","), f"{erwartet:g}".replace(".", ",")
+			)
+		)
+	return {
+		**erg,
+		"pakete": len(gewichte),
+		"gewicht_kg": gesamt,
+		"erwartet_kg": erwartet,
+		"adresse": _kundenadresse(kunde=kunde),
+		"lose": [z["code"] for z in zeilen],
+		"hinweise": hinweise,
+	}
+
+
+@frappe.whitelist()
+def sendungsnummer(station: str, lieferschein: str, nummer: str) -> dict:
+	"""DHL-Sendungsnummer nachtragen (vom Label scannen); mehrere Pakete: jede Nummer einzeln hinzufügen."""
+	_station(station)
+	nummer = (nummer or "").strip()
+	if not nummer:
+		_fehler(_("Bitte die Sendungsnummer scannen oder eintippen."))
+	alt = frappe.db.get_value("Delivery Note", lieferschein, "kt_sendungsnummer") or ""
+	neu = "\n".join([x for x in alt.splitlines() if x.strip()] + [nummer])
+	frappe.db.set_value("Delivery Note", lieferschein, "kt_sendungsnummer", neu)
+	return {"lieferschein": lieferschein, "sendungsnummern": neu.splitlines()}
+
+
+# ---------------------------------------------------------------------------
 # Umlagern (z. B. ins Lager des Lagerverkaufs)
 # ---------------------------------------------------------------------------
 

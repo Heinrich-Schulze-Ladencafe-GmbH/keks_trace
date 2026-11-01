@@ -318,6 +318,43 @@ CUSTOM_FIELDS = {
 			"read_only": 1,
 			"insert_after": "customer",
 		},
+		{
+			"fieldname": "kt_section_paket",
+			"label": "Paketversand (DHL)",
+			"fieldtype": "Section Break",
+			"insert_after": "kt_station",
+			"collapsible": 1,
+		},
+		{
+			"fieldname": "kt_pakete",
+			"label": "Pakete",
+			"fieldtype": "Int",
+			"allow_on_submit": 1,
+			"insert_after": "kt_section_paket",
+		},
+		{
+			"fieldname": "kt_gewicht_kg",
+			"label": "Gewogen gesamt (kg)",
+			"fieldtype": "Float",
+			"allow_on_submit": 1,
+			"insert_after": "kt_pakete",
+		},
+		{
+			"fieldname": "kt_paket_gewichte",
+			"label": "Gewicht je Paket (kg)",
+			"fieldtype": "Data",
+			"allow_on_submit": 1,
+			"insert_after": "kt_gewicht_kg",
+		},
+		{
+			"fieldname": "kt_sendungsnummer",
+			"label": "Sendungsnummer(n)",
+			"fieldtype": "Small Text",
+			"allow_on_submit": 1,
+			"in_standard_filter": 1,
+			"insert_after": "kt_paket_gewichte",
+			"description": "DHL-Sendungsnummer je Paket, vom Label gescannt oder eingetippt.",
+		},
 	],
 	"Delivery Note Item": [
 		{

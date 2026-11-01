@@ -17,6 +17,7 @@ from keks_trace import demo, pilot
 GROESSEN = {"12": (0.05, 0.01), "18": (0.12, 0.02), "25": (0.25, 0.04)}
 
 # Leistung je Größe in Stück: Garnieren (Stück/h), Kalfass (Stück/min) - Platzhalter
+STUECKGEWICHT = {"12": 0.08, "18": 0.2, "25": 0.42}  # kg je verpacktes Herz (Demo-Werte)
 LEISTUNG = {"12": (1200, 30), "18": (800, 25), "25": (500, 20)}
 
 # Demo-Kundenauftrag: der Kunde bestellt Herzen in Stück
@@ -104,6 +105,8 @@ def _linie(ctx):
 	for station in ("Herzen Garnieren", "Herzen Verpackung"):
 		if frappe.db.exists("Terminal Station", station):
 			frappe.db.set_value("Terminal Station", station, {"linie": LINIE, "f_silo": 1})
+			if station == "Herzen Verpackung":  # Pakete gehen auch direkt per DHL raus
+				frappe.db.set_value("Terminal Station", station, "f_lieferung", 1)
 			frappe.clear_document_cache("Terminal Station", station)
 
 
@@ -166,6 +169,8 @@ def anlegen(vorrat: int = 1) -> frappe._dict:
 				"kt_linienleistung", {"abschnitt": "Kalfass", "leistung": kalfass, "einheit": "Stück/min"}
 			)
 			item.save()
+	for g, kg in STUECKGEWICHT.items():
+		frappe.db.set_value("Item", f"HZ-{g}", {"weight_per_unit": kg, "weight_uom": "Kg"})
 	_behaelter(ctx)
 	auftrag = kundenauftrag(ctx)
 	# Am Herzenboden wird direkt nach Kundenauftrag gearbeitet, ohne Tagesplan
