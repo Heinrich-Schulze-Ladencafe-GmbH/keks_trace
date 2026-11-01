@@ -267,8 +267,11 @@ Etiketten gehen direkt auf einen Drucker im Netz (ZPL über TCP, Port 9100), ohn
 Zebra-Drucker sprechen ZPL; Honeywell PM43 und PX6i über **ZSim** (Zebra-Emulation, eingebaut). Am
 Drucker die Befehlssprache auf ZSim stellen, sonst druckt er den ZPL-Text als Klartext oder gar nicht.
 
-1. **Etikettendrucker** anlegen: Name, Adresse (feste IP oder Rechnername), Port 9100, Auflösung.
-   Knopf **Testdruck**: Rahmen nachmessen (genau 90 x 50 mm, sonst stimmt die Auflösung nicht),
+1. **Etikettendrucker** anlegen: Name, Adresse (feste IP oder Rechnername), Port 9100, Auflösung und
+   **Rollengröße** (ein Etikett, Breite x Höhe in mm). Die Layouts richten sich nach der Rolle: Kopf oben,
+   Strichcodes unten am Rand, die Mitte wächst mit. Mindestens: Palette 100 x 120, Karton 90 x 50,
+   Gebinde 95 x 60 mm; eine kleinere Rolle lässt sich dafür nicht zuordnen (auch nicht nachträglich).
+   Knopf **Testdruck**: Rahmen 5 mm vom Rand nachmessen (Maß steht darauf; passt es nicht, stimmt die Auflösung nicht),
    **beide Strichcodes scannen**. Code 2 muss `(02)04032744000011(37)8(10)AB1234` ergeben; er wechselt
    die Code-128-Zeichensätze wie ein echtes Paletten-Etikett.
 2. An der **Terminal Station**, Abschnitt „Etikettendrucker“, je Etikett einen Drucker eintragen:
@@ -276,6 +279,11 @@ Drucker die Befehlssprache auf ZSim stellen, sonst druckt er den ZPL-Text als Kl
    Die Druckermaske zeigt unter „Genutzt an“, welche Terminals ihn nutzen.
 3. Leer gelassen oder Drucker nicht aktiv: das Terminal druckt wie bisher über den Browser.
    Antwortet der Drucker nicht, sagt das Terminal das und bietet „Im Browser drucken“ an.
+
+**Logo:** in den Keks Trace Einstellungen „Logo für Etiketten“ hochladen; es steht auf Paletten- und
+Kartonetikett (Drucker und Browser), nicht auf dem internen Gebinde-Etikett. Der Drucker kennt nur
+Schwarz: Transparentes wird weiß, alles Dunkle und Farbige schwarz. Bei 10 mm Höhe und 203 dpi bleibt
+das Wappen klar, feine Schrift im Logo („seit 1830“) ist nicht mehr lesbar.
 
 Inhalt wie die Browser-Etiketten (gleiche Datenquelle). Auf dem Paletten-Etikett steht der Inhalt
 einer sortenreinen Palette in **zwei** GS1-128: (02)+(37) und (15)+(10). In einem Code wären die
@@ -512,7 +520,7 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_fluesse` (Ergänzung) | FEFO auch beim Zuführen an der Linie; Paletten-Etikett: Los wie Karton, „neu drucken“ nach Entnahme |
 | `test_qs_tagesliste` | Alle vier Arten eines Tages; Routinesperre „Freigabe vor Verwendung“ ist keine Abweichung; Durchsicht nur QS, je Tag einmal, nicht in der Zukunft, danach unveränderbar |
 | `test_behaelter` | Behälter nach dem Leeren frei bzw. zur Reinigung (Einstellung); Meldung „gereinigt“ mit Zeit und Station; Anfrage-ID nur für geschützte Buchungen |
-| `test_etiketten` | GS1-128 in ZPL (Zeichensätze, FNC1, zurückgelesen); Layouts; Drucker an der Station oder Browserdruck; inaktiv; nicht erreichbar mit klarer Meldung; Testdruck; Adresse geprüft; „Genutzt an“ |
+| `test_etiketten` | GS1-128 in ZPL (Zeichensätze, FNC1, zurückgelesen); Layouts je Rollengröße, Mindestmaß beim Zuordnen und Ändern; Logo (transparent wird weiß, fehlt es: ohne Logo drucken); Drucker an der Station oder Browserdruck; inaktiv; nicht erreichbar mit klarer Meldung; Testdruck; Adresse geprüft; „Genutzt an“ |
 
 Die Tests rollen ihre Daten am Ende zurück. Demo-Funktionen committen nur außerhalb von Tests
 (`utils.demo_commit`); vorher schrieb ein Demo-Aufruf mitten in einem Test dessen Daten fest.

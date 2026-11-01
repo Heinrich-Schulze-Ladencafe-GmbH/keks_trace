@@ -22,6 +22,7 @@
   "gs1_basisnummer",
   "nve_reserveziffer",
   "absender",
+  "etikett_logo",
   "section_los",
   "los_format",
   "section_bio",
@@ -129,6 +130,12 @@
    "description": "Leer = Firmenname."
   },
   {
+   "fieldname": "etikett_logo",
+   "fieldtype": "Attach Image",
+   "label": "Logo für Etiketten",
+   "description": "Auf Paletten- und Kartonetikett (Drucker und Browser). Am besten einfarbig als PNG mit transparentem oder weißem Hintergrund. Der Etikettendrucker druckt nur Schwarz: alles Dunkle und Farbige wird schwarz, Helles und Transparentes weiß."
+  },
+  {
    "fieldname": "section_los",
    "fieldtype": "Section Break",
    "label": "Los (Fertigware)"
@@ -167,7 +174,7 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-11-01 14:00:00.000000",
+ "modified": "2026-11-01 17:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Keks Trace Einstellungen",

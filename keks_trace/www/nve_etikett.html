@@ -10,6 +10,8 @@
 		background: #fff; color: #000; font: 10pt/1.25 Arial, Helvetica, sans-serif; display: flex; flex-direction: column; position: relative; }
 	.feld { border-bottom: 0.4mm solid #000; padding: 1.5mm 0; }
 	.klein { font-size: 7pt; text-transform: uppercase; }
+	.kopf { display: flex; gap: 3mm; align-items: center; }
+	.logo { height: 12mm; width: auto; margin: -1mm 0; filter: grayscale(1) contrast(10); }
 	.gross { font-size: 14pt; font-weight: bold; }
 	.nve { font-size: 15pt; font-weight: bold; letter-spacing: 0.5px; }
 	table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
@@ -29,7 +31,8 @@
 <button class="knopf" onclick="window.print()">Drucken</button>
 <div class="etikett">
 	{% if e.test %}<div class="test">TEST-NVE<br>nicht versenden</div>{% endif %}
-	<div class="feld"><div class="klein">Absender</div><div class="gross">{{ e.absender }}</div></div>
+	<div class="feld kopf">{% if logo %}<img class="logo" src="{{ logo }}" alt="">{% endif %}
+		<div><div class="klein">Absender</div><div class="gross">{{ e.absender }}</div></div></div>
 	<div class="feld">
 		<div class="klein">NVE / SSCC</div><div class="nve">{{ e.nve }}</div>
 		<div>{{ e.art }} · {{ e.datum }}{% if e.kunde %} · {{ e.kunde }}{% endif %}</div>

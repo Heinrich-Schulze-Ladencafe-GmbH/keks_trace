@@ -14,6 +14,10 @@
   "adresse",
   "port",
   "dpi",
+  "section_rolle",
+  "etikett_breite",
+  "column_break_rolle",
+  "etikett_hoehe",
   "section_genutzt",
   "genutzt",
   "section_bemerkung",
@@ -75,6 +79,33 @@
    "description": "Steht auf dem Typenschild oder dem Konfigurationsausdruck. Der Testdruck zeigt einen Rahmen von genau 90 x 50 mm: passt das Maß nicht, ist die Auflösung falsch."
   },
   {
+   "fieldname": "section_rolle",
+   "fieldtype": "Section Break",
+   "label": "Etikettenrolle"
+  },
+  {
+   "fieldname": "etikett_breite",
+   "fieldtype": "Float",
+   "label": "Breite (mm)",
+   "reqd": 1,
+   "non_negative": 1,
+   "in_list_view": 1,
+   "description": "Ein Etikett der eingelegten Rolle, quer zur Laufrichtung."
+  },
+  {
+   "fieldname": "column_break_rolle",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "etikett_hoehe",
+   "fieldtype": "Float",
+   "label": "Höhe (mm)",
+   "reqd": 1,
+   "non_negative": 1,
+   "in_list_view": 1,
+   "description": "In Laufrichtung, ohne die Lücke zum nächsten Etikett. Die Layouts richten sich danach; ist die Rolle für eine Etikettart zu klein, lässt sich der Drucker dafür nicht zuordnen."
+  },
+  {
    "fieldname": "section_genutzt",
    "fieldtype": "Section Break",
    "label": "Genutzt an"
@@ -99,16 +130,38 @@
  ],
  "index_web_pages_for_search": 0,
  "links": [],
- "modified": "2026-11-01 16:00:00.000000",
+ "modified": "2026-11-01 17:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Etikettendrucker",
  "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1, "print": 1, "share": 1},
-  {"role": "Stock Manager", "read": 1, "write": 1, "create": 1, "report": 1, "export": 1, "print": 1},
-  {"role": "Stock User", "read": 1, "report": 1}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "share": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1
+  }
  ],
  "sort_field": "drucker_name",
  "sort_order": "ASC",

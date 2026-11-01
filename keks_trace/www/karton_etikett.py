@@ -18,4 +18,5 @@ def get_context(context):
 	context.anzahl = max(1, min(cint(frappe.form_dict.get("anzahl") or 1), etiketten.MAX_KARTON))
 	context.ean = d.get("ean")
 	context.drucken = frappe.form_dict.get("druck") == "1"
+	context.logo = frappe.db.get_single_value("Keks Trace Einstellungen", "etikett_logo")
 	context.title = "Kartonlabel " + d["name"]

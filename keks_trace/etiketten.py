@@ -85,42 +85,101 @@ def _zahl(wert) -> str:
 
 
 # ---------------------------------------------------------------------------
-# ZPL-Layouts (gleiche Größe und Aufteilung wie die Browser-Etiketten)
+# Rollengröße und Logo
+# ---------------------------------------------------------------------------
+
+# Kleinste Rolle (Breite, Höhe in mm), auf die das Layout einer Etikettart noch passt
+MINDEST = {"palette": (100, 120), "karton": (90, 50), "gebinde": (95, 60)}
+MINDEST_TEST = (80, 50)
+GROESSE = {"palette": (105, 148), "karton": (100, 60), "gebinde": (100, 70)}  # wie die Browser-Etiketten
+
+
+def zu_klein(art: str, breite, hoehe) -> str | None:
+	"""Meldung, wenn eine Rolle für die Etikettart zu klein ist, sonst None."""
+	mb, mh = MINDEST[art]
+	if (breite or 0) + 1e-6 < mb or (hoehe or 0) + 1e-6 < mh:
+		return _("{0} braucht eine Rolle von mindestens {1} x {2} mm.").format(_(ARTNAMEN[art]), mb, mh)
+	return None
+
+
+def logo(dpi: int, hoehe_mm: float) -> zpl.Grafik | None:
+	"""Logo aus den Einstellungen als Druckergrafik (zwischengespeichert). Fehlt es, None."""
+	from keks_trace.utils import einstellung
+
+	url = einstellung("etikett_logo")
+	if not url:
+		return None
+	punkte = round(hoehe_mm * (8 if cint(dpi) == 203 else 12))
+	schluessel = f"kt_etikett_logo:{url}:{punkte}"
+	gemerkt = frappe.cache.get_value(schluessel)
+	if gemerkt:
+		return zpl.Grafik(*gemerkt)
+	try:
+		datei = frappe.get_doc("File", {"file_url": url}).get_full_path()
+		g = zpl.bild(datei, punkte)
+	except Exception:
+		# Ohne Logo drucken ist besser als gar nicht drucken; der Fehler steht im Fehlerprotokoll
+		frappe.log_error(title="Etikett: Logo nicht lesbar")
+		return None
+	frappe.cache.set_value(schluessel, (g.hex, g.je_zeile, g.breite, g.hoehe), expires_in_sec=24 * 3600)
+	return g
+
+
+def _mm(z: zpl.Etikett, punkte: int) -> float:
+	return punkte / z.dpmm
+
+
+# ---------------------------------------------------------------------------
+# ZPL-Layouts: Kopf oben, Strichcodes unten am Rand, die Mitte wächst mit der Rolle
 # ---------------------------------------------------------------------------
 
 
-def zpl_palette(e: dict, dpi: int = 203) -> str:
-	"""Paletten-Etikett A6 hoch (105 x 148 mm): Absender, NVE, Inhalt; unten die Strichcodes, die SSCC zuletzt.
+def zpl_palette(e: dict, dpi: int = 203, breite=105, hoehe=148, logo_grafik=None) -> str:
+	"""Paletten-Etikett (Standard A6 hoch): Logo, Absender, NVE, Inhalt; unten die Strichcodes, SSCC zuletzt.
 
 	Sortenrein mit GTIN: Inhalt in zwei GS1-128 ((02)+(37) und (15)+(10)), damit die Striche breit genug
 	bleiben (0,5 mm). In einem Code wären es bei 203 dpi nur 0,25 mm.
 	"""
-	z = zpl.Etikett(105, 148, dpi)
+	z = zpl.Etikett(breite, hoehe, dpi)
+	w = breite - 10  # nutzbare Breite
+	unten = hoehe - 148  # alles ab der Linie über den Strichcodes wandert mit der Höhe
 	test = bool(e.get("test"))
-	z.text(5, 4, 2.5, "ABSENDER")
-	z.text(5, 7, 5, e.get("absender"), breite=56 if test else 95)
+	x = 5
+	if logo_grafik:
+		z.grafik(5, 3, logo_grafik)
+		x = 5 + _mm(z, logo_grafik.breite) + 3
+	rechts = breite - 5 - (38 if test else 0)
+	z.text(x, 4, 2.5, "ABSENDER", breite=rechts - x)
+	z.text(x, 7, 5, e.get("absender"), breite=rechts - x)
 	if test:
-		z.umgekehrt(63, 3, 37, 9.5, [(4.5, "TEST-NVE"), (2.6, "nicht versenden")])
-	z.linie(5, 13.5, 95)
+		z.umgekehrt(breite - 42, 3, 37, 9.5, [(4.5, "TEST-NVE"), (2.6, "nicht versenden")])
+	z.linie(5, 13.5, w)
 	z.text(5, 15, 2.5, "NVE / SSCC")
-	z.text(5, 18.5, 6, e.get("nve"), breite=95)
-	kopf = " · ".join(str(x) for x in (e.get("art"), e.get("datum"), e.get("kunde")) if x)
-	z.text(5, 25.5, 3.2, kopf, breite=95)
-	z.linie(5, 30, 95)
-	spalten = ((5, 39, "ARTIKEL"), (45, 15, "LOS"), (61, 17, "MHD"), (79, 21, "ANZAHL"))
-	for x, b, titel in spalten:
-		z.text(x, 32, 2.3, titel, breite=b)
-	y = 35.5
+	z.text(5, 18.5, 6, e.get("nve"), breite=w)
+	kopf = " · ".join(str(v) for v in (e.get("art"), e.get("datum"), e.get("kunde")) if v)
+	z.text(5, 25.5, 3.2, kopf, breite=w)
+	z.linie(5, 30, w)
+	spalten, sx = [], 5.0
+	for anteil, titel in ((40, "ARTIKEL"), (16, "LOS"), (18, "MHD"), (21, "ANZAHL")):
+		b = w * anteil / 95
+		spalten.append((sx, b, titel))
+		sx += b
+	for sx, b, titel in spalten:
+		z.text(sx, 32, 2.3, titel, breite=b)
 	positionen = e.get("positionen") or []
-	for p in positionen[:8]:
+	fuss = 0.8 + 4.5 + (4.5 if e.get("bio") else 0) + 1
+	platz = max(1, int((84 + unten - 35.5 - fuss) / 4.2))  # so viele Zeilen passen
+	zeigen = positionen if len(positionen) <= platz else positionen[: platz - 1]
+	y = 35.5
+	for p in zeigen:
 		anzahl = f"{p.get('anzahl_text')} {p.get('einheit') or ''}"
-		for (x, b, _t), wert in zip(
+		for (sx, b, _t), wert in zip(
 			spalten, (p.get("name"), p.get("los"), p.get("mhd") or "", anzahl), strict=True
 		):
-			z.text(x, y, 2.8, wert, breite=b - 1)
+			z.text(sx, y, 2.8, wert, breite=b - 1)
 		y += 4.2
-	if len(positionen) > 8:
-		z.text(5, y, 2.8, f"… und {len(positionen) - 8} weitere Positionen", breite=95)
+	if len(zeigen) < len(positionen):
+		z.text(5, y, 2.8, f"… und {len(positionen) - len(zeigen)} weitere Positionen", breite=w)
 		y += 4.2
 	if not positionen:
 		z.text(5, y, 2.8, "(leer)")
@@ -128,64 +187,65 @@ def zpl_palette(e: dict, dpi: int = 203) -> str:
 	y += 0.8
 	if e.get("bio"):
 		oeko = f" · Öko-Kontrollstelle {e['oeko_nr']}" if e.get("oeko_nr") else ""
-		z.text(5, y, 3.2, "BIO" + oeko, breite=95)
+		z.text(5, y, 3.2, "BIO" + oeko, breite=w)
 		y += 4.5
-	z.text(5, y, 3.2, f"Gesamt: {e.get('kartons') or ''} · {_zahl(e.get('menge'))} kg", breite=95)
-	z.linie(5, 84, 95)
+	z.text(5, y, 3.2, f"Gesamt: {e.get('kartons') or ''} · {_zahl(e.get('menge'))} kg", breite=w)
+	z.linie(5, 84 + unten, w)
 	zeilen = e.get("inhalt_zeilen") or (
 		[(e["inhalt_barcode"].replace("Ï", zpl.FNC1), e.get("inhalt_text"))]
 		if e.get("inhalt_barcode")
 		else []
 	)
-	for (roh, text), oben in zip(zeilen[:2], (85.5, 101), strict=False):
-		z.gs1_128(oben, 11, roh, breite=97)
-		z.text(4, oben + 11.5, 3, text, breite=97, mitte=True)
-	z.gs1_128(117.5, 23, e["barcode_sscc"], breite=97)
-	z.text(4, 141.5, 3.3, e.get("text_sscc"), breite=97, mitte=True)
+	for (roh, text), oben in zip(zeilen[:2], (85.5 + unten, 101 + unten), strict=False):
+		z.gs1_128(oben, 11, roh, breite=breite - 2)
+		z.text(4, oben + 11.5, 3, text, breite=w + 2, mitte=True)
+	z.gs1_128(117.5 + unten, 23, e["barcode_sscc"], breite=breite - 2)
+	z.text(4, 141.5 + unten, 3.3, e.get("text_sscc"), breite=w + 2, mitte=True)
 	return z.zpl()
 
 
-def zpl_karton(d: dict, anzahl: int = 1, dpi: int = 203) -> str:
-	"""Kartonlabel 100 x 60 mm: Name, Inhalt, Los, MHD, Art.-Nr., EAN des Kartons."""
-	z = zpl.Etikett(100, 60, dpi)
-	z.text(4, 3, 5, d.get("name"), breite=92)
-	z.text(4, 9.5, 3.5, " · ".join(str(x) for x in (d.get("inhalt"), d.get("kunde")) if x), breite=92)
-	for x, titel, wert in (
-		(4, "LOS", d.get("los_vorschau")),
-		(36, "MHD", d.get("mhd_vorschau")),
-		(68, "ART.-NR.", d.get("artikel")),
+def zpl_karton(d: dict, anzahl: int = 1, dpi: int = 203, breite=100, hoehe=60, logo_grafik=None) -> str:
+	"""Kartonlabel (Standard 100 x 60 mm): Name, Inhalt, Los, MHD, Art.-Nr., Logo oben rechts, EAN unten."""
+	z = zpl.Etikett(breite, hoehe, dpi)
+	w = breite - 8
+	rechts = 0.0
+	if logo_grafik:
+		rechts = _mm(z, logo_grafik.breite) + 3
+		z.grafik(breite - 4 - _mm(z, logo_grafik.breite), 3, logo_grafik)
+	z.text(4, 3, 5, d.get("name"), breite=w - rechts)
+	z.text(4, 9.5, 3.5, " · ".join(str(x) for x in (d.get("inhalt"), d.get("kunde")) if x), breite=w - rechts)
+	spalte = w / 3
+	for i, (titel, wert) in enumerate(
+		(("LOS", d.get("los_vorschau")), ("MHD", d.get("mhd_vorschau")), ("ART.-NR.", d.get("artikel")))
 	):
-		z.text(x, 15, 2.3, titel, breite=30)
-		z.text(x, 18, 4.5, wert or "", breite=30)
+		z.text(4 + i * spalte, 15, 2.3, titel, breite=spalte - 2)
+		z.text(4 + i * spalte, 18, 4.5, wert or "", breite=spalte - 2)
 	if d.get("ean"):
-		z.ean(28, 20, d["ean"])
+		oben = max(24, hoehe - 32)
+		z.ean(oben, min(20, hoehe - oben - 8), d["ean"])
 	return z.zpl(anzahl)
 
 
-def zpl_gebinde(etiketten: list[dict], dpi: int = 203) -> str:
-	"""Gebinde-Etikett 100 x 70 mm: QR mit dem Code links, Angaben rechts. Eins je Gebinde."""
+def zpl_gebinde(etiketten: list[dict], dpi: int = 203, breite=100, hoehe=70) -> str:
+	"""Gebinde-Etikett (Standard 100 x 70 mm): QR mit dem Code links, Angaben rechts. Eins je Gebinde.
+
+	Ohne Logo: das Etikett bleibt im Haus.
+	"""
 	teile = []
 	for e in etiketten:
-		z = zpl.Etikett(100, 70, dpi)
+		z = zpl.Etikett(breite, hoehe, dpi)
 		z.qr(3, 3, e["code"], groesse_mm=34, version=zpl.qr_version(e["code"]))
 		z.text(3, 40, 4.5, e["code"], breite=36, mitte=True)
-		x, b = 42, 55
+		x, b = 42, breite - 45
 		z.text(x, 4, 4.3, e.get("name") or "", breite=b, zeilen=2)
-		z.text(
-			x,
-			14,
-			3,
-			" · ".join(str(v) for v in (f"Art.-Nr. {e.get('artikel') or ''}", e.get("art")) if v),
-			breite=b,
-		)
+		art = " · ".join(str(v) for v in (f"Art.-Nr. {e.get('artikel') or ''}", e.get("art")) if v)
+		z.text(x, 14, 3, art, breite=b)
 		y = 19
+		menge = f"{_zahl(e.get('menge'))} {e.get('einheit') or ''} · {e.get('eingang') or ''}"
 		for titel, wert in (
 			("CHARGE (LIEFERANT)", e.get("charge") or ""),
 			("MHD", e.get("mhd") or ""),
-			(
-				"MENGE · EINGANG",
-				f"{_zahl(e.get('menge'))} {e.get('einheit') or ''} · {e.get('eingang') or ''}",
-			),
+			("MENGE · EINGANG", menge),
 		):
 			z.text(x, y, 2.3, titel, breite=b)
 			z.text(x, y + 3, 3.8, wert, breite=b)
@@ -203,25 +263,34 @@ TEST_GS1 = "02" + "04032744000011" + "37" + "8" + zpl.FNC1 + "10" + "AB1234"
 TEST_GS1_TEXT = "(02) 04032744000011 (37) 8 (10) AB1234"
 
 
-def zpl_test(drucker: dict, dpi: int = 203) -> str:
-	"""Testetikett 100 x 60 mm: Rahmen 90 x 50 mm zum Nachmessen der Auflösung, Umlaute, zwei Strichcodes.
+def zpl_test(drucker: dict, dpi: int = 203, breite=100, hoehe=60, logo_grafik=None) -> str:
+	"""Testetikett in Rollengröße: Rahmen 5 mm vom Rand (Maß steht darauf), Logo, Umlaute, zwei Strichcodes.
 
 	Code 1 (SSCC) nur Zeichensatz C. Code 2 mit Wechsel der Zeichensätze: beide scannen und vergleichen.
 	"""
 	from keks_trace.palette import pruefziffer
 
-	z = zpl.Etikett(100, 60, dpi)
-	z.rahmen(5, 5, 90, 50)
-	z.text(9, 7.5, 4.5, "Testdruck " + str(drucker.get("name") or ""), breite=82)
+	z = zpl.Etikett(breite, hoehe, dpi)
+	rb, rh = breite - 10, hoehe - 10
+	z.rahmen(5, 5, rb, rh)
+	w = rb - 8
+	rechts = 0.0
+	if logo_grafik:
+		rechts = _mm(z, logo_grafik.breite) + 2
+		z.grafik(breite - 9 - _mm(z, logo_grafik.breite), 7, logo_grafik)
+	z.text(9, 7.5, 4.5, "Testdruck " + str(drucker.get("name") or ""), breite=w - rechts)
 	zeit = f"{formatdate(now_datetime())} {now_datetime().strftime('%H:%M')}"
-	z.text(9, 13, 3, f"{dpi} dpi · {zeit} · Rahmen genau 90 x 50 mm", breite=82)
-	z.text(9, 17, 3, "Umlaute: ÄÖÜ äöü ß", breite=82)
+	z.text(9, 13, 3, f"{dpi} dpi · {zeit}", breite=w - rechts)
+	z.text(9, 17, 3, f"Rahmen genau {_zahl(rb)} x {_zahl(rh)} mm · ÄÖÜ äöü ß", breite=w - rechts)
 	muster = "34012345000000000"  # Muster-SSCC, keine echte Palette
 	muster += str(pruefziffer(muster))
-	z.gs1_128(21.5, 10, "00" + muster, breite=82)
-	z.text(9, 32, 2.8, f"1: (00) {muster}", breite=82, mitte=True)
-	z.gs1_128(36.5, 10, TEST_GS1, breite=82)
-	z.text(9, 47, 2.8, "2: " + TEST_GS1_TEXT, breite=82, mitte=True)
+	block = (hoehe - 5 - 22) / 2  # zwei gleich hohe Blöcke unter dem Text
+	for i, (daten, text) in enumerate(
+		(("00" + muster, f"1: (00) {muster}"), (TEST_GS1, "2: " + TEST_GS1_TEXT))
+	):
+		oben = 22 + i * block
+		z.gs1_128(oben, max(5, block - 5), daten, breite=w)
+		z.text(9, oben + block - 4.5, 2.8, text, breite=w, mitte=True)
 	return z.zpl()
 
 
@@ -259,8 +328,18 @@ def senden(drucker: str, daten: str, auch_inaktiv: bool = False) -> None:
 		)
 
 
+def _rolle(drucker: str) -> frappe._dict:
+	d = frappe.db.get_value(
+		"Etikettendrucker", drucker, ["name", "dpi", "etikett_breite", "etikett_hoehe"], as_dict=True
+	)
+	if not d:
+		frappe.throw(_("Etikettendrucker {0} ist nicht eingerichtet.").format(drucker))
+	d.dpi = cint(d.dpi) or 203
+	return d
+
+
 def drucken(station: str, art: str, nve=None, codes=None, anzahl=None) -> dict:
-	"""Etikett der Art an den Drucker, der an der Station dafür eingetragen ist."""
+	"""Etikett der Art an den Drucker, der an der Station dafür eingetragen ist, in dessen Rollengröße."""
 	if art not in ARTEN:
 		frappe.throw(_("Unbekannte Etikettart {0}.").format(art))
 	drucker = drucker_der_station(station).get(art)
@@ -268,7 +347,14 @@ def drucken(station: str, art: str, nve=None, codes=None, anzahl=None) -> dict:
 		frappe.throw(
 			_("An der Station {0} ist kein Drucker für {1} eingetragen.").format(station, _(ARTNAMEN[art]))
 		)
-	dpi = cint(frappe.db.get_value("Etikettendrucker", drucker, "dpi")) or 203
+	r = _rolle(drucker)
+	if fehler := zu_klein(art, r.etikett_breite, r.etikett_hoehe):
+		frappe.throw(
+			_("{0} Drucker {1} hat {2} x {3} mm.").format(
+				fehler, drucker, _zahl(r.etikett_breite), _zahl(r.etikett_hoehe)
+			)
+		)
+	masse = {"dpi": r.dpi, "breite": r.etikett_breite, "hoehe": r.etikett_hoehe}
 	if art == "palette":
 		from keks_trace import palette
 
@@ -276,15 +362,15 @@ def drucken(station: str, art: str, nve=None, codes=None, anzahl=None) -> dict:
 		if not nr:
 			frappe.throw(_("Palette nicht gefunden."), frappe.DoesNotExistError)
 		frappe.has_permission("Palette", "read", nr, throw=True)
-		daten, stueck = zpl_palette(palette.etikett(nr), dpi), 1
+		daten, stueck = zpl_palette(palette.etikett(nr), logo_grafik=logo(r.dpi, 10), **masse), 1
 	elif art == "karton":
 		stueck = max(1, min(cint(anzahl) or 1, MAX_KARTON))
-		daten = zpl_karton(karton(station), stueck, dpi)
+		daten = zpl_karton(karton(station), stueck, logo_grafik=logo(r.dpi, 12), **masse)
 	else:
 		liste = gebinde(codes)
 		if not liste:
 			frappe.throw(_("Kein Gebinde angegeben."))
-		daten, stueck = zpl_gebinde(liste, dpi), len(liste)
+		daten, stueck = zpl_gebinde(liste, **masse), len(liste)
 	senden(drucker, daten)
 	if art == "palette":
 		palette.etikett_gedruckt(nr)  # Inhalt festhalten (Hinweis „neu drucken“ bei Änderung)
@@ -295,8 +381,10 @@ def drucken(station: str, art: str, nve=None, codes=None, anzahl=None) -> dict:
 def testdruck(drucker: str) -> dict:
 	"""Testetikett aus der Druckermaske (auch bevor der Drucker aktiv geschaltet ist)."""
 	frappe.has_permission("Etikettendrucker", "write", drucker, throw=True)
-	d = frappe.db.get_value("Etikettendrucker", drucker, ["name", "dpi"], as_dict=True)
-	if not d:
-		frappe.throw(_("Etikettendrucker {0} ist nicht eingerichtet.").format(drucker))
-	senden(drucker, zpl_test(d, cint(d.dpi) or 203), auch_inaktiv=True)
+	r = _rolle(drucker)
+	mb, mh = MINDEST_TEST
+	if (r.etikett_breite or 0) < mb or (r.etikett_hoehe or 0) < mh:
+		frappe.throw(_("Der Testdruck braucht eine Rolle von mindestens {0} x {1} mm.").format(mb, mh))
+	daten = zpl_test(r, r.dpi, r.etikett_breite, r.etikett_hoehe, logo_grafik=logo(r.dpi, 10))
+	senden(drucker, daten, auch_inaktiv=True)
 	return {"drucker": drucker}

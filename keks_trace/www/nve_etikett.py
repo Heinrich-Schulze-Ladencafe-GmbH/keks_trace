@@ -19,4 +19,5 @@ def get_context(context):
 		# Festhalten, welchen Inhalt das gedruckte Etikett zeigt (Hinweis „neu drucken“ bei Änderung)
 		palette.etikett_gedruckt(nve)
 		frappe.db.commit()
+	context.logo = frappe.db.get_single_value("Keks Trace Einstellungen", "etikett_logo")
 	context.title = "NVE " + nve

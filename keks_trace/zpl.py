@@ -95,6 +95,12 @@ class Etikett:
 		vergroesserung = max(1, min(10, self.p(groesse_mm) // module))
 		self.teile.append(f"^FO{self.p(x)},{self.p(y)}^BQN,2,{vergroesserung}^FDMA,{feld(str(code))}^FS")
 
+	def grafik(self, x, y, grafik: "Grafik"):
+		"""Schwarz-Weiß-Bild (siehe ``bild``) ab (x, y) in mm."""
+		self.teile.append(
+			f"^FO{self.p(x)},{self.p(y)}^GFA,{grafik.bytes},{grafik.bytes},{grafik.je_zeile},{grafik.hex}^FS"
+		)
+
 	def zpl(self, anzahl: int = 1) -> str:
 		kopf = f"^XA^CI28^PW{self.p(self.breite)}^LL{self.p(self.hoehe)}^LH0,0"
 		fuss = f"^PQ{int(anzahl)}^XZ" if anzahl and int(anzahl) > 1 else "^XZ"
@@ -104,6 +110,47 @@ class Etikett:
 # ---------------------------------------------------------------------------
 # Hilfen
 # ---------------------------------------------------------------------------
+
+
+class Grafik:
+	"""Bild für ^GFA: Hex-Daten, Bytes je Zeile, Größe in Punkten."""
+
+	def __init__(self, hex_daten: str, je_zeile: int, breite: int, hoehe: int):
+		self.hex, self.je_zeile, self.breite, self.hoehe = hex_daten, je_zeile, breite, hoehe
+		self.bytes = je_zeile * hoehe
+
+
+def bild(datei, hoehe_punkte: int, max_breite_punkte: int | None = None, schwelle: int = 160) -> Grafik:
+	"""Bilddatei (PNG, JPG ...) als Schwarz-Weiß-Grafik in ``hoehe_punkte`` Höhe, Seitenverhältnis bleibt.
+
+	Transparentes wird weiß (sonst würde ein transparenter Hintergrund ein schwarzer Kasten). Danach gilt:
+	dunkler als ``schwelle`` (0-255) wird schwarz. Farben wie Rot oder Dunkelblau sind dunkel genug.
+	"""
+	from PIL import Image
+
+	with Image.open(datei) as roh:
+		quelle = roh.convert("RGBA")
+	weiss = Image.new("RGBA", quelle.size, (255, 255, 255, 255))
+	grau = Image.alpha_composite(weiss, quelle).convert("L")
+	# Ränder ohne Inhalt abschneiden, damit die Höhe dem sichtbaren Logo entspricht
+	rahmen = Image.eval(grau, lambda w: 255 - w).getbbox()
+	if rahmen:
+		grau = grau.crop(rahmen)
+	breite = max(1, round(grau.width * hoehe_punkte / grau.height))
+	if max_breite_punkte and breite > max_breite_punkte:
+		breite = max_breite_punkte
+		hoehe_punkte = max(1, round(grau.height * breite / grau.width))
+	klein = grau.resize((breite, hoehe_punkte), Image.Resampling.LANCZOS)
+	je_zeile = (breite + 7) // 8
+	pixel = klein.load()
+	zeilen = []
+	for py in range(hoehe_punkte):
+		werte = bytearray(je_zeile)
+		for px in range(breite):
+			if pixel[px, py] < schwelle:
+				werte[px // 8] |= 0x80 >> (px % 8)
+		zeilen.append(werte.hex().upper())
+	return Grafik("".join(zeilen), je_zeile, breite, hoehe_punkte)
 
 
 def feld(text: str) -> str:

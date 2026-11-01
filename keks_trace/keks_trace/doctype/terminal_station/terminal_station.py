@@ -73,6 +73,22 @@ class TerminalStation(Document):
 			)
 		if self.f_umlagern and not self.umlager_ziel and self.typ == "Lagerverkauf":
 			frappe.throw(_("Bitte „Umlagern nach“ angeben (z. B. Lagerort Lagerverkauf)."))
+		self.drucker_pruefen()
+
+	def drucker_pruefen(self):
+		"""Rolle des zugeordneten Druckers muss für die Etikettart groß genug sein."""
+		from keks_trace.etiketten import ARTEN, _zahl, zu_klein
+
+		for art, feld in ARTEN.items():
+			if not self.get(feld):
+				continue
+			b, h = frappe.db.get_value(
+				"Etikettendrucker", self.get(feld), ["etikett_breite", "etikett_hoehe"]
+			)
+			if meldung := zu_klein(art, b, h):
+				frappe.throw(
+					_("{0} Drucker {1} hat {2} x {3} mm.").format(meldung, self.get(feld), _zahl(b), _zahl(h))
+				)
 
 	def stufen_liste(self) -> list[str]:
 		return [s.strip() for s in (self.stufen or "").splitlines() if s.strip()]

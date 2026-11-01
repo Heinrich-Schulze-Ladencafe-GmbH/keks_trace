@@ -13,6 +13,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 
 from keks_trace import demo, etiketten, gs1, terminal, zpl
+from keks_trace.utils import einstellungen
 
 
 class Empfaenger:
@@ -178,7 +179,7 @@ class TestDrucken(IntegrationTestCase):
 		self.empfaenger = Empfaenger()
 		self.addCleanup(self.empfaenger.schliessen)
 		self.drucker = frappe.get_doc(
-			{"doctype": "Etikettendrucker", "drucker_name": f"Test {_hash()}", "adresse": "127.0.0.1", "port": self.empfaenger.port, "dpi": "203"}
+			{"doctype": "Etikettendrucker", "drucker_name": f"Test {_hash()}", "adresse": "127.0.0.1", "port": self.empfaenger.port, "dpi": "203", "etikett_breite": 105, "etikett_hoehe": 148}
 		).insert()  # fmt: skip
 
 	def _zuordnen(self, station, **felder):
@@ -230,7 +231,7 @@ class TestDrucken(IntegrationTestCase):
 		self.drucker.db_set("aktiv", 0)
 		etiketten.testdruck(self.drucker.name)
 		self.empfaenger.warten()
-		self.assertIn(b"Rahmen genau 90 x 50 mm", self.empfaenger.daten[0])
+		self.assertIn(b"Rahmen genau 95 x 138 mm", self.empfaenger.daten[0])
 		# Code 2 wechselt die Zeichensätze; zurückgelesen genau der Text, der darunter steht
 		felder = zpl.code128(etiketten.TEST_GS1, gs1=True)[0]
 		self.assertIn(">6", felder)
@@ -242,9 +243,9 @@ class TestDrucken(IntegrationTestCase):
 	def test_adresse_geprueft(self):
 		for falsch in ("http://10.0.0.5", "10.0.0.5:9100", "drucker eins", ""):
 			with self.assertRaises(frappe.ValidationError):
-				frappe.get_doc({"doctype": "Etikettendrucker", "drucker_name": f"X {_hash()}", "adresse": falsch, "port": 9100}).insert()  # fmt: skip
+				frappe.get_doc({"doctype": "Etikettendrucker", "drucker_name": f"X {_hash()}", "adresse": falsch, "port": 9100, "etikett_breite": 100, "etikett_hoehe": 60}).insert()  # fmt: skip
 		with self.assertRaisesRegex(frappe.ValidationError, "Port"):
-			frappe.get_doc({"doctype": "Etikettendrucker", "drucker_name": f"X {_hash()}", "adresse": "drucker-1", "port": 70000}).insert()  # fmt: skip
+			frappe.get_doc({"doctype": "Etikettendrucker", "drucker_name": f"X {_hash()}", "adresse": "drucker-1", "port": 70000, "etikett_breite": 100, "etikett_hoehe": 60}).insert()  # fmt: skip
 
 	def test_maske_zeigt_wo_genutzt(self):
 		from keks_trace.keks_trace.doctype.etikettendrucker.etikettendrucker import genutzt
@@ -252,3 +253,103 @@ class TestDrucken(IntegrationTestCase):
 		self._zuordnen("Versand", drucker_palette=self.drucker.name, drucker_karton=self.drucker.name)
 		self.assertEqual({(z["station"], z["etikett"]) for z in genutzt(self.drucker.name)},
 		                 {("Versand", "Palettenetikett"), ("Versand", "Kartonlabel")})  # fmt: skip
+
+
+def _logo_datei(pfad):
+	"""Muster-Logo: transparenter Rand, rotes Quadrat in der Mitte (wie das Rot im Wappen)."""
+	from PIL import Image
+
+	bild = Image.new("RGBA", (200, 100), (0, 0, 0, 0))
+	for x in range(80, 120):
+		for y in range(30, 70):
+			bild.putpixel((x, y), (223, 0, 8, 255))
+	bild.save(pfad)
+	return pfad
+
+
+class TestRolleUndLogo(unittest.TestCase):
+	def test_layout_folgt_der_rolle(self):
+		z = etiketten.zpl_palette(TestLayouts.PALETTE, 203, 100, 150)
+		self.assertIn("^PW800^LL1200", z)
+		# SSCC am unteren Rand: 117,5 + 2 mm (Rolle 2 mm höher als A6) = 119,5 mm = 956 Punkte
+		self.assertIn(",956^BCN,184", z)
+
+	def test_viele_positionen_auf_kleiner_rolle(self):
+		e = {**TestLayouts.PALETTE, "positionen": TestLayouts.PALETTE["positionen"] * 12}
+		z = etiketten.zpl_palette(e, 203, 100, 120)
+		self.assertIn("weitere Positionen", z)
+		self.assertEqual(z.count("Butterkeks 200 g"), 2)  # Platz für 3 Zeilen: 2 Positionen + „weitere“
+
+	def test_mindestmass(self):
+		self.assertIsNone(etiketten.zu_klein("palette", 105, 148))
+		self.assertIsNone(etiketten.zu_klein("palette", 100, 120))
+		self.assertIn("mindestens 100 x 120", etiketten.zu_klein("palette", 100, 60))
+		self.assertIsNotNone(etiketten.zu_klein("gebinde", 100, 50))
+
+	def test_logo_transparent_wird_weiss(self):
+		import tempfile
+
+		with tempfile.TemporaryDirectory() as ordner:
+			g = zpl.bild(_logo_datei(ordner + "/logo.png"), 40)
+		# Leerer Rand wird abgeschnitten: nur das Quadrat bleibt, also ganz schwarz
+		self.assertEqual((g.breite, g.hoehe), (40, 40))
+		self.assertEqual(g.hex, "FF" * 5 * 40)
+
+	def test_logo_auf_dem_etikett(self):
+		import tempfile
+
+		with tempfile.TemporaryDirectory() as ordner:
+			g = zpl.bild(_logo_datei(ordner + "/logo.png"), 80)
+		z = etiketten.zpl_karton({"name": "Butterkeks"}, 1, 203, 100, 60, logo_grafik=g)
+		self.assertIn(f"^GFA,{g.bytes},{g.bytes},{g.je_zeile},", z)
+		self.assertIn("^FO688,24^GFA", z)  # oben rechts: 100 - 4 - 10 mm Logo = 86 mm = 688 Punkte
+
+
+class TestRolleZuordnen(IntegrationTestCase):
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		cls.ctx = demo.stammdaten()
+
+	def _drucker(self, b, h):
+		return frappe.get_doc(
+			{"doctype": "Etikettendrucker", "drucker_name": f"R {_hash()}", "adresse": "127.0.0.1", "port": 9100, "etikett_breite": b, "etikett_hoehe": h}
+		).insert()  # fmt: skip
+
+	def test_zu_kleine_rolle_nicht_zuordnen(self):
+		klein = self._drucker(100, 60)
+		s = frappe.get_doc("Terminal Station", "Lager")
+		s.drucker_karton = klein.name  # passt
+		s.save()
+		s.drucker_palette = klein.name  # passt nicht
+		with self.assertRaisesRegex(frappe.ValidationError, "mindestens 100 x 120"):
+			s.save()
+
+	def test_rolle_verkleinern_wenn_zugeordnet(self):
+		gross = self._drucker(105, 148)
+		s = frappe.get_doc("Terminal Station", "Lager")
+		s.drucker_palette = gross.name
+		s.save()
+		gross.etikett_hoehe = 60
+		with self.assertRaisesRegex(frappe.ValidationError, "zu klein"):
+			gross.save()
+
+	def test_rollengroesse_pflicht_und_plausibel(self):
+		with self.assertRaises(frappe.ValidationError):
+			self._drucker(100, 0)
+		with self.assertRaises(frappe.ValidationError):
+			self._drucker(400, 100)
+
+	def test_logo_aus_den_einstellungen(self):
+		import os
+		import tempfile
+
+		with tempfile.TemporaryDirectory() as ordner:
+			pfad = _logo_datei(os.path.join(ordner, "logo.png"))
+			with open(pfad, "rb") as f:
+				datei = frappe.get_doc({"doctype": "File", "file_name": f"logo-{_hash()}.png", "content": f.read(), "is_private": 0}).insert()  # fmt: skip
+		with einstellungen(etikett_logo=datei.file_url):
+			g = etiketten.logo(203, 10)
+		self.assertEqual(g.hoehe, 80)
+		with einstellungen(etikett_logo="/files/gibt-es-nicht.png"):
+			self.assertIsNone(etiketten.logo(203, 10))  # ohne Logo drucken statt gar nicht

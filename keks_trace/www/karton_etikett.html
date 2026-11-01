@@ -9,6 +9,9 @@
 	.etikett { width: 100mm; height: 60mm; box-sizing: border-box; margin: 10px auto; padding: 3mm 4mm; background: #fff; color: #000;
 		font: 10pt/1.25 Arial, Helvetica, sans-serif; display: flex; flex-direction: column; page-break-after: always; }
 	.name { font-size: 14pt; font-weight: bold; }
+	.etikett { position: relative; }
+	.mit-logo .name, .mit-logo .name + div { margin-right: 15mm; }
+	.logo { position: absolute; top: 3mm; right: 4mm; height: 12mm; width: auto; filter: grayscale(1) contrast(10); }
 	.zeile { display: flex; justify-content: space-between; margin-top: 1.5mm; }
 	.gross { font-size: 13pt; font-weight: bold; }
 	.klein { font-size: 7pt; text-transform: uppercase; }
@@ -21,7 +24,8 @@
 {% block content %}
 <button class="knopf" onclick="window.print()">{{ anzahl }} Label drucken</button>
 {% for i in range(anzahl) %}
-<div class="etikett">
+<div class="etikett{% if logo %} mit-logo{% endif %}">
+	{% if logo %}<img class="logo" src="{{ logo }}" alt="">{% endif %}
 	<div class="name">{{ d.name }}</div>
 	<div>{{ inhalt }}{% if d.kunde %} · {{ d.kunde }}{% endif %}</div>
 	<div class="zeile">
