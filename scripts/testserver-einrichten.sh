@@ -127,6 +127,22 @@ systemctl enable --now mariadb redis-server 2>/dev/null || systemctl enable --no
 # ---------------------------------------------------------------------------
 # 2. Node (offizielles Paket) und Benutzer frappe mit uv und Python
 # ---------------------------------------------------------------------------
+# IPv6 vorhanden, aber ohne Weg ins Internet (häufig im Firmennetz): uv, pip und yarn warten dann
+# ewig auf IPv6-Verbindungen. Dann Linux sagen, dass IPv4 zuerst probiert wird.
+schritt "Netz prüfen (IPv6)"
+V6="$(ip -6 addr show scope global 2>/dev/null || true)"
+if [ -n "$V6" ] && ! curl -6 -sS -m 8 -o /dev/null https://pypi.org/simple/ 2>/dev/null; then
+	if grep -qs '^precedence ::ffff:0:0/96' /etc/gai.conf; then
+		hinweis "IPv6 ohne Internet, IPv4 ist schon bevorzugt (/etc/gai.conf)."
+	else
+		echo 'precedence ::ffff:0:0/96  100' >> /etc/gai.conf
+		hinweis "IPv6 ohne Internet: Linux bevorzugt jetzt IPv4 (Eintrag in /etc/gai.conf)."
+	fi
+else
+	hinweis "in Ordnung"
+fi
+curl -4 -sS -m 15 -o /dev/null https://pypi.org/simple/ || fehler "Kein Internet über IPv4 (pypi.org nicht erreichbar). Netz/DNS prüfen."
+
 schritt "Node ${NODE_MAJOR} installieren"
 if [ ! -x "/opt/node${NODE_MAJOR}/bin/node" ]; then
 	arch="$(dpkg --print-architecture)"; case "$arch" in amd64) arch=x64 ;; arm64) arch=arm64 ;; *) fehler "Architektur $arch nicht unterstützt" ;; esac
