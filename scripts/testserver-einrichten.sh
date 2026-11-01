@@ -277,7 +277,8 @@ for app in erpnext eu_einvoice erpnext_datev keks_trace; do
 	fi
 done
 # PDFs mit Chromium aus Debian statt wkhtmltopdf
-als_frappe "bench config set-common-config -c chromium_path /usr/bin/chromium"
+# bench liest den Wert als Python-Ausdruck: Text muss in Anführungszeichen stehen
+als_frappe "bench config set-common-config -c chromium_path \"'/usr/bin/chromium'\""
 
 schritt "Einrichtungsassistent (Deutsch, ${FIRMA}, Geschäftsjahr $(date +%Y))"
 eingerichtet() { local a; a="$(als_frappe "bench --site ${SITE} execute frappe.is_setup_complete")"; grep -qi true <<<"$a"; }
