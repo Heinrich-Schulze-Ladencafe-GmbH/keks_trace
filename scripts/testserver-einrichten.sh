@@ -190,23 +190,32 @@ mysql -uroot -p"${DB_ROOT}" -h 127.0.0.1 -e "select 1" >/dev/null || fehler "Anm
 # 4. Bench mit Frappe, ERPNext, DATEV, E-Rechnung und keks_trace
 # ---------------------------------------------------------------------------
 schritt "Frappe ${FRAPPE_BRANCH} (bench init, dauert einige Minuten)"
-if [ ! -d "$BENCH/apps/frappe" ]; then
+# Fertig ist ein Schritt erst, wenn die App in sites/apps.txt steht und sich laden lässt; ein halber
+# Ordner von einem abgebrochenen Lauf zählt nicht.
+app_fertig() { grep -qsx "$1" "$BENCH/sites/apps.txt" && "$BENCH/env/bin/python" -c "import $1" 2>/dev/null; }
+if ! app_fertig frappe; then
+	if [ -d "$BENCH" ]; then
+		hinweis "Abgebrochene Bench gefunden: wird als ${BENCH}.abgebrochen beiseitegelegt und neu angelegt."
+		rm -rf "${BENCH}.abgebrochen" && mv "$BENCH" "${BENCH}.abgebrochen"
+	fi
 	sudo -u "$BENCH_USER" -H bash -c "export PATH=\"/opt/node${NODE_MAJOR}/bin:${BENCH_HOME}/.local/bin:\$PATH\"; cd ~ && \
 		bench init --frappe-branch ${FRAPPE_BRANCH} --python \"\$(uv python find ${PY_VERSION})\" frappe-bench" \
 		|| fehler "bench init fehlgeschlagen"
 fi
 
 app_holen() {  # app_holen NAME URL BRANCH
-	[ -d "$BENCH/apps/$1" ] && { hinweis "$1 ist schon da"; return; }
+	app_fertig "$1" && { hinweis "$1 ist schon da"; return; }
 	schritt "App $1 holen"
+	[ -d "$BENCH/apps/$1" ] && { hinweis "halber Ordner apps/$1 von einem Abbruch: neu holen"; rm -rf "${BENCH:?}/apps/$1"; }
 	als_frappe "bench get-app --branch $3 $2"
 }
 app_holen erpnext https://github.com/frappe/erpnext "$FRAPPE_BRANCH"
 app_holen eu_einvoice https://github.com/alyf-de/eu_einvoice "$FRAPPE_BRANCH"
 app_holen erpnext_datev https://github.com/alyf-de/erpnext_datev "$FRAPPE_BRANCH"
 
-if [ ! -d "$BENCH/apps/keks_trace" ]; then
+if ! app_fertig keks_trace; then
 	schritt "keks_trace holen"
+	[ -d "$BENCH/apps/keks_trace" ] && rm -rf "${BENCH:?}/apps/keks_trace"
 	URL="$REPO"
 	if ! git ls-remote "$REPO" >/dev/null 2>&1; then
 		hinweis "Das Repository ist nicht öffentlich erreichbar."
