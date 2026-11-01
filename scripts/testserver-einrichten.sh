@@ -131,7 +131,7 @@ systemctl enable --now mariadb redis-server 2>/dev/null || systemctl enable --no
 # ewig auf IPv6-Verbindungen. Dann Linux sagen, dass IPv4 zuerst probiert wird.
 schritt "Netz prüfen (IPv6)"
 V6="$(ip -6 addr show scope global 2>/dev/null || true)"
-if [ -n "$V6" ] && ! curl -6 -sS -m 8 -o /dev/null https://pypi.org/simple/ 2>/dev/null; then
+if [ -n "$V6" ] && ! curl -6 -sS -m 8 -o /dev/null -I https://pypi.org/ 2>/dev/null; then
 	if grep -qs '^precedence ::ffff:0:0/96' /etc/gai.conf; then
 		hinweis "IPv6 ohne Internet, IPv4 ist schon bevorzugt (/etc/gai.conf)."
 	else
@@ -141,7 +141,8 @@ if [ -n "$V6" ] && ! curl -6 -sS -m 8 -o /dev/null https://pypi.org/simple/ 2>/d
 else
 	hinweis "in Ordnung"
 fi
-curl -4 -sS -m 15 -o /dev/null https://pypi.org/simple/ || fehler "Kein Internet über IPv4 (pypi.org nicht erreichbar). Netz/DNS prüfen."
+# Nur die Kopfzeilen einer kleinen Seite (pypi.org/simple/ allein ist fast 50 MB)
+curl -4 -sS -m 15 -o /dev/null -I https://pypi.org/ || fehler "Kein Internet über IPv4 (pypi.org nicht erreichbar). Netz/DNS prüfen."
 
 schritt "Node ${NODE_MAJOR} installieren"
 if [ ! -x "/opt/node${NODE_MAJOR}/bin/node" ]; then
