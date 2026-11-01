@@ -115,9 +115,11 @@ fi
 schritt "Systempakete installieren"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -y -q sudo git curl ca-certificates xz-utils build-essential pkg-config \
+hinweis "Bei langsamer Leitung 10-15 Minuten (Chromium, MariaDB, Build-Werkzeuge)."
+# Fortschrittsbalken von dpkg statt Stille: man sieht, dass es arbeitet
+apt-get install -y -q -o Dpkg::Progress-Fancy=1 sudo git curl ca-certificates xz-utils build-essential pkg-config \
 	mariadb-server mariadb-client libmariadb-dev nginx supervisor cron \
-	chromium fonts-dejavu-core fonts-liberation2 locales >/dev/null
+	chromium fonts-dejavu-core fonts-liberation2 locales
 # Redis: Debian 13 hat redis-server; falls nicht, Valkey mit Redis-Namen
 if ! apt-get install -y -q redis-server >/dev/null 2>&1; then
 	apt-get install -y -q valkey-server valkey-redis-compat >/dev/null
