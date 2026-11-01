@@ -143,15 +143,10 @@ und Füllungen.
 
 ## Testserver auf Debian 13 in einem Lauf
 
-Auf einer frischen VM mit Debian 13 (trixie). Zuerst die Grundeinrichtung (allgemein, nicht nur für
-keks_trace): Benutzer mit sudo, Rechnername, Zeitzone, feste IP. Als root mit `su -` (mit Minus):
-
-```bash
-bash debian-grundeinrichtung.sh     # fragt alles nacheinander, Enter übernimmt bzw. überspringt
-```
-
-Die feste IP wirkt nach dem Neustart, den das Skript anbietet; geänderte Dateien werden als
-`*.vor-grundeinrichtung` gesichert. Oft einfacher: die Adresse im Router per DHCP reservieren.
+Auf einer frischen VM mit Debian 13 (trixie). Zuerst die allgemeine Grundeinrichtung (sudo-Benutzer,
+Rechnername, Zeitzone, feste IP, Proxmox-Agent) aus dem Repository
+[server-werkzeuge](https://github.com/Heinrich-Schulze-Ladencafe-GmbH/server-werkzeuge):
+`debian/grundeinrichtung.sh`, als root mit `su -` (mit Minus). Danach neu starten.
 
 Dann keks_trace, als root:
 
