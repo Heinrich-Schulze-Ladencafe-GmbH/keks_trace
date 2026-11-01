@@ -264,8 +264,8 @@ MHD 32 Monate. Ausgedachte Werte (Beutelgrößen, Gebinde, Ruhezeit, Packmittel)
 ## Etikettendrucker im Netz
 
 Etiketten gehen direkt auf einen Drucker im Netz (ZPL über TCP, Port 9100), ohne Druckdialog.
-Zebra-Drucker sprechen ZPL; Honeywell PM43 und andere über **ZSim** (Zebra-Emulation, am Drucker als
-Befehlssprache einstellen). Für die PX6i ist ZSim nicht belegt: erst Testdruck.
+Zebra-Drucker sprechen ZPL; Honeywell PM43 und PX6i über **ZSim** (Zebra-Emulation, eingebaut). Am
+Drucker die Befehlssprache auf ZSim stellen, sonst druckt er den ZPL-Text als Klartext oder gar nicht.
 
 1. **Etikettendrucker** anlegen: Name, Adresse (feste IP oder Rechnername), Port 9100, Auflösung.
    Knopf **Testdruck**: Rahmen nachmessen (genau 90 x 50 mm, sonst stimmt die Auflösung nicht),

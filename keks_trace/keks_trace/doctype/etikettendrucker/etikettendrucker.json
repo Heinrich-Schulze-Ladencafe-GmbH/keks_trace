@@ -3,7 +3,7 @@
  "allow_rename": 1,
  "autoname": "field:drucker_name",
  "creation": "2026-11-01 16:00:00.000000",
- "description": "Etikettendrucker im Netz (ZPL über TCP, Port 9100). Zebra; Honeywell PM43 u. a. mit ZSim (Zebra-Emulation). Welcher Drucker an welchem Terminal druckt, steht an der Terminal Station.",
+ "description": "Etikettendrucker im Netz (ZPL über TCP, Port 9100). Zebra; Honeywell PM43 und PX6i mit ZSim (Zebra-Emulation, am Drucker als Befehlssprache einstellen). Welcher Drucker an welchem Terminal druckt, steht an der Terminal Station.",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [

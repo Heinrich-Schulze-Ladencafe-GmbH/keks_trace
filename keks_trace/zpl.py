@@ -1,4 +1,4 @@
-"""ZPL II für Etikettendrucker im Netz (Zebra; Honeywell PM43 u. a. mit ZSim).
+"""ZPL II für Etikettendrucker im Netz (Zebra; Honeywell PM43 und PX6i mit ZSim).
 
 Reine Textbausteine ohne Frappe: Maße in mm, umgerechnet in Punkte je Auflösung (203 oder 300 dpi).
 Strichcodes ohne Klartextzeile des Druckers; den Klartext mit Klammern setzt das Etikett selbst.
