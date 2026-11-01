@@ -225,8 +225,8 @@ code { font-family: var(--f-code); font-size: .88em; }
 				<text class="t" x="185" y="375" text-anchor="middle">Freigabe vor Verwendung</text>
 				<rect class="chip steht" x="308" y="355" width="210" height="32" rx="16"/>
 				<text class="t" x="413" y="375" text-anchor="middle">Sperren · Rückrufsperre</text>
-				<rect class="chip offen" x="536" y="355" width="210" height="32" rx="16"/>
-				<text class="t" x="641" y="375" text-anchor="middle">Tagesliste Abweichungen</text>
+				<rect class="chip neu" x="536" y="355" width="210" height="32" rx="16"/>
+				<text class="t" x="641" y="375" text-anchor="middle">Tagesliste + Durchsicht</text>
 				<rect class="chip steht" x="764" y="355" width="210" height="32" rx="16"/>
 				<text class="t" x="869" y="375" text-anchor="middle">Rückverfolgungstest · Bilanz</text>
 				<rect class="chip neu" x="992" y="355" width="210" height="32" rx="16"/>
@@ -296,7 +296,7 @@ code { font-family: var(--f-code); font-size: .88em; }
 					<tr><td>6 Palette, Versand</td>
 						<td><ul><li>Kartons auf Palette scannen</li><li>Palette oder Los zum Kunden scannen</li></ul></td>
 						<td><ul><li>gesperrte Charge nicht auslieferbar</li><li>NVE mit Reserveziffer (GS1)</li></ul></td>
-						<td><ul><li>Lieferschein mit Charge</li><li>Paletten-Etikett (02) (37) (10) (15)</li><li>neu drucken bei Änderung <span class="mk offen">offen</span></li></ul></td></tr>
+						<td><ul><li>Lieferschein mit Charge</li><li>Paletten-Etikett (02) (37) (10) (15), Los wie auf dem Karton <span class="mk neu">neu</span></li><li>„Etikett neu drucken“ nach Entnahme <span class="mk neu">neu</span></li></ul></td></tr>
 				</tbody>
 			</table>
 		</div>
@@ -324,15 +324,15 @@ code { font-family: var(--f-code); font-size: .88em; }
 			</div>
 			<div class="gedanke">
 				<h3>Ein Grund nützt nur, wenn ihn jemand liest</h3>
-				<p>Heute steht er an der Buchung. Es fehlt die Tagesliste für die QS: alle FEFO- und Einwaage-Abweichungen, Prüfwerte außerhalb, gesperrte Lose. Ohne sie werden Gründe zur Formsache, besonders „Sonstiges“.</p>
+				<p>Dafür gibt es jetzt die QS Tagesliste: FEFO- und Einwaage-Abweichungen, Prüfwerte außerhalb, Sperren eines Tages an einer Stelle. Die QS bestätigt „Tag durchgesehen“, das bleibt als unveränderbarer Nachweis. Routinesperren (Freigabe vor Verwendung) zählen nicht als Abweichung.</p>
 			</div>
 			<div class="gedanke">
 				<h3>Der Wareneingang ist so gut wie die Lieferanten</h3>
 				<p>Die Fotos zeigen es: Butter und Palmfett nur mit EAN, Kokos ganz ohne Strichcode, Eigelb mit GS1. Der Scan erkennt fast immer den Artikel, die Charge aber nur bei GS1-128. Den Hebel hat der Einkauf, nicht das ERP.</p>
 			</div>
 			<div class="gedanke">
-				<h3>Zwei Lücken im Fluss</h3>
-				<p>FEFO greift beim Herstellen, aber noch nicht, wenn am Kneter ein Gebinde direkt an die Linie geht. Und eine geänderte Palette bekommt noch kein neues Etikett; die Zahl wird heute weiter von Hand korrigiert.</p>
+				<h3>Zwei Lücken geschlossen</h3>
+				<p>FEFO fragt jetzt auch an der Linie nach dem Grund. Und eine Palette merkt sich, was ihr Etikett zeigt: Wird ein Karton heruntergenommen, kommt „Etikett neu drucken“ statt der Korrektur von Hand.</p>
 			</div>
 		</div>
 	</section>
