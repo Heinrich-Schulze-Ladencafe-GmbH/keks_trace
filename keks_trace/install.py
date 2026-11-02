@@ -285,6 +285,14 @@ CUSTOM_FIELDS = {
 			"insert_after": "po_no",
 			"description": "Nur für diesen Auftrag. Leer = Wert am Kunden.",
 		},
+		{
+			"fieldname": "kt_hinweis_produktion",
+			"label": "Hinweis an Produktion und Verpackung",
+			"fieldtype": "Small Text",
+			"insert_after": "kt_mhd_monate",
+			"description": "Steht am Terminal groß beim Auftrag (Linie, Verpackungs-PC, Packstation, Verpacken), "
+			"z. B. „mit Clip“, „neue Folie ab heute“.",
+		},
 	],
 	"Supplier": [
 		{

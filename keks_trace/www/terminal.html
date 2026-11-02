@@ -140,6 +140,11 @@
 	.pos { display: flex; justify-content: space-between; gap: 10px; width: 100%; text-align: left; background: #fff; border: 1px solid var(--rand); color: var(--text); border-radius: 6px; padding: 12px 14px; margin: 8px 0; font-size: 19px; cursor: pointer; }
 	.pos small { display: block; color: var(--muted); font-size: 15px; }
 	.marke { display: inline-block; font-size: 15px; padding: 2px 10px; border-radius: 20px; background: #d9e7f7; margin-left: 8px; vertical-align: middle; }
+	/* Hinweis vom Büro am Auftrag: groß und gelb, nicht zu übersehen */
+	.hinweis-buero { background: #fff3c4; border: 2px solid #e0a800; border-left-width: 10px; border-radius: 6px; padding: 12px 16px; margin: 10px 0; font-size: 24px; font-weight: 700; }
+	.hinweis-buero small { display: block; font-size: 15px; font-weight: 400; color: var(--muted); margin-bottom: 2px; }
+	.balken { height: 10px; background: var(--panel2); border-radius: 5px; overflow: hidden; margin-top: 4px; min-width: 80px; }
+	.balken div { height: 100%; background: var(--blau); }
 	.marke.gruen { background: var(--gruen); color: #fff; } .marke.orange { background: var(--orange); color: #111; } .marke.rot { background: var(--rot); color: #fff; }
 	@media (max-width: 600px) {
 		body { font-size: 18px; }
@@ -219,7 +224,7 @@
 
 	const BUCHUNGEN = /^(herstellen|linie_|palette|pruefung_erfassen|umlagern|lieferung|paket_lieferung|anbrechen|wareneingang|rework_erfassen|rework_linie$|silo_leer|behaelter_)/;
 	// Anfrage-ID nur für Methoden, die der Server mit @einmalig schützt (terminal.py); Test test_anfrage_liste
-	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "etikett_drucken", "etikett_vormerken", "herstellen", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_zufuehren", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
+	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "etikett_drucken", "etikett_vormerken", "herstellen", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_rueckgabe", "linie_zufuehren", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
 	async function api(methode, args) {
 		let r;
 		try {
@@ -687,6 +692,7 @@
 		} catch (e) { meldung("rot", e.message); }
 	}
 
+	const UEBERSICHT = ["uebersicht", "Tagesübersicht", "Aufträge des Tages je Linie: Status, Fortschritt, Hinweise"];
 	// Knöpfe aus den Funktionen der Station (in ERPNext unter Terminal Station einstellbar)
 	function menue() {
 		const f = zustand.funktionen || [];
@@ -695,11 +701,13 @@
 			["vpc_lose", "Lose Ware verpacken", "erst das Linienlager leer, sonst nach Bedarf aus dem Lager in Beutel / Karton"],
 			["paletten", "Paletten", "Neue Palette, Etikett, umpacken"],
 			["info", "Info-Scan", "Charge, Behälter oder Palette"],
+			UEBERSICHT,
 		];
 		if (zustand.typ === "Paletten-Terminal") return [
 			["einwickeln", "Palette einwickeln", "abschließen, NVE-Etikett, versandbereit ins Lager"],
 			["paletten", "Paletten", "Neue Palette, Etikett, umpacken"],
 			["info", "Info-Scan", "Charge, Behälter oder Palette"],
+			UEBERSICHT,
 		];
 		const fw = zustand.nur_fertigware;
 		const m = [];
@@ -718,6 +726,7 @@
 		if (f.includes("packstation")) m.push(["packstation", "Packstation", "Auftrag, Anlage, Los, MHD, Kartonlabel"]);
 		if (f.includes("palette_fertig")) m.push(["palette_fertig", "Palette fertig", "Kartons zählen, buchen, Palettenlabel"]);
 		m.push(["info", "Info-Scan", "Charge, Behälter, Silo oder Palette"]);
+		m.push(UEBERSICHT);
 		return m;
 	}
 
@@ -823,6 +832,7 @@
 			if (a === "vpc_lose") return schnellStart(true);
 			if (a === "einwickeln") return einwickelnStart();
 			if (a === "info") return infoScan();
+			if (a === "uebersicht") return tagesuebersicht();
 			if (a === "wareneingang") return wareneingangStart();
 			if (a === "lieferung") return lieferungStart();
 			if (a === "paletten") return palettenStart();
@@ -861,7 +871,8 @@
 			const el = document.getElementById("pa-liste");
 			if (!liste.length) { el.innerHTML = `<p class="fehlt">Kein freigegebener Auftrag für heute. Die Produktionsleitung gibt den Tagesplan frei.</p>`; return; }
 			el.innerHTML = tabelle([["Auftrag", "name"], ["Artikel", "artikel"], ["Bezeichnung", "artikelname"], ["Kunde", "kundenname"], ["Tag", "datum_text"],
-				["Bestellt", "menge_text", 1], ["Gebucht", "gebucht_text", 1], ["Anlage", "verpackungsanlage"], ["Status", (a) => (a.aktuell ? "▶ " : "") + a.status]], liste, "pa");
+				["Bestellt", "menge_text", 1], ["Gebucht", "gebucht_text", 1], ["Anlage", "verpackungsanlage"], ["Status", (a) => (a.aktuell ? "▶ " : "") + a.status],
+				...(liste.some((a) => a.hinweis) ? [["Hinweis", (a) => a.hinweis || ""]] : [])], liste, "pa");
 			aktionen(async (a, d) => {
 				if (a !== "pa") return beiAllgemein(a);
 				try { await api("linie_waehlen", { station: zustand.station, auftrag: liste[+d.i].name }); weiter(); } catch (e) { meldung("rot", e.message); }
@@ -869,8 +880,11 @@
 		} catch (e) { meldung("rot", e.message); }
 	}
 
+	function hinweisHtml(liste) {
+		return (liste || []).filter((h) => h && h.text).map((h) => `<div class="hinweis-buero"><small>Hinweis ${esc(h.von || "")}</small>${esc(h.text)}</div>`).join("");
+	}
 	function auftragKopf(i) {
-		return tabelle([["Auftrag", "auftrag"], ["Bezeichnung", "name"], ["Kunde", (x) => x.kunde || ""], ["Anlage", (x) => x.verpackungsanlage || ""],
+		return hinweisHtml(i.hinweise) + tabelle([["Auftrag", "auftrag"], ["Bezeichnung", "name"], ["Kunde", (x) => x.kunde || ""], ["Anlage", (x) => x.verpackungsanlage || ""],
 			["Bestellt", "menge_text", 1], ["Gebucht", "gebucht_text", 1]], [i]) + `<div style="text-align:right;margin-top:-8px"><button class="link" data-a="pa-wechseln">Auftrag wechseln</button></div>`;
 	}
 
@@ -886,8 +900,13 @@
 			<div class="fehlt" style="font-size:16px">${i.kuebel.map((k) => esc(k.code + ": " + k.name + (k.datum ? " vom " + k.datum : "") + ", " + kg(k.menge))).join("<br>")}</div></div>` : "";
 		app.innerHTML = kopf("An die Linie", true) + auftragKopf(i) + kuebel + `<div class="panel">${zutaten}</div>` +
 			textFeld("scan", "Kübel, Gebinde oder Tank scannen") +
-			zahlFeld("menge", "Menge (leer = ganzer Kübel)");
-		aktionen((a) => (a === "pa-wechseln" ? auftragWaehlen("An die Linie", linieStart) : beiAllgemein(a)));
+			zahlFeld("menge", "Menge (leer = ganzer Kübel)") +
+			`<div class="reihe"><button class="knopf" data-a="retour">Retour ins Lager<small>Unbenutztes von der Linie zurück, z. B. halber Sack</small></button></div>`;
+		aktionen((a) => {
+			if (a === "pa-wechseln") return auftragWaehlen("An die Linie", linieStart);
+			if (a === "retour") return retourStart(linieStart);
+			beiAllgemein(a);
+		});
 		const zufuehren = async (code, menge, fefoGrund) => {
 			try {
 				const r = await api("linie_zufuehren", { station: zustand.station, code, menge, fefo_grund: fefoGrund || null });
@@ -1161,9 +1180,11 @@
 		const rest = i.zutaten.filter((z) => z.auf_linie > 0);
 		app.innerHTML = kopf("Auftrag beenden", true) + auftragKopf(i) +
 			(rest.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Rest auf der Linie wird als Linienrest ausgebucht (Bruch, Biogas). Wannen vorher leer verpacken!</div>${rest.map((z) => `<div class="zeile"><div>${esc(z.name)}</div><div class="rechts">${esc(mg(z.auf_linie, z.einheit))}</div></div>`).join("")}</div>` : `<p>Nichts mehr auf der Linie.</p>`) +
+			(rest.length ? `<div class="reihe"><button class="knopf blau" data-a="retour">Erst Unbenutztes zurück ins Lager<small>Retour: Säcke, Gebinde, Packmittel</small></button></div>` : "") +
 			`<div class="reihe"><button class="knopf" data-a="zurueck-pf">← Zurück</button><button class="knopf gruen" data-a="ja">Auftrag beenden</button></div>`;
 		aktionen(async (a) => {
 			if (a === "zurueck-pf") return paletteFertigStart();
+			if (a === "retour") return retourStart(async () => auftragBeenden(await api("linie_info", { station: zustand.station })));
 			if (a !== "ja") return beiAllgemein(a);
 			try {
 				const r = await api("linie_beenden", { station: zustand.station, auftrag: i.auftrag });
@@ -1179,6 +1200,80 @@
 			<div class="reihe">${extra || ""}<button class="knopf blau" data-a="zurueck">Fertig</button></div>`;
 		ton(true);
 		return aktionen;
+	}
+
+	// ------------------------------------------------------------------ Retour von der Linie
+	// Was an die Linie gegeben, aber nicht verbraucht wurde, geht zurück in das Lager, aus dem es kam. Sonst würde
+	// es beim Auftragsende als Linienrest ausgebucht und Bestand und Mengenbilanz stimmten nicht.
+	async function retourStart(zurueck, hinweis) {
+		app.innerHTML = kopf("Retour ins Lager", true) + `<div id="retour">Lädt …</div>`;
+		aktionen((a) => (a === "zurueck" ? zurueck() : beiAllgemein(a)));
+		if (hinweis) meldung("gruen", hinweis);
+		let liste;
+		try { liste = await api("linie_retour_liste", { station: zustand.station }); } catch (e) { return meldung("rot", e.message); }
+		const el = document.getElementById("retour");
+		if (!liste.length) { el.innerHTML = `<p class="fehlt">Auf der Linie liegen keine Rohstoffe oder Packmittel dieses Auftrags.</p>`; return; }
+		el.innerHTML = `<p>Was geht zurück? Zeile antippen</p>` + tabelle([["Artikel", "name"], ["Charge", "charge"], ["Auf der Linie", (z) => mg(z.menge, z.einheit), 1],
+			["Zurück nach", (z) => z.silo ? "– (aus dem Silo)" : z.ziel_name || "–"]], liste, "zeile");
+		aktionen((a, d) => {
+			if (a === "zurueck") return zurueck();
+			if (a !== "zeile") return beiAllgemein(a);
+			const z = liste[+d.i];
+			if (z.silo || !z.ziel) return meldung("orange", z.name + " kam aus dem Silo und kann nicht zurück.");
+			retourMenge(z, zurueck);
+		});
+	}
+	function retourMenge(z, zurueck) {
+		app.innerHTML = kopf("Retour: " + z.name, true) +
+			`<div class="panel"><div class="zeile"><div>Charge</div><div class="rechts">${esc(z.charge)}</div></div>
+			<div class="zeile"><div>Auf der Linie</div><div class="rechts">${esc(mg(z.menge, z.einheit))}</div></div>
+			<div class="zeile"><div>Zurück nach</div><div class="rechts">${esc(z.ziel_name)}</div></div></div>` +
+			zahlFeld("menge", `Wie viel geht zurück (${esc(ein(z.einheit))})?`, z.menge) +
+			`<div class="reihe"><button class="knopf" data-a="zur-liste">← Liste</button><button class="knopf gruen" data-a="buchen">Zurück ins Lager buchen</button></div>`;
+		const buchen = async () => {
+			try {
+				const r = await api("linie_rueckgabe", { station: zustand.station, charge: z.charge, menge: zahl(document.getElementById("menge").value) });
+				ton(true);
+				retourStart(zurueck, "Zurück ins Lager: " + r.name + " " + mg(r.menge, r.einheit) + " nach " + r.ziel);
+			} catch (e) { meldung("rot", e.message); }
+		};
+		aktionen((a) => {
+			if (a === "zur-liste" || a === "zurueck") return retourStart(zurueck);
+			if (a === "buchen") return buchen();
+			beiAllgemein(a);
+		});
+		enter("menge", buchen);
+		fokus("menge");
+	}
+
+	// ------------------------------------------------------------------ Tagesübersicht
+	// Aufträge des Tages je Linie mit Status, Fortschritt und Hinweis – wie der Orderblock bei FOBIS
+	const PA_FARBE = { "Läuft": "gruen", Freigegeben: "orange", Geplant: "", Fertig: "", Abgebrochen: "rot" };
+	async function tagesuebersicht(datum) {
+		app.innerHTML = kopf("Tagesübersicht", true) + `<div id="tag">Lädt …</div>`;
+		aktionen(beiAllgemein);
+		let t;
+		try { t = await api("tagesuebersicht", { station: zustand.station, datum: datum || null }); } catch (e) { return meldung("rot", e.message); }
+		const tagVerschieben = (n) => { const d = new Date(t.datum_iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+		document.getElementById("tag").innerHTML =
+			`<div class="reihe"><button class="knopf klein" data-a="tag" data-d="${tagVerschieben(-1)}">← Vortag</button>
+				<div style="flex:2 1 260px;text-align:center"><div class="gross">${esc(t.datum)}${t.heute ? " · heute" : ""}</div>
+				<div class="fehlt" style="font-size:16px">Offen ${t.offen} · Fertig ${t.fertig}</div></div>
+				<button class="knopf klein" data-a="tag" data-d="${tagVerschieben(1)}">Folgetag →</button></div>` +
+			(t.linien.length ? t.linien.map((l) => `<h2 style="margin:18px 0 0">${esc(l.linie)} <span class="fehlt" style="font-size:16px;font-weight:400">offen ${l.offen} · fertig ${l.fertig}</span></h2>
+				<table class="tab"><thead><tr><th>Status</th><th>Auftrag</th><th>Artikel</th><th>Kunde</th><th class="z">Bestellt</th><th class="z">Gebucht</th></tr></thead><tbody>
+				${l.auftraege.map((a) => `<tr><td><span class="marke ${PA_FARBE[a.status] || ""}" style="margin:0">${esc(a.status)}</span>${a.vortag ? `<small class="fehlt" style="display:block;font-size:14px">vom ${esc(a.datum)}</small>` : ""}</td>
+					<td>${esc(a.auftrag)}</td><td>${esc(a.name)}${a.hinweis ? `<div class="hinweis-buero" style="font-size:17px;padding:6px 10px;margin:6px 0 0">${esc(a.hinweis)}</div>` : ""}</td>
+					<td>${esc(a.kunde || "Lager")}</td><td class="z">${esc(a.menge_text)}</td>
+					<td class="z">${esc(a.gebucht_text)}<div class="balken"><div style="width:${Math.round(a.anteil * 100)}%"></div></div></td></tr>`).join("")}
+				</tbody></table>`).join("")
+				: `<p class="fehlt">An diesem Tag sind keine Produktionsaufträge geplant.</p>`) +
+			`<div class="reihe"><button class="knopf" data-a="tag" data-d="">Heute</button><button class="knopf" data-a="neu">Aktualisieren</button></div>`;
+		aktionen((a, d) => {
+			if (a === "tag") return tagesuebersicht(d.d || null);
+			if (a === "neu") return tagesuebersicht(t.datum_iso);
+			beiAllgemein(a);
+		});
 	}
 
 	// ------------------------------------------------------------------ Herstellen / Verpacken
@@ -1206,7 +1301,8 @@
 				const liste = await api("aufgaben", { station: zustand.station });
 				suchListe("aufg", [["Auftrag", "auftrag"], ["Kunde", "kunde"], ["Artikel", "name"],
 					["Bestellt", (a) => zahlText(a.bestellt), 1], ["Erledigt", (a) => zahlText(a.erledigt), 1], ["ToDo", (a) => zahlText(a.todo), 1],
-					["Vorrat", (a) => !a.vorstufe ? "" : (a.vorrat_eigen ? zahlText(a.vorrat_eigen) + " für Auftrag" + (a.vorrat_frei ? " + " + zahlText(a.vorrat_frei) + " frei" : "") : zahlText(a.verfuegbar)) + " " + a.vorstufe, 1], ["Termin", "termin"]],
+					["Vorrat", (a) => !a.vorstufe ? "" : (a.vorrat_eigen ? zahlText(a.vorrat_eigen) + " für Auftrag" + (a.vorrat_frei ? " + " + zahlText(a.vorrat_frei) + " frei" : "") : zahlText(a.verfuegbar)) + " " + a.vorstufe, 1], ["Termin", "termin"],
+					...(liste.some((a) => a.hinweis) ? [["Hinweis", (a) => a.hinweis || ""]] : [])],
 					liste, (a) => schnellAnzahl(a), "Suchen: Kunde, Auftrag, Artikel …");
 			} else {
 				const liste = await api("zum_verpacken", { station: zustand.station });
@@ -1417,6 +1513,7 @@
 		const au = ansatz.auftrag;
 		const pa = zustand.linienAuftrag;
 		app.innerHTML = kopf((au ? "Produktion " + au.auftrag + ": " : "") + r.name + " · " + mg(r.sollmenge, r.einheit), true) +
+			(au && au.hinweis ? hinweisHtml([{ von: "Kundenauftrag " + au.auftrag, text: au.hinweis }]) : "") +
 			(au ? positionBox(au.artikel + "  " + au.name, au.kundenname, au.menge, au.verpackt, au.offen_verpacken, au.einheit) : "") + `
 			${r.kennzeichen && r.kennzeichen.length ? `<div class="panel">${kennzeichenMarken(r.kennzeichen)} <span class="fehlt" style="font-size:16px">Nur Zutaten mit diesem Kennzeichen werden angenommen.</span></div>` : ""}
 			${r.umstellung_bio ? `<div class="meldung orange">Umstellung auf Bio: hier wurde zuletzt konventionell produziert. Vor dem Buchen Reinigung bzw. Spülcharge bestätigen.</div>` : ""}

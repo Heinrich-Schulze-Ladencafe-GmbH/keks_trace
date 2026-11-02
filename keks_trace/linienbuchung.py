@@ -115,7 +115,7 @@ def auftraege(station: str) -> list[dict]:
 		filters={"linie": s.linie, "status": ["in", ["Freigegeben", "Läuft"]]},
 		fields=[
 			"name", "datum", "reihenfolge", "status", "artikel", "artikelname", "menge", "einheit", "menge_kg",
-			"gebucht_kg", "kunde", "kundenauftrag", "verpackungsanlage", "engpass", "dauer_stunden",
+			"gebucht_kg", "kunde", "kundenauftrag", "verpackungsanlage", "engpass", "dauer_stunden", "bemerkung",
 		],
 		order_by="datum, reihenfolge, creation",
 	)  # fmt: skip
@@ -126,6 +126,7 @@ def auftraege(station: str) -> list[dict]:
 		a["gebucht_text"] = _menge_text(a["artikel"], a["gebucht_kg"])
 		a["datum_text"] = formatdate(a["datum"])
 		a["kundenname"] = frappe.db.get_value("Customer", a["kunde"], "customer_name") if a["kunde"] else None
+		a["hinweis"] = " · ".join(h["text"] for h in hinweise(frappe._dict(a)))
 	return liste
 
 
@@ -152,6 +153,18 @@ def _laufender(s):
 	if pa.status != "Läuft":
 		_fehler(_("Auftrag {0} ist {1}. Bitte einen laufenden Auftrag wählen.").format(pa.name, pa.status))
 	return pa
+
+
+def hinweise(pa) -> list[dict]:
+	"""Hinweise vom Büro zum Auftrag: am Produktionsauftrag und am Kundenauftrag. Das Terminal zeigt sie groß."""
+	out = []
+	if (pa.bemerkung or "").strip():
+		out.append({"von": _("Produktionsauftrag"), "text": pa.bemerkung.strip()})
+	if pa.kundenauftrag:
+		text = (frappe.db.get_value("Sales Order", pa.kundenauftrag, "kt_hinweis_produktion") or "").strip()
+		if text:
+			out.append({"von": _("Kundenauftrag {0}").format(pa.kundenauftrag), "text": text})
+	return out
 
 
 def info(auftrag: str) -> dict:
@@ -181,6 +194,7 @@ def info(auftrag: str) -> dict:
 	return {
 		"auftrag": pa.name,
 		"status": pa.status,
+		"hinweise": hinweise(pa),
 		"artikel": pa.artikel,
 		"name": pa.artikelname,
 		"datum": formatdate(pa.datum),
@@ -528,6 +542,182 @@ def zufuehren(station: str, code: str, menge: float | None = None, fefo_grund: s
 		"buchung": se.name,
 		"hinweise": hinweise,
 		"info": info(pa.name),
+	}
+
+
+# ---------------------------------------------------------------------------
+# Retour: Unbenutztes von der Linie zurück ins Lager (sonst wird es beim Auftragsende als Linienrest ausgebucht)
+# ---------------------------------------------------------------------------
+
+RETOUR_STUFEN = ("Rohstoff", "Packmittel")
+
+
+def _herkunft(pa: str, charge: str, linienlager: str) -> str | None:
+	"""Lager, aus dem die Charge für diesen Auftrag an die Linie kam (letzte Zuführung)."""
+	z = frappe.db.sql(
+		"""
+		select sed.s_warehouse from `tabStock Entry Detail` sed join `tabStock Entry` se on se.name = sed.parent
+		where se.docstatus = 1 and se.kt_produktionsauftrag = %s and sed.batch_no = %s and sed.t_warehouse = %s
+			and ifnull(sed.s_warehouse, '') != ''
+		order by se.posting_date desc, se.posting_time desc, se.creation desc limit 1
+		""",
+		(pa, charge, linienlager),
+	)
+	return z[0][0] if z else None
+
+
+def retour_liste(station: str) -> list[dict]:
+	"""Was vom laufenden Auftrag zurück ins Lager kann: Rohstoffe und Packmittel, nicht aus dem Silo."""
+	from keks_trace.silo import silo_fuer_lager
+
+	s = _station(station)
+	linie = _linie(s)
+	pa = _laufender(s)
+	out = []
+	for z in bestand(pa.name):
+		stufe = artikel_stufe(z["artikel"])
+		if stufe not in RETOUR_STUFEN:
+			continue
+		lager = _herkunft(pa.name, z["charge"], linie.lagerort)
+		out.append(
+			{
+				"charge": z["charge"],
+				"artikel": z["artikel"],
+				"name": frappe.get_cached_value("Item", z["artikel"], "item_name"),
+				"stufe": stufe,
+				"menge": flt(z["menge"], 3),
+				"einheit": frappe.get_cached_value("Item", z["artikel"], "stock_uom"),
+				"ziel": lager,
+				"ziel_name": frappe.get_cached_value("Warehouse", lager, "warehouse_name") if lager else None,
+				# Mehl kippt niemand zurück ins Silo: Silo-Ware bleibt auf der Linie
+				"silo": bool(lager and silo_fuer_lager(lager)),
+			}
+		)
+	return out
+
+
+def rueckgabe(station: str, charge: str, menge: float) -> dict:
+	"""Retour: Menge einer Charge von der Linie zurück in das Lager, aus dem sie kam."""
+	s = _station(station)
+	linie = _linie(s)
+	pa = _laufender(s)
+	menge = flt(menge)
+	if menge <= EPS:
+		_fehler(_("Bitte die Menge eingeben, die zurück ins Lager geht."))
+	zeile = next((z for z in retour_liste(s.name) if z["charge"] == charge), None)
+	if not zeile:
+		_fehler(
+			_(
+				"Charge {0} liegt für diesen Auftrag nicht auf der Linie (oder ist kein Rohstoff/Packmittel)."
+			).format(charge)
+		)
+	if zeile["silo"] or not zeile["ziel"]:
+		_fehler(
+			_("{0} kam aus dem Silo bzw. ohne Herkunft an die Linie und kann nicht zurück.").format(
+				zeile["name"]
+			)
+		)
+	if menge > zeile["menge"] + EPS:
+		_fehler(
+			_("Auf der Linie sind nur {0} {1} von Charge {2}.").format(
+				flt(zeile["menge"], 3), zeile["einheit"], charge
+			)
+		)
+	jetzt = now_datetime()
+	se = frappe.get_doc(
+		{
+			"doctype": "Stock Entry",
+			"stock_entry_type": "Material Transfer",
+			"purpose": "Material Transfer",
+			"company": linie.company,
+			"set_posting_time": 1,
+			"posting_date": jetzt.date(),
+			"posting_time": jetzt.time().strftime("%H:%M:%S"),
+			"kt_station": s.name,
+			"kt_produktionsauftrag": pa.name,
+			"remarks": _("Retour von der Linie ({0})").format(pa.name),
+			"items": [
+				{
+					"item_code": zeile["artikel"],
+					"qty": menge,
+					"transfer_qty": menge,
+					"uom": zeile["einheit"],
+					"stock_uom": zeile["einheit"],
+					"conversion_factor": 1,
+					"s_warehouse": linie.lagerort,
+					"t_warehouse": zeile["ziel"],
+					"use_serial_batch_fields": 1,
+					"batch_no": charge,
+				}
+			],
+		}
+	)
+	se.insert()
+	se.submit()
+	return {
+		"name": zeile["name"],
+		"charge": charge,
+		"menge": flt(menge, 3),
+		"einheit": zeile["einheit"],
+		"ziel": zeile["ziel_name"],
+		"buchung": se.name,
+	}
+
+
+# ---------------------------------------------------------------------------
+# Tagesübersicht: Aufträge eines Tages je Linie (wie der Orderblock bei FOBIS)
+# ---------------------------------------------------------------------------
+
+STATUS_REIHENFOLGE = {"Läuft": 0, "Freigegeben": 1, "Geplant": 2, "Fertig": 3, "Abgebrochen": 4}
+
+
+def tagesuebersicht(datum: str | None = None) -> dict:
+	"""Produktionsaufträge eines Tages je Linie mit Status, Menge, gebucht und Hinweis. Für heute zusätzlich
+	alles, was von früheren Tagen noch freigegeben ist oder läuft (sonst fällt es aus dem Blick)."""
+	tag = getdate(datum or nowdate())
+	heute = tag == getdate(nowdate())
+	bedingung = "(datum = %(tag)s or (%(heute)s and datum < %(tag)s and status in ('Freigegeben', 'Läuft')))"
+	zeilen = frappe.db.sql(
+		f"""
+		select name, linie, datum, reihenfolge, status, artikel, artikelname, menge_kg, gebucht_kg, kunde,
+			kundenauftrag, bemerkung
+		from `tabProduktionsauftrag` where {bedingung}
+		order by linie, datum, reihenfolge, creation
+		""",
+		{"tag": tag, "heute": 1 if heute else 0},
+		as_dict=True,
+	)
+	je_linie = {}
+	for z in zeilen:
+		l = je_linie.setdefault(
+			z.linie or "-", {"linie": z.linie or "-", "auftraege": [], "offen": 0, "fertig": 0}
+		)
+		fertig = z.status in ("Fertig", "Abgebrochen")
+		l["fertig" if fertig else "offen"] += 1
+		l["auftraege"].append(
+			{
+				"auftrag": z.name,
+				"status": z.status,
+				"artikel": z.artikel,
+				"name": z.artikelname,
+				"kunde": frappe.db.get_value("Customer", z.kunde, "customer_name") if z.kunde else None,
+				"menge_text": _menge_text(z.artikel, z.menge_kg),
+				"gebucht_text": _menge_text(z.artikel, z.gebucht_kg),
+				"anteil": min(flt(z.gebucht_kg) / flt(z.menge_kg), 1) if flt(z.menge_kg) else 0,
+				"vortag": getdate(z.datum) < tag,
+				"datum": formatdate(z.datum),
+				"hinweis": " · ".join(h["text"] for h in hinweise(z)),
+			}
+		)
+	for l in je_linie.values():
+		l["auftraege"].sort(key=lambda a: (STATUS_REIHENFOLGE.get(a["status"], 9), not a["vortag"]))
+	return {
+		"datum": formatdate(tag),
+		"datum_iso": str(tag),
+		"heute": heute,
+		"linien": sorted(je_linie.values(), key=lambda l: l["linie"]),
+		"offen": sum(l["offen"] for l in je_linie.values()),
+		"fertig": sum(l["fertig"] for l in je_linie.values()),
 	}
 
 

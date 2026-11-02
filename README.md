@@ -202,6 +202,20 @@ Artikels, bei Silo-Zutaten das Silo). Steht am Artikel eine Maßeinheit-Umrechnu
 (z. B. 1 Sack = 25 kg), fragt das Terminal nach dem Scan in **Gebinden** („Wie viele Sack?“, darunter „= 50 kg“);
 geht der Rest in ganzen Gebinden auf, ist das schon vorgewählt. Umschalten auf kg geht immer.
 
+**Hinweis vom Büro:** Am Produktionsauftrag („Hinweis an Linie und Verpackung“) und am Kundenauftrag („Hinweis
+an Produktion und Verpackung“) eine Zeile eintragen, z. B. „Mit Clip, neue Folie 2026“. Sie steht groß und gelb
+über dem Auftrag an der Linie, am Verpackungs-PC, an der Packstation, beim Verpacken nach Kundenauftrag, in den
+Auftragslisten und in der Tagesübersicht.
+
+**Retour ins Lager:** „An die Linie“ → **Retour ins Lager**. Rohstoffe und Packmittel, die für den laufenden
+Auftrag an die Linie gegeben, aber nicht verbraucht wurden (halber Sack, Folienrolle), gehen zurück in das Lager,
+aus dem sie kamen. Sonst würden sie beim Auftragsende als Linienrest ausgebucht. Silo-Ware geht nicht zurück.
+„Auftrag beenden“ erinnert daran, solange noch etwas auf der Linie liegt.
+
+**Tagesübersicht** (an jeder Station): Aufträge des Tages je Linie mit Status, bestellt, gebucht (Balken) und
+Hinweis, Zähler offen/fertig, blättern nach Vortag und Folgetag. Heute zeigt sie auch noch freigegebene oder
+laufende Aufträge von früheren Tagen („vom …“).
+
 **Datumsfelder** haben ein festes Format: nur Ziffern (TTMMJJ), die Punkte setzt das Terminal. Unter dem Feld
 steht sofort das erkannte Datum mit Wochentag oder der Fehler (gibt es nicht, unvollständig, in der
 Vergangenheit, über 10 Jahre in der Zukunft). Buchen geht erst mit gültigem Datum. Das MHD beim Wareneingang
@@ -598,6 +612,8 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_behaelter` | Behälter nach dem Leeren frei bzw. zur Reinigung (Einstellung); Meldung „gereinigt“ mit Zeit und Station; Anfrage-ID nur für geschützte Buchungen |
 | `test_etiketten` | GS1-128 in ZPL (Zeichensätze, FNC1, zurückgelesen); Data Matrix (Größe, Zeichen, Behälter-Code); Layouts je Rollengröße, Mindestmaß beim Zuordnen und Ändern; Logo (transparent wird weiß, fehlt es: ohne Logo drucken); Drucker an der Station oder Browserdruck; inaktiv; nicht erreichbar mit klarer Meldung; Testdruck; Adresse geprüft; „Genutzt an“ |
 | `test_akte` | Druckprotokoll: Erstdruck, Nachdruck nur mit Grund, Inhalt geändert, im Ablauf, Gebinde, Browserdruck, Testdruck, nicht änderbar; NVE mit Leerzeichen; Akte Palette und Behälter; Wo ist das Los; Etikett fehlt mit geprüften und nicht geprüften Paletten; Woraus besteht das bis zur Silo-Charge mit Wareneingang und QS-Freigabe |
+| `test_einwaage` | Lagerort je Zutat (Quelllager der Stückliste vor Standardlager), Gebinde aus der Maßeinheit-Umrechnung |
+| `test_retour_hinweis` | Retour von der Linie ins Herkunftslager (Menge geprüft, Rest beim Auftragsende als Linienrest); Hinweise von Produktions- und Kundenauftrag; Tagesübersicht mit Aufträgen vom Vortag |
 
 Die Tests rollen ihre Daten am Ende zurück. Demo-Funktionen committen nur außerhalb von Tests
 (`utils.demo_commit`); vorher schrieb ein Demo-Aufruf mitten in einem Test dessen Daten fest.

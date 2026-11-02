@@ -310,6 +310,23 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 REZEPT_STUFEN = ("Grundteig", "Teig veredelt", "Halbfabrikat")
 
 
+def _mit_hinweis(zeilen: list[dict]) -> None:
+	"""Hinweis des Büros am Kundenauftrag („mit Clip“ …) an jede Zeile hängen (Feld kt_hinweis_produktion)."""
+	namen = {z["auftrag"] for z in zeilen if z.get("auftrag")}
+	if not namen:
+		return
+	text = dict(
+		frappe.get_all(
+			"Sales Order",
+			filters={"name": ["in", list(namen)]},
+			fields=["name", "kt_hinweis_produktion"],
+			as_list=True,
+		)
+	)
+	for z in zeilen:
+		z["hinweis"] = (text.get(z.get("auftrag")) or "").strip() or None
+
+
 def _lagerort(bom_zeile, company: str | None) -> str | None:
 	"""Lagerort einer Rezeptzeile: Quelllager der Stückliste, sonst Standardlager des Artikels (ohne Firmenkürzel)."""
 	lager = bom_zeile.get("source_warehouse") or frappe.db.get_value(
@@ -936,6 +953,7 @@ def aufgaben(station: str) -> list[dict]:
 				"termin": formatdate(z.termin) if z.termin else None,
 			}
 		)
+	_mit_hinweis(ergebnis)
 	return ergebnis
 
 
@@ -1077,6 +1095,7 @@ def auftraege(station: str, kunde: str | None = None) -> list[dict]:
 		z["offen_liefern_text"] = paletten.zerlegen(z.artikel, max(flt(z.stock_qty) - geliefert_kg, 0))
 		z["offen_kg"] = max(flt(z.stock_qty) - verpackt_kg, 0)
 		z["einheiten"] = paletten.einheiten(z.artikel, alle=True)
+	_mit_hinweis(zeilen)
 	return zeilen
 
 
@@ -2632,6 +2651,32 @@ def _linien_station(station):
 	if not (s.f_linie or s.f_packstation or s.f_palette_fertig):
 		_fehler(_("Die Station {0} arbeitet nicht an einer Linie.").format(s.name))
 	return s
+
+
+@frappe.whitelist()
+def linie_retour_liste(station: str) -> list[dict]:
+	"""Retour: was vom laufenden Auftrag unbenutzt zurück ins Lager kann."""
+	from keks_trace import linienbuchung
+
+	return linienbuchung.retour_liste(_linien_station(station).name)
+
+
+@frappe.whitelist()
+@einmalig
+def linie_rueckgabe(station: str, charge: str, menge: float) -> dict:
+	from keks_trace import linienbuchung
+
+	return linienbuchung.rueckgabe(_linien_station(station).name, charge, menge)
+
+
+@frappe.whitelist()
+def tagesuebersicht(station: str, datum: str | None = None) -> dict:
+	"""Aufträge des Tages je Linie (nur lesen, jede Station)."""
+	from keks_trace import linienbuchung
+
+	_station(station)
+	frappe.has_permission("Produktionsauftrag", "read", throw=True)
+	return linienbuchung.tagesuebersicht(datum)
 
 
 @frappe.whitelist()
