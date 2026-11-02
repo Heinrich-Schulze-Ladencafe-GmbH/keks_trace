@@ -14,6 +14,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, formatdate, getdate, now_datetime, nowdate
 
+from keks_trace import akte as akte_modul
 from keks_trace import etiketten, gs1, kennzeichnung, pruefung
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
@@ -129,12 +130,38 @@ def start(station: str) -> dict:
 @frappe.whitelist()
 @einmalig
 def etikett_drucken(
-	station: str, art: str, nve: str | None = None, codes: str | None = None, anzahl: int | None = None
+	station: str,
+	art: str,
+	nve: str | None = None,
+	codes: str | None = None,
+	anzahl: int | None = None,
+	grund: str | None = None,
+	geprueft: str | None = None,
 ) -> dict:
 	"""Etikett direkt auf den Netzwerkdrucker der Station (siehe etiketten.py). Einmalig: ein verlorenes
-	Ergebnis und nochmal Tippen druckt nicht doppelt."""
+	Ergebnis und nochmal Tippen druckt nicht doppelt. Nachdruck ohne Anlass: Antwort `grund_noetig`."""
 	_station(station)
-	return etiketten.drucken(station, art, nve=nve, codes=codes, anzahl=anzahl)
+	return etiketten.drucken(
+		station, art, nve=nve, codes=codes, anzahl=anzahl, grund=grund, geprueft=geprueft
+	)
+
+
+@frappe.whitelist()
+@einmalig
+def etikett_vormerken(
+	station: str,
+	art: str,
+	nve: str | None = None,
+	codes: str | None = None,
+	anzahl: int | None = None,
+	grund: str | None = None,
+	geprueft: str | None = None,
+) -> dict:
+	"""Browserdruck: vor dem Öffnen der Druckseite Grund prüfen und den Druck protokollieren."""
+	_station(station)
+	return etiketten.vormerken(
+		station, art, nve=nve, codes=codes, anzahl=anzahl, grund=grund, geprueft=geprueft
+	)
 
 
 @frappe.whitelist()
@@ -1264,7 +1291,29 @@ def info(code: str) -> dict:
 		)
 	if r.get("artikel") and not r.get("artikelname"):
 		r["artikelname"] = frappe.get_cached_value("Item", r["artikel"], "item_name")
+	if r["typ"] == "charge":
+		r["fundstellen"] = akte_modul.fundstellen(r["charge"])  # „Wo ist dieses Los?“
 	return r
+
+
+@frappe.whitelist()
+def akte(code: str) -> dict:
+	"""Lebenslauf einer Palette oder eines Behälters (akte.py)."""
+	return akte_modul.akte(code)
+
+
+@frappe.whitelist()
+def herkunft(code: str) -> dict:
+	"""Woraus besteht das? Für eine Charge bzw. ein Los (auch Kartonetikett) oder einen Behälter mit Inhalt."""
+	r = aufloesen(code)
+	charge = r.get("charge")
+	if not charge:
+		_fehler(
+			_("Zu {0} gibt es keine Charge. Bei einer Palette bitte das Los wählen.").format(
+				frappe.bold(code)
+			)
+		)
+	return akte_modul.herkunft(charge)
 
 
 # ---------------------------------------------------------------------------

@@ -142,6 +142,7 @@
 {% endblock %}
 
 {% block script %}
+<script src="/assets/keks_trace/js/akte_ansicht.js"></script>
 <script>
 {% raw %}
 (function () {
@@ -203,7 +204,7 @@
 
 	const BUCHUNGEN = /^(herstellen|linie_|palette|pruefung_erfassen|umlagern|lieferung|paket_lieferung|anbrechen|wareneingang|rework_erfassen|rework_linie$|silo_leer|behaelter_)/;
 	// Anfrage-ID nur für Methoden, die der Server mit @einmalig schützt (terminal.py); Test test_anfrage_liste
-	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "etikett_drucken", "herstellen", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_zufuehren", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
+	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "etikett_drucken", "etikett_vormerken", "herstellen", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_zufuehren", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
 	async function api(methode, args) {
 		let r;
 		try {
@@ -533,37 +534,68 @@
 	// „Etikettendrucker“), sonst wie bisher über den Browser. Geht der Drucker nicht: Meldung und Browserdruck.
 	function browserDruck(url) { window.open(url, "_blank"); }
 	let druckTimer;
-	function druckHinweis(art, text, url) {
+	function druckHinweis(art, text, imBrowser) {
 		let el = document.getElementById("druckhinweis");
 		if (!el) { el = document.createElement("div"); el.id = "druckhinweis"; document.body.appendChild(el); }
 		clearTimeout(druckTimer);
-		el.innerHTML = `<div class="meldung ${art}">${esc(text)}${url ? `<div class="reihe"><button class="knopf" data-d="browser">Im Browser drucken</button><button class="knopf" data-d="zu">Schließen</button></div>` : ""}</div>`;
-		el.querySelectorAll("[data-d]").forEach((b) => b.addEventListener("click", () => { el.innerHTML = ""; if (b.dataset.d === "browser") browserDruck(url); }));
+		el.innerHTML = art ? `<div class="meldung ${art}">${esc(text)}${imBrowser ? `<div class="reihe"><button class="knopf" data-d="browser">Im Browser drucken</button><button class="knopf" data-d="zu">Schließen</button></div>` : ""}</div>` : "";
+		el.querySelectorAll("[data-d]").forEach((b) => b.addEventListener("click", () => { el.innerHTML = ""; if (b.dataset.d === "browser") imBrowser(); }));
 		if (art === "rot") ton(false);
-		else druckTimer = setTimeout(() => { el.innerHTML = ""; }, art === "gruen" ? 5000 : 20000);
+		else if (art) druckTimer = setTimeout(() => { el.innerHTML = ""; }, art === "gruen" ? 5000 : 20000);
 	}
-	async function druckeEtikett(art, args, url) {
+	// Nachdruck ohne Anlass (gleicher Inhalt, nicht Teil einer Buchung): das System fragt nach dem Grund.
+	// Jeder Druck steht mit Grund im Protokoll „Etikettendruck“ (druckprotokoll.py).
+	function grundFragen(r) {
+		return new Promise((fertig) => {
+			const d = document.createElement("div");
+			d.className = "dialog";
+			d.innerHTML = `<div class="panel"><h2>Warum nochmal drucken?</h2>
+				<p class="fehlt">Dieses Etikett wurde schon gedruckt. Der Nachdruck wird mit Grund protokolliert.</p>
+				<div class="reihe">${r.gruende.map((g) => `<button class="knopf" data-g="${esc(g.wert)}">${esc(g.text)}</button>`).join("")}</div>
+				<div class="reihe"><button class="knopf" data-g="">Abbrechen</button></div></div>`;
+			d.querySelectorAll("[data-g]").forEach((b) => b.addEventListener("click", () => { d.remove(); fertig(b.dataset.g || null); }));
+			document.body.appendChild(d);
+		});
+	}
+	// grund: "ablauf" = Druck gehört zur Buchung; null = Nachdruck per Knopf (Server fragt ggf. nach dem Grund)
+	async function druckeEtikett(art, args, url, grund) {
 		const drucker = (zustand.drucker || {})[art];
-		if (!drucker) { browserDruck(url); return false; }
+		const daten = Object.assign({ station: zustand.station, art }, args, grund ? { grund } : {});
+		const nochmal = async (r) => {
+			druckHinweis("", "");
+			const g = await grundFragen(r);
+			return g ? druckeEtikett(art, args, url, g) : false;
+		};
+		const imBrowser = async () => {
+			try {
+				const v = await api("etikett_vormerken", daten);
+				if (v.grund_noetig) return nochmal(v);
+				browserDruck(url);
+			} catch (e) { druckHinweis("rot", e.message); }
+			return false;
+		};
+		if (!drucker) return imBrowser();
 		druckHinweis("orange", "Druckt auf " + drucker + " …");
 		try {
-			const r = await api("etikett_drucken", Object.assign({ station: zustand.station, art }, args));
+			const r = await api("etikett_drucken", daten);
+			if (r.grund_noetig) return nochmal(r);
 			druckHinweis("gruen", (r.etiketten > 1 ? r.etiketten + " Etiketten" : "Etikett") + " an " + r.drucker + " geschickt.");
 			return true;
 		} catch (e) {
-			druckHinweis("rot", e.message, url);
+			druckHinweis("rot", e.message, imBrowser);
 			return false;
 		}
 	}
-	function etikettDrucken(nve) {
-		return druckeEtikett("palette", { nve }, "/nve_etikett?nve=" + encodeURIComponent(nve) + "&druck=1");
+	function etikettDrucken(nve, grund = "ablauf", geprueft) {
+		return druckeEtikett("palette", Object.assign({ nve }, geprueft !== undefined ? { geprueft } : {}), "/nve_etikett?nve=" + encodeURIComponent(nve) + "&druck=1", grund);
 	}
+	function etikettNachdrucken(nve) { return etikettDrucken(nve, null); }
 	function kartonDrucken(anzahl) {
 		druckeEtikett("karton", { anzahl }, "/karton_etikett?druck=1&station=" + encodeURIComponent(zustand.station) + "&anzahl=" + anzahl);
 	}
-	function gebindeDrucken(codes) {
+	function gebindeDrucken(codes, grund = "ablauf") {
 		const liste = [].concat(codes).join(",");
-		druckeEtikett("gebinde", { codes: liste }, "/gebinde_etikett?druck=1&codes=" + encodeURIComponent(liste));
+		return druckeEtikett("gebinde", { codes: liste }, "/gebinde_etikett?druck=1&codes=" + encodeURIComponent(liste), grund);
 	}
 
 	// ------------------------------------------------------------------ Station
@@ -1046,7 +1078,7 @@
 					e.mhd ? "MHD: " + e.mhd : "", e.kennzeichen ? "Kennzeichen: " + e.kennzeichen : "",
 					"Auftrag gesamt: " + e.gebucht_text, "Verbraucht: " + e.verbraucht.map((v) => v.name + " " + v.charge).join(", "),
 				].filter(Boolean), e.hinweise, `<button class="knopf" data-a="etikett">Palettenlabel nochmal</button><button class="knopf" data-a="weiter">Nächste Palette</button>`)((a2) => {
-					if (a2 === "etikett") return etikettDrucken(e.palette);
+					if (a2 === "etikett") return etikettNachdrucken(e.palette);
 					if (a2 === "weiter") return zurueck ? zurueck() : paletteFertigStart();
 					beiAllgemein(a2);
 				});
@@ -1555,7 +1587,7 @@
 			].filter(Boolean);
 			const extra = e.palette ? `<button class="knopf" data-a="etikett">Paletten-Etikett drucken</button><button class="knopf" data-a="palette">Palette anzeigen</button>` : "";
 			ergebnis(e.name, zeilen, e.hinweise, extra)((a) => {
-				if (a === "etikett") return etikettDrucken(e.palette);
+				if (a === "etikett") return etikettNachdrucken(e.palette);
 				if (a === "palette") return paletteLaden(e.palette);
 				beiAllgemein(a);
 			});
@@ -1607,7 +1639,7 @@
 				ergebnis(e.name, ["Behälter: " + e.behaelter, "Menge: " + kg(e.menge), e.punkt ? "Entnahmepunkt: " + e.punkt : "", "Charge: " + e.charge,
 					e.mhd ? "Verwendbar bis: " + e.mhd : "", "Von Auftrag " + e.auftrag], [],
 					`<button class="knopf" data-a="etikett">Etikett nochmal</button><button class="knopf gruen" data-a="weiter">Nächster Behälter</button>`)((b) => {
-					if (b === "etikett") return gebindeDrucken(e.behaelter);
+					if (b === "etikett") return gebindeDrucken(e.behaelter, null);
 					if (b === "weiter") return reworkLinie(a);
 					beiAllgemein(b);
 				});
@@ -1787,12 +1819,12 @@
 					ton(false);
 					return aktionen(beiAllgemein);
 				}
-				const druck = () => gebindeDrucken(e.gebinde);
-				if (e.gebinde && e.gebinde.length) druck();
+				const druck = (grund) => gebindeDrucken(e.gebinde, grund);
+				if (e.gebinde && e.gebinde.length) druck("ablauf");
 				ergebnis(e.name, ["Charge: " + e.charge, "Menge: " + mg(e.menge, art.stock_uom), "Ort: " + e.lager,
 					e.gebinde && e.gebinde.length ? "Gebinde: " + e.gebinde.join(", ") : "", e.mhd ? "MHD: " + e.mhd : ""].filter(Boolean),
 					(e.gesperrt ? ["Gesperrt bis zur Freigabe durch die QS (" + (e.sperrgrund || "") + ")"] : []).concat(e.hinweise || []),
-					e.gebinde && e.gebinde.length ? `<button class="knopf" data-a="etiketten">Gebinde-Etiketten drucken</button>` : "")((a2) => (a2 === "etiketten" ? druck() : beiAllgemein(a2)));
+					e.gebinde && e.gebinde.length ? `<button class="knopf" data-a="etiketten">Gebinde-Etiketten drucken</button>` : "")((a2) => (a2 === "etiketten" ? druck(null) : beiAllgemein(a2)));
 			} catch (err) {
 				if (knopf) { knopf.disabled = false; knopf.textContent = "Buchen"; }
 				meldung("rot", err.message);
@@ -1886,7 +1918,7 @@
 		if (hinweis) meldung("gruen", hinweis);
 		aktionen(async (a, d) => {
 			try {
-				if (a === "etikett") { if (await etikettDrucken(p.nve)) paletteLaden(p.nve); return; }
+				if (a === "etikett") { if (await etikettNachdrucken(p.nve)) paletteLaden(p.nve); return; }
 				if (a === "schliessen") return paletteZeigen(await api("palette_schliessen", { station: zustand.station, palette: p.nve }), "Palette geschlossen.");
 				if (a === "oeffnen") return paletteZeigen(await api("palette_oeffnen", { station: zustand.station, palette: p.nve }), "Palette geöffnet.");
 				if (a === "laden") return kartonsLaden(p);
@@ -2233,10 +2265,15 @@
 						<div class="panel"><div class="zeile"><div class="fehlt">Art / Status</div><div class="rechts">${esc(r.art)} · ${esc(r.status)}</div></div>
 						<div class="zeile"><div class="fehlt">Inhalt</div><div class="rechts">${esc(r.kartons || "leer")}</div></div>
 						${r.lieferschein ? `<div class="zeile"><div class="fehlt">Lieferschein</div><div class="rechts">${esc(r.lieferschein)} · ${esc(r.kunde || "")}</div></div>` : ""}</div>` +
-						positionenHtml(r, null) +
-						`<div class="reihe"><button class="knopf" data-a="etikett-palette">Etikett drucken</button></div>`;
+						`<p class="fehlt">Los antippen: Woraus besteht das?</p>` + positionenHtml(r, "herkunft-pos") +
+						`<div class="reihe"><button class="knopf" data-a="etikett-palette">Etikett drucken</button><button class="knopf" data-a="akte">Akte</button></div>`;
 					ton(true);
-					aktionen((a) => (a === "etikett-palette" ? etikettDrucken(r.nve) : beiAllgemein(a)));
+					aktionen((a, d) => {
+						if (a === "etikett-palette") return etikettNachdrucken(r.nve);
+						if (a === "akte") return akteZeigen(r.nve, infoScan);
+						if (a === "herkunft-pos") return herkunftZeigen(r.positionen[+d.i].charge, infoScan);
+						beiAllgemein(a);
+					});
 					return;
 				}
 				const zeilen = [];
@@ -2261,10 +2298,15 @@
 					(reinigen ? `<div class="reihe">${r.status === "Reinigung" ? `<button class="knopf gruen" data-a="gereinigt">Gereinigt – wieder frei</button>`
 						: `<button class="knopf" data-a="zur-reinigung">Zur Reinigung</button><button class="knopf" data-a="gereinigt">Gereinigt melden</button>`}</div>` : "") +
 					// Etikett nachdrucken (abgerissen, verschmutzt): Behälter und Gebinde
-					(r.typ === "behaelter" ? `<div class="reihe"><button class="knopf" data-a="etikett-behaelter">Etikett drucken</button></div>` : "");
+					(r.typ === "behaelter" ? `<div class="reihe"><button class="knopf" data-a="etikett-behaelter">Etikett drucken</button><button class="knopf" data-a="akte">Akte</button></div>` : "") +
+					(r.charge ? `<div class="reihe"><button class="knopf" data-a="herkunft">Woraus besteht das?</button></div>` : "") +
+					(r.fundstellen ? KtAkte.fundstellenHtml(r.fundstellen, true) : "");
 				ton(!gesperrt && !r.abgelaufen);
-				aktionen(async (a) => {
-					if (a === "etikett-behaelter") return gebindeDrucken(r.behaelter);
+				aktionen(async (a, d) => {
+					if (a === "etikett-behaelter") return gebindeDrucken(r.behaelter, null);
+					if (a === "akte") return akteZeigen(d.c || r.behaelter, infoScan);
+					if (a === "herkunft") return herkunftZeigen(r.charge, infoScan);
+					if (a === "fehlt") return fehltStart(r.fundstellen, +d.i, infoScan);
 					if (a !== "gereinigt" && a !== "zur-reinigung") return beiAllgemein(a);
 					try {
 						const e = await api("behaelter_reinigung", { station: zustand.station, code: r.behaelter, gereinigt: a === "gereinigt" ? 1 : 0 });
@@ -2276,6 +2318,74 @@
 			} catch (e) { meldung("rot", e.message); }
 		});
 		fokus("scan");
+	}
+
+	// ------------------------------------------------------------------ Akte, Herkunft, Etikett fehlt
+	// Darstellung in /assets/keks_trace/js/akte_ansicht.js (gemeinsam mit der Audit-Ansicht /akte)
+	async function akteZeigen(code, zurueck) {
+		try {
+			const a = await api("akte", { code });
+			app.innerHTML = kopf("Akte", true) + `<div class="panel"><div class="gross">${esc(a.titel)}</div></div>` +
+				((a.lose || []).length ? `<div class="reihe">${a.lose.map((l) => `<button class="knopf" data-a="herkunft" data-c="${esc(l.charge)}">Woraus besteht Los ${esc(l.los)}?<small>${esc(l.name || "")}</small></button>`).join("")}</div>` : "") +
+				KtAkte.akteHtml(a);
+			aktionen((x, d) => {
+				if (x === "zurueck") return zurueck();
+				if (x === "herkunft") return herkunftZeigen(d.c, () => akteZeigen(code, zurueck));
+				beiAllgemein(x);
+			});
+		} catch (e) { meldung("rot", e.message); }
+	}
+	async function herkunftZeigen(code, zurueck) {
+		app.innerHTML = kopf("Woraus besteht das?", true) + `<p>Lädt …</p>`;
+		const zu = () => aktionen((x) => (x === "zurueck" ? zurueck() : beiAllgemein(x)));
+		zu();
+		try {
+			const h = await api("herkunft", { code });
+			app.innerHTML = kopf("Woraus besteht das?", true) + KtAkte.herkunftHtml(h);
+			zu();
+		} catch (e) { meldung("rot", e.message); }
+	}
+	// Palette ohne Etikett: aus „Wo ist dieses Los?“ nachdrucken. Damit keine NVE doppelt klebt, werden die
+	// anderen Paletten mit demselben Los gescannt (sie haben ihr Etikett noch). Das Protokoll hält fest, welche.
+	function fehltStart(f, i, zurueck) {
+		const ziel = f.paletten[i];
+		const andere = f.paletten.filter((_, j) => j !== i);
+		const gesehen = new Set();
+		const zeigen = () => {
+			const offen = andere.length - gesehen.size;
+			app.innerHTML = kopf("Etikett fehlt", true) +
+				`<div class="panel"><div class="gross">Palette …${esc(ziel.nve.slice(-6))}</div><small>${esc([ziel.nve, ziel.dieses_los, ziel.gepackt, ziel.letzte].filter(Boolean).join(" · "))}</small></div>` +
+				(andere.length
+					? `<div class="meldung ${offen ? "orange" : "gruen"}">${offen ? `Damit keine NVE doppelt klebt: bitte die anderen Paletten mit Los ${esc(f.los)} scannen. Sie müssen ihr Etikett noch haben.<small>Noch ${offen} von ${andere.length}.</small>` : "Alle anderen Paletten haben ihr Etikett."}</div>` +
+						textFeld("scan", "Andere Palette scannen") +
+						`<div class="panel">${andere.map((x) => `<div class="zeile"><div>${gesehen.has(x.nve) ? "✔" : "○"} Palette …${esc(x.nve.slice(-6))}<br><small class="fehlt">${esc([x.status, x.dieses_los, x.letzte].filter(Boolean).join(" · "))}</small></div>
+							<div class="rechts">${gesehen.has(x.nve) ? `<span class="ok">hat Etikett</span>` : "offen"}</div></div>`).join("")}</div>`
+					: `<p>Keine anderen Paletten mit diesem Los im Lager.</p>`) +
+				`<div class="reihe"><button class="knopf gruen" data-a="drucken"${offen ? " disabled" : ""}>Etikett nachdrucken</button>` +
+				(offen ? `<button class="knopf" data-a="trotzdem">Andere nicht erreichbar – trotzdem drucken<small>wird im Protokoll vermerkt</small></button>` : "") + `</div>`;
+			aktionen(async (a) => {
+				if (a === "zurueck") return zurueck();
+				if (a === "drucken" || a === "trotzdem") {
+					await etikettDrucken(ziel.nve, "fehlt", [...gesehen].join(","));
+					return zurueck();
+				}
+				beiAllgemein(a);
+			});
+			enter("scan", async (v, feldEl) => {
+				if (!v) return;
+				feldEl.value = "";
+				try {
+					const p = await api("palette_info", { code: v });
+					if (p.nve === ziel.nve) { ton(false); return meldung("rot", "Diese Palette hat ein Etikett – dann ist sie nicht die gesuchte. Bitte nochmal prüfen."); }
+					if (!andere.some((x) => x.nve === p.nve)) { ton(false); return meldung("orange", "Palette …" + p.nve.slice(-6) + " hat dieses Los nicht."); }
+					gesehen.add(p.nve);
+					ton(true);
+					zeigen();
+				} catch (e) { meldung("rot", e.message); }
+			});
+			fokus("scan");
+		};
+		zeigen();
 	}
 
 	// ------------------------------------------------------------------ Start

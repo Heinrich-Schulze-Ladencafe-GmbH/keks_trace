@@ -308,7 +308,7 @@
    "label": "Paletten und Lagerverkauf",
    "hidden": 0,
    "is_query_report": 0,
-   "link_count": 4,
+   "link_count": 5,
    "onboard": 0
   },
   {
@@ -326,6 +326,16 @@
    "label": "Paletten Bewegung",
    "link_type": "DocType",
    "link_to": "Paletten Bewegung",
+   "hidden": 0,
+   "is_query_report": 0,
+   "link_count": 0,
+   "onboard": 0
+  },
+  {
+   "type": "Link",
+   "label": "Etikettendruck (Protokoll)",
+   "link_type": "DocType",
+   "link_to": "Etikettendruck",
    "hidden": 0,
    "is_query_report": 0,
    "link_count": 0,
@@ -458,7 +468,7 @@
    "type": "Link"
   }
  ],
- "modified": "2026-11-01 22:30:00.000000",
+ "modified": "2026-11-02 07:00:00.000000",
  "modified_by": "Administrator",
  "module": "Keks Trace",
  "name": "Keks Trace",

@@ -1,0 +1,164 @@
+{% extends "templates/base.html" %}
+{% block title %}Akte{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block style %}
+<style>
+	/* Handy und Tablet (Audit): große Schrift, ein Feld, Kamera-Knopf */
+	:root { --bg: #dce8f6; --panel: #fbeaa8; --panel2: #e9f1fb; --rand: #9db9dd; --text: #1b1f24; --muted: #5a6573; --rot: #d23a3a; }
+	html, body { background: var(--bg) !important; color: var(--text); margin: 0; }
+	body { font: 18px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+	#ak { width: 100%; max-width: 980px; margin: 0 auto; padding: 0 12px 60px; box-sizing: border-box; }
+	.titel { position: sticky; top: 0; z-index: 5; background: linear-gradient(#4d9cf0, #1f6dd0); color: #fff; margin: 0 -12px 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; }
+	.titel h1 { font-size: 22px; margin: 0; flex: 1; color: #fff; }
+	.suche { display: flex; gap: 8px; }
+	.suche input { flex: 1; min-width: 0; font-size: 20px; padding: 10px 12px; border: 1px solid var(--rand); border-radius: 6px; }
+	.knopf { min-height: 48px; border: 1px solid var(--rand); border-radius: 6px; background: linear-gradient(#fbfdff, #d9e7f7); font-size: 17px; font-weight: 600; padding: 8px 14px; cursor: pointer; color: var(--text); }
+	.knopf.klein { min-height: 44px; }
+	.reihe { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+	.reihe .knopf { flex: 1 1 200px; }
+	.meldung { padding: 12px 14px; border-radius: 6px; margin: 10px 0; background: #fbd9d9; color: #7a1717; }
+	.gross { font-size: 24px; font-weight: 700; overflow-wrap: anywhere; }
+	video { width: 100%; max-height: 50vh; background: #000; border-radius: 6px; margin-top: 10px; }
+	.leise { color: var(--muted); font-size: 15px; }
+	@media print { .titel, .suche, video, .reihe { display: none !important; } }
+</style>
+{% endblock %}
+{% block content %}
+<div id="ak" data-code="{{ code | e }}">
+	<div class="titel"><h1>Akte</h1><a href="/app" style="color:#e3efff">ERPNext</a></div>
+	<div class="suche">
+		<input id="code" placeholder="Palette, Los oder Behälter scannen / eingeben" autocomplete="off" inputmode="text">
+		<button class="knopf" id="suchen">Zeigen</button>
+		<button class="knopf" id="kamera" hidden>Kamera</button>
+	</div>
+	<p class="leise" id="kamera-hinweis" hidden></p>
+	<video id="video" playsinline muted hidden></video>
+	<div id="inhalt"><p class="leise">Etikett mit dem Scanner oder der Kamera lesen, oder die Nummer eintippen (NVE, Los, Behälter).</p></div>
+</div>
+{% endblock %}
+{% block script %}
+<script src="/assets/keks_trace/js/akte_ansicht.js"></script>
+<script>
+(function () {
+	"use strict";
+	const esc = KtAkte.esc;
+	const inhalt = document.getElementById("inhalt");
+	const feld = document.getElementById("code");
+	const verlauf = [];
+
+	async function api(methode, args) {
+		const url = "/api/method/keks_trace.terminal." + methode + "?" + new URLSearchParams(args);
+		const r = await fetch(url, { headers: { Accept: "application/json" } });
+		let d = {};
+		try { d = await r.json(); } catch (e) { /* leer */ }
+		if (!r.ok) {
+			let text = "Fehler " + r.status;
+			try { text = JSON.parse(JSON.parse(d._server_messages)[0]).message; } catch (e) { if (d.exception) text = d.exception; }
+			throw new Error(String(text).replace(/<[^>]+>/g, ""));
+		}
+		return d.message;
+	}
+	function fehler(e) { inhalt.innerHTML = `<div class="meldung">${esc(e.message || e)}</div>`; }
+	function laedt() { inhalt.innerHTML = `<p class="leise">Lädt …</p>`; }
+	function knoepfe(h) {
+		inhalt.querySelectorAll("[data-a]").forEach((b) => b.addEventListener("click", () => {
+			const a = b.dataset.a;
+			if (a === "akte") return zeigeAkte(b.dataset.c);
+			if (a === "herkunft") return zeigeHerkunft(b.dataset.c);
+			if (a === "zurueck") return zurueck();
+			if (h) h(a, b.dataset);
+		}));
+		window.scrollTo(0, 0);
+	}
+	function zurueckKnopf() { return verlauf.length > 1 ? `<div class="reihe"><button class="knopf" data-a="zurueck">← Zurück</button></div>` : ""; }
+	function merken(fn) { verlauf.push(fn); }
+	function zurueck() { verlauf.pop(); const fn = verlauf.pop(); if (fn) fn(); }
+
+	async function zeigeAkte(code) {
+		merken(() => zeigeAkte(code));
+		laedt();
+		try {
+			const a = await api("akte", { code });
+			inhalt.innerHTML = zurueckKnopf() + `<div class="gross">${esc(a.titel)}</div>` +
+				((a.lose || []).length ? `<div class="reihe">${a.lose.map((l) => `<button class="knopf" data-a="herkunft" data-c="${esc(l.charge)}">Woraus besteht Los ${esc(l.los)}?</button>`).join("")}</div>` : "") +
+				KtAkte.akteHtml(a);
+			knoepfe();
+		} catch (e) { fehler(e); }
+	}
+	async function zeigeHerkunft(code) {
+		merken(() => zeigeHerkunft(code));
+		laedt();
+		try {
+			inhalt.innerHTML = zurueckKnopf() + KtAkte.herkunftHtml(await api("herkunft", { code }));
+			knoepfe();
+		} catch (e) { fehler(e); }
+	}
+	async function suchen(code) {
+		code = (code || "").trim();
+		if (!code) return;
+		feld.value = "";
+		verlauf.length = 0;
+		laedt();
+		try {
+			const r = await api("info", { code });
+			if (r.typ === "palette" || r.typ === "behaelter") return zeigeAkte(r.typ === "palette" ? r.nve : r.behaelter);
+			if (r.typ === "charge") {
+				merken(() => suchen(code));
+				const h = await api("herkunft", { code: r.charge });
+				inhalt.innerHTML = `<div class="gross">${esc(r.artikelname || "")} · Los ${esc(r.fundstellen ? r.fundstellen.los : r.charge)}</div>` +
+					(r.sperrstatus === "Gesperrt" ? `<div class="meldung">GESPERRT: ${esc(r.sperrgrund || "")}</div>` : "") +
+					KtAkte.herkunftHtml(h) + KtAkte.fundstellenHtml(r.fundstellen, false);
+				return knoepfe();
+			}
+			// Silo/Tank: Bestand je Charge
+			inhalt.innerHTML = `<div class="gross">${esc(r.silo || code)}</div>` +
+				((r.bestand || []).map((b) => `<div class="reihe"><button class="knopf" data-a="herkunft" data-c="${esc(b.charge)}">Charge ${esc(b.charge)}: ${esc(String(b.menge).replace(".", ","))} kg</button></div>`).join("") || `<p class="leise">Leer.</p>`);
+			knoepfe();
+		} catch (e) { fehler(e); }
+	}
+
+	feld.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); suchen(feld.value); } });
+	document.getElementById("suchen").addEventListener("click", () => suchen(feld.value));
+
+	// Kamera: im Browser eingebaute Barcode-Erkennung (Chrome auf Android). Am Surface (Windows) gibt es sie nicht:
+	// dort Handscanner oder Eintippen. Die Kamera braucht HTTPS (oder localhost).
+	const kamera = document.getElementById("kamera");
+	const hinweis = document.getElementById("kamera-hinweis");
+	const video = document.getElementById("video");
+	let strom = null;
+	function stopp() { if (strom) strom.getTracks().forEach((t) => t.stop()); strom = null; video.hidden = true; kamera.textContent = "Kamera"; }
+	async function start() {
+		const formate = (await BarcodeDetector.getSupportedFormats()).filter((f) => ["data_matrix", "qr_code", "code_128", "ean_13", "ean_8"].includes(f));
+		const leser = new BarcodeDetector({ formats: formate });
+		strom = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+		video.srcObject = strom;
+		video.hidden = false;
+		kamera.textContent = "Kamera aus";
+		await video.play();
+		const runde = async () => {
+			if (!strom) return;
+			try {
+				const treffer = await leser.detect(video);
+				if (treffer.length) { const wert = treffer[0].rawValue; stopp(); if (navigator.vibrate) navigator.vibrate(80); return suchen(wert); }
+			} catch (e) { /* nächstes Bild */ }
+			setTimeout(runde, 200);
+		};
+		runde();
+	}
+	if ("BarcodeDetector" in window && navigator.mediaDevices && window.isSecureContext) {
+		kamera.hidden = false;
+		kamera.addEventListener("click", async () => {
+			if (strom) return stopp();
+			try { await start(); } catch (e) { stopp(); fehler("Kamera nicht verfügbar: " + e.message); }
+		});
+	} else if (!window.isSecureContext) {
+		hinweis.hidden = false;
+		hinweis.textContent = "Kamera erst mit HTTPS möglich. Bis dahin Scanner oder Eintippen.";
+	}
+	const start_code = document.getElementById("ak").dataset.code;
+	if (start_code) suchen(start_code);
+	else feld.focus();
+})();
+</script>
+{% endblock %}

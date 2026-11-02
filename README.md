@@ -327,6 +327,38 @@ Ausprobieren ohne Drucker: `bench execute keks_trace.etiketten.zpl_test --kwargs
 liefert das ZPL; ein Renderer wie Labelary zeigt es an. Achtung: der offline geprüfte Renderer
 (zebrash) setzt den Wechsel nach Zeichensatz C (`>5`) falsch um; maßgeblich ist der Scan vom Drucker.
 
+## Nachdruck, Akte und Audit-Ansicht
+
+**Druckprotokoll.** Jeder Etikettendruck steht im Protokoll **Etikettendruck** (nicht änderbar, nicht löschbar):
+Etikett, Grund, Drucker (oder „Browser“), Station, Person, bei Paletten der Inhalt zum Zeitpunkt des Drucks.
+Den Grund bestimmt das System selbst, wo es ihn kennt: noch nie gedruckt = *Erstdruck*, Palette mit
+geändertem Inhalt = *Inhalt geändert*, Druck als Teil einer Buchung = *Im Ablauf*. Ein Nachdruck per Knopf
+ohne Anlass (gleicher Inhalt) fragt nach dem Grund: *Beschädigt / unleserlich* oder *Etikett fehlt*.
+Kartonetiketten brauchen keinen Grund. Gebinde und Behälter, die vor dem Protokoll gedruckt wurden, gelten
+beim nächsten Druck als Erstdruck.
+
+**Etikett fehlt (Palette).** Info-Scan → Kartonetikett oder Los scannen → **Wo ist Los …?** zeigt alle
+offenen Paletten, Behälter und lose Ware mit dem Los, je mit gepackt wann/wo/von wem, letzter Bewegung und
+letztem Etikettendruck. Bei der gesuchten Palette **Etikett fehlt – nachdrucken**: Erst werden die anderen
+Paletten mit dem Los gescannt (sie müssen ihr Etikett noch haben), sonst klebt eine NVE womöglich zweimal.
+Wer sie nicht erreicht, druckt trotzdem; das Protokoll hält fest, welche gescannt wurden und welche nicht.
+Das Los gilt je Tag und Artikel – mehrere Paletten mit demselben Los sind also der Normalfall.
+NVE abtippen geht jetzt auch mit Leerzeichen und „(00)“.
+
+**Akte.** Info-Scan einer Palette oder eines Behälters → **Akte**: Lebenslauf aus den vorhandenen Protokollen
+(angelegt, gepackt, umgepackt, umgelagert, geliefert, Etiketten; beim Behälter: Befüllungen mit Charge,
+geleert, gereinigt). Ein Los antippen → **Woraus besteht das?**: alle Rohstoffe und Packmittel mit Charge,
+Wareneingang (Zeit, Station oder Eingangsbeleg, Lieferant, Lieferschein, direkt ins Silo), MHD und
+QS-Freigabe; darunter der Herstellungsweg Stufe für Stufe mit Buchung, Station, Person und Prüfungen.
+„Möglicherweise enthalten“ = nur über die Silo-Vermischung. Sehr lange Ketten (viel Rework) werden gekürzt,
+vollständig bleibt die Rückverfolgung in ERPNext.
+
+**Audit-Ansicht `/akte`** (Handy, Tablet, Surface): nur lesen, keine Station nötig, Anmeldung mit Leserecht
+auf Chargen. Palette, Los oder Behälter scannen oder eintippen. Kamera-Scan über die im Browser eingebaute
+Barcode-Erkennung: Chrome auf Android ja, Windows (Surface) nein – dort Handscanner (USB/Bluetooth) oder
+Eintippen. Die Kamera braucht **HTTPS**; auf dem Testserver mit `http://` erscheint der Kamera-Knopf deshalb
+nicht. Direktaufruf mit Code: `/akte?code=<NVE oder Los>`.
+
 ## Prüfungen (CP/CCP)
 
 Unter **Prüfplan** werden Kontrollen gepflegt: Lenkung (CCP, CP, GHP), Auslöser (Intervall in
@@ -554,6 +586,7 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_qs_tagesliste` | Alle vier Arten eines Tages; Routinesperre „Freigabe vor Verwendung“ ist keine Abweichung; Durchsicht nur QS, je Tag einmal, nicht in der Zukunft, danach unveränderbar |
 | `test_behaelter` | Behälter nach dem Leeren frei bzw. zur Reinigung (Einstellung); Meldung „gereinigt“ mit Zeit und Station; Anfrage-ID nur für geschützte Buchungen |
 | `test_etiketten` | GS1-128 in ZPL (Zeichensätze, FNC1, zurückgelesen); Data Matrix (Größe, Zeichen, Behälter-Code); Layouts je Rollengröße, Mindestmaß beim Zuordnen und Ändern; Logo (transparent wird weiß, fehlt es: ohne Logo drucken); Drucker an der Station oder Browserdruck; inaktiv; nicht erreichbar mit klarer Meldung; Testdruck; Adresse geprüft; „Genutzt an“ |
+| `test_akte` | Druckprotokoll: Erstdruck, Nachdruck nur mit Grund, Inhalt geändert, im Ablauf, Gebinde, Browserdruck, Testdruck, nicht änderbar; NVE mit Leerzeichen; Akte Palette und Behälter; Wo ist das Los; Etikett fehlt mit geprüften und nicht geprüften Paletten; Woraus besteht das bis zur Silo-Charge mit Wareneingang und QS-Freigabe |
 
 Die Tests rollen ihre Daten am Ende zurück. Demo-Funktionen committen nur außerhalb von Tests
 (`utils.demo_commit`); vorher schrieb ein Demo-Aufruf mitten in einem Test dessen Daten fest.

@@ -210,7 +210,9 @@ class TestDrucken(IntegrationTestCase):
 		self.assertEqual(terminal.start("Lager")["drucker"]["palette"], self.drucker.name)
 		nve = terminal.palette_neu("Lager")["nve"]
 		r = terminal.etikett_drucken("Lager", "palette", nve=nve)
-		self.assertEqual(r, {"drucker": self.drucker.name, "art": "palette", "etiketten": 1})
+		self.assertEqual(
+			r, {"drucker": self.drucker.name, "art": "palette", "etiketten": 1, "grund": "Erstdruck"}
+		)
 		self.empfaenger.warten()
 		zpl_text = self.empfaenger.daten[0].decode("utf-8")
 		self.assertIn(f">;>800{nve}", zpl_text)
