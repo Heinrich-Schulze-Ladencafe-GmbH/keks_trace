@@ -1987,6 +1987,17 @@ def wareneingang(
 	_pruefe_lieferantencharge(artikel, lieferantencharge)
 	if frappe.get_cached_value("Item", artikel, "has_expiry_date") and not mhd:
 		_fehler(_("Bitte das MHD eingeben."))
+	if mhd:
+		try:
+			mhd = getdate(mhd)
+		except Exception:
+			_fehler(_("MHD {0} ist kein gültiges Datum.").format(mhd))
+		if mhd < getdate(nowdate()):
+			_fehler(
+				_("MHD {0} liegt in der Vergangenheit: Ware abgelaufen, nicht annehmen.").format(
+					formatdate(mhd)
+				)
+			)
 	if kennzeichnung.BIO in kennzeichnung.artikel_kennzeichen(artikel):
 		kennzeichnung.pruefe_bio_lieferant(lieferant, artikel)
 

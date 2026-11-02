@@ -44,6 +44,11 @@
 	.feld { width: 100%; box-sizing: border-box; font-size: 26px; padding: 12px 14px; border-radius: 4px; border: 1px solid var(--rand); background: #fff; color: var(--text); }
 	.feld:focus { outline: none; border: 2px solid var(--blau); background: #fffef2; }
 	label { display: block; color: var(--muted); font-size: 17px; margin: 14px 0 6px; }
+	/* Hinweis unter einem Feld (Datum: Format bzw. erkanntes Datum) */
+	.feld-hinweis { display: block; font-size: 16px; margin: 6px 0 0; color: var(--muted); }
+	.feld-hinweis.ok { color: var(--gruen); font-weight: 600; }
+	.feld-hinweis.falsch { color: var(--rot); font-weight: 600; }
+	.feld.falsch { border-color: var(--rot); box-shadow: 0 0 0 2px rgba(210,58,58,.25); }
 	.panel { background: var(--panel); border: 1px solid #dfc56a; border-radius: 6px; padding: 12px 16px; margin: 14px 0; }
 	.zeile { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #e8d38a; }
 	.zeile:last-child { border-bottom: none; }
@@ -338,7 +343,62 @@
 		return feld(id, label, wert == null || wert === "" ? "" : String(wert).replace(".", ","), "zahl");
 	}
 	function textFeld(id, label, wert) { return feld(id, label, wert, "text", true); }
-	function datumFeld(id, label) { return feld(id, label + ' <span class="fehlt">(TT.MM.JJ oder TTMMJJ)</span>', "", "datum"); }
+	// Datumsfeld mit Zwangsformat TT.MM.JJ: nur Ziffern, die Punkte setzt das Terminal; darunter steht das erkannte
+	// Datum mit Wochentag oder der Fehler. opt: pflicht (leer nicht erlaubt), abHeute (nicht in der Vergangenheit),
+	// wert (ISO-Datum zum Vorbelegen). Beim Buchen den Wert mit datumWert(id, name) holen – der prüft noch einmal.
+	const DATUM_MAX_JAHRE = 10; // weiter in der Zukunft ist fast immer ein Tippfehler (Jahr)
+	function datumFeld(id, label, opt) {
+		const o = opt || {};
+		return `<label for="${id}">${label}</label><input id="${id}" class="feld" data-art="datum" data-pflicht="${o.pflicht ? 1 : ""}" data-ab-heute="${o.abHeute ? 1 : ""}"
+			inputmode="none" autocomplete="off" maxlength="10" placeholder="TT.MM.JJ" value="${esc(o.wert ? datumMaske(o.wert.split("-").reverse().join("").replace(/^(\d{4})\d{2}(\d{2})$/, "$1$2")) : "")}">
+			<small class="feld-hinweis" id="${id}-hinweis">Tag, Monat, Jahr als Ziffern, z. B. 300628 für den 30.06.2028</small>`;
+	}
+	function datumMaske(text) {
+		const z = String(text || "").replace(/\D/g, "").slice(0, 8);
+		return z.slice(0, 2) + (z.length > 2 ? "." + z.slice(2, 4) : "") + (z.length > 4 ? "." + z.slice(4) : "");
+	}
+	const WOCHENTAGE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+	// {iso, fehler, text}: fehler = warum nicht gültig; leer und nicht Pflicht = {iso: null}
+	function datumPruefen(f) {
+		const z = f.value.replace(/\D/g, "");
+		if (!z) return f.dataset.pflicht ? { fehler: "Bitte das Datum eingeben." } : { iso: null };
+		if (z.length !== 6 && z.length !== 8) return { fehler: "Unvollständig: Tag, Monat und Jahr eingeben (TTMMJJ)." };
+		const iso = datumIso(z);
+		if (!iso) return { fehler: datumMaske(z) + " gibt es nicht." };
+		const dt = new Date(iso + "T12:00:00");
+		const heute = new Date(); heute.setHours(0, 0, 0, 0);
+		const grenze = new Date(heute); grenze.setFullYear(grenze.getFullYear() + DATUM_MAX_JAHRE);
+		if (f.dataset.abHeute && dt < heute) return { fehler: datumMaske(z) + " liegt in der Vergangenheit." };
+		if (dt > grenze) return { fehler: datumMaske(z) + " liegt über " + DATUM_MAX_JAHRE + " Jahre in der Zukunft. Jahr prüfen." };
+		return { iso, text: WOCHENTAGE[dt.getDay()] + ", " + datumDe(iso) };
+	}
+	function datumAnzeigen(f) {
+		const h = document.getElementById(f.id + "-hinweis");
+		const z = f.value.replace(/\D/g, "");
+		const r = datumPruefen(f);
+		const fertig = z.length === 6 || z.length === 8;
+		f.classList.toggle("falsch", fertig && !!r.fehler);
+		if (!h) return r;
+		h.className = "feld-hinweis" + (r.text ? " ok" : fertig && r.fehler ? " falsch" : "");
+		h.textContent = r.text ? "= " + r.text : fertig && r.fehler ? r.fehler : "Tag, Monat, Jahr als Ziffern, z. B. 300628 für den 30.06.2028";
+		return r;
+	}
+	// Beim Buchen: ISO-Datum oder Fehler (wird als Meldung gezeigt, Feld bekommt den Fokus)
+	function datumWert(id, name) {
+		const f = document.getElementById(id);
+		if (!f) return null;
+		const r = datumAnzeigen(f);
+		if (r.fehler) { f.classList.add("falsch"); f.focus(); throw new Error((name ? name + ": " : "") + r.fehler); }
+		return r.iso;
+	}
+	// Jede Eingabe (Bildschirmtastatur, Tastatur, Scanner, Vorbelegung) wird sofort auf TT.MM.JJ gebracht
+	document.addEventListener("input", (e) => {
+		const f = e.target;
+		if (!f || !f.dataset || f.dataset.art !== "datum") return;
+		const neu = datumMaske(f.value);
+		if (neu !== f.value) { f.value = neu; f.setSelectionRange(neu.length, neu.length); }
+		datumAnzeigen(f);
+	}, true);
 	function datumIso(t) {
 		const z = String(t || "").replace(/\D/g, "");
 		let d, m, y;
@@ -1538,12 +1598,16 @@
 					el.innerHTML = `<div class="panel"><div class="fehlt" style="font-size:16px">Am Beuteldrucker einstellen</div>
 						<div class="gross">${v.los ? "Los " + esc(v.los) : ""}${v.mhd ? " · MHD " + esc(v.mhd) : ""}</div>
 						${v.mhd_gekuerzt ? `<div class="fehlt" style="font-size:16px">Gekürzt für Kunde/Auftrag, möglich wäre ${esc(v.mhd_voll)}</div>` : ""}
-						<div class="reihe"><input type="date" id="mhd-wahl" value="${esc(ansatz.mhd || v.mhd_iso || "")}" style="font-size:20px;padding:8px">
-						<button class="knopf" id="mhd-setzen">MHD kürzen</button>${ansatz.mhd ? `<button class="knopf" id="mhd-weg">Volles MHD</button>` : ""}</div>
+						${datumFeld("mhd-wahl", "MHD kürzen auf", { pflicht: true, abHeute: true, wert: ansatz.mhd || v.mhd_iso || "" })}
+						<div class="reihe"><button class="knopf" id="mhd-setzen">MHD kürzen</button>${ansatz.mhd ? `<button class="knopf" id="mhd-weg">Volles MHD</button>` : ""}</div>
 						${v.kennzeichen && v.kennzeichen.length ? `<div>${kennzeichenMarken(v.kennzeichen)}${v.oeko_nr ? ` <b>${esc(v.oeko_nr)}</b>` : ""}</div>` : ""}
 						${v.los_vorhanden ? `<div class="fehlt" style="font-size:16px">Los von heute läuft schon, diese Ware kommt dazu.</div>` : ""}</div>` +
 						(v.mhd_sinkt ? `<div class="meldung orange">MHD sinkt von ${esc(v.mhd_bisher)} auf ${esc(v.mhd)}: Drucker umstellen, gedruckte Beutel prüfen.</div>` : "");
-					document.getElementById("mhd-setzen").onclick = () => { ansatz.mhd = document.getElementById("mhd-wahl").value || null; vorschauLaden(); };
+					datumAnzeigen(document.getElementById("mhd-wahl"));
+					document.getElementById("mhd-setzen").onclick = () => {
+						try { ansatz.mhd = datumWert("mhd-wahl", "MHD"); } catch (e) { return meldung("rot", e.message); }
+						vorschauLaden();
+					};
 					const weg = document.getElementById("mhd-weg");
 					if (weg) weg.onclick = () => { ansatz.mhd = null; vorschauLaden(); };
 				}).catch(() => {});
@@ -1721,7 +1785,10 @@
 	// Lieferanten-Etikett ins Formular übernehmen (nur Vorschlag – der Mensch prüft vor dem Buchen)
 	function etikettUebernehmen(v, einheit) {
 		if (!v) return "";
-		const set = (id, wert) => { const f = document.getElementById(id); if (f && wert != null && wert !== "") f.value = wert; };
+		const set = (id, wert) => {
+			const f = document.getElementById(id);
+			if (f && wert != null && wert !== "") { f.value = wert; f.dispatchEvent(new Event("input", { bubbles: true })); }
+		};
 		set("scan", v.charge);
 		if (v.mhd) { const [y, m, d] = v.mhd.split("-"); set("mhd", `${d}.${m}.${y}`); }
 		if (v.menge_je_gebinde) set("menge", String(rund(v.menge_je_gebinde, 3)).replace(".", ","));
@@ -1745,7 +1812,7 @@
 			(lief.length ? `<label>Lieferant${art.bio ? "" : " (optional)"}</label><select id="lieferant" class="feld">${art.bio ? "" : `<option value="">–</option>`}${lief.map((l) => `<option value="${esc(l.lieferant)}">${esc(l.name)}${l.bio_ok ? " · Bio-zertifiziert" : ""}</option>`).join("")}</select>` : "") +
 			`<div id="etikett-info"></div>` +
 			textFeld("scan", "Charge des Lieferanten (Etikett scannen oder Charge eingeben)") +
-			`${art.has_expiry_date ? datumFeld("mhd", "MHD") : ""}
+			`${art.has_expiry_date ? datumFeld("mhd", "MHD", { pflicht: true, abHeute: true }) : ""}
 			${art.silo ? `<label>Wohin?</label><select id="ziel" class="feld"><option value="${esc(art.silo)}">ins ${esc(art.silo)}</option><option value="">als Gebinde ins Lager</option></select>` : ""}
 			<div id="gebinde-box" style="${art.silo ? "display:none" : ""}">
 				<label>Gebindeart</label><div class="einheiten">${ARTEN.map((a) => `<button type="button" data-a="einheit" data-e="${a}" class="${a === gebindeart ? "an" : ""}">${a}</button>`).join("")}</div>
@@ -1796,8 +1863,7 @@
 			if (knopf) { knopf.disabled = true; knopf.textContent = "Bucht …"; }
 			try {
 				const ziel = document.getElementById("ziel");
-				const mhd = document.getElementById("mhd");
-				if (mhd && mhd.value && !datumIso(mhd.value)) throw new Error("MHD " + mhd.value + " ist kein gültiges Datum (z. B. 300628 oder 30.06.28).");
+				const mhdIso = datumWert("mhd", "MHD");
 				const silo = ziel ? ziel.value || null : null;
 				const e = await api("wareneingang", {
 					station: zustand.station,
@@ -1805,7 +1871,7 @@
 					lieferantencharge: document.getElementById("scan").value.trim(),
 					lieferant: document.getElementById("lieferant") ? document.getElementById("lieferant").value || null : null,
 					menge: zahl(document.getElementById("menge").value),
-					mhd: mhd ? datumIso(mhd.value) : null,
+					mhd: mhdIso,
 					silo,
 					gebinde: silo ? 0 : Math.max(1, Math.round(zahl(document.getElementById("anzahl").value))),
 					gebindeart: silo ? null : gebindeart,

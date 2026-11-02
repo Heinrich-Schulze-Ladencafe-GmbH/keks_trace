@@ -196,6 +196,11 @@ Keine Mitarbeiter-Anmeldung: jedes Terminal meldet sich einmal mit einem Station
 wählt beim ersten Start seine Station. Jede Buchung trägt die Station (Feld „Station (Terminal)“
 an Lagerbuchung und Lieferschein).
 
+**Datumsfelder** haben ein festes Format: nur Ziffern (TTMMJJ), die Punkte setzt das Terminal. Unter dem Feld
+steht sofort das erkannte Datum mit Wochentag oder der Fehler (gibt es nicht, unvollständig, in der
+Vergangenheit, über 10 Jahre in der Zukunft). Buchen geht erst mit gültigem Datum. Das MHD beim Wareneingang
+ist Pflicht und darf nicht abgelaufen sein; der Server prüft das zusätzlich.
+
 | Station | Knöpfe (Vorlage) |
 |---|---|
 | Backstube | Herstellen (Grundteig, Veredelung, Backen, Füllen, Sirup), Rework/Bruch, Silo leer, Info-Scan |

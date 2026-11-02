@@ -71,6 +71,11 @@ class TestTerminal(IntegrationTestCase):
 			terminal.wareneingang("Lager", "KT-MEHL", "", 10, nowdate())
 		with self.assertRaises(TerminalFehler):
 			terminal.wareneingang("Lager", "KT-MEHL", "X1", 10, nowdate(), silo=self.silo["KT-ZUCKER"])
+		# MHD Pflicht, gültig und nicht abgelaufen (das Terminal prüft dasselbe schon bei der Eingabe)
+		with self.assertRaisesRegex(TerminalFehler, "Vergangenheit"):
+			terminal.wareneingang("Lager", "KT-BUTTER", f"ALT{self.h}", 10, add_days(nowdate(), -1))
+		with self.assertRaisesRegex(TerminalFehler, "kein gültiges Datum"):
+			terminal.wareneingang("Lager", "KT-BUTTER", f"ALT{self.h}", 10, "31.02.2027")
 
 	# ------------------------------------------------------------------ Prüfen beim Scannen
 	def test_03_scan_pruefungen(self):
