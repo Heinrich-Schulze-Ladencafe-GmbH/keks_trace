@@ -2233,8 +2233,10 @@
 						<div class="panel"><div class="zeile"><div class="fehlt">Art / Status</div><div class="rechts">${esc(r.art)} · ${esc(r.status)}</div></div>
 						<div class="zeile"><div class="fehlt">Inhalt</div><div class="rechts">${esc(r.kartons || "leer")}</div></div>
 						${r.lieferschein ? `<div class="zeile"><div class="fehlt">Lieferschein</div><div class="rechts">${esc(r.lieferschein)} · ${esc(r.kunde || "")}</div></div>` : ""}</div>` +
-						positionenHtml(r, null);
+						positionenHtml(r, null) +
+						`<div class="reihe"><button class="knopf" data-a="etikett-palette">Etikett drucken</button></div>`;
 					ton(true);
+					aktionen((a) => (a === "etikett-palette" ? etikettDrucken(r.nve) : beiAllgemein(a)));
 					return;
 				}
 				const zeilen = [];
@@ -2257,9 +2259,12 @@
 						: r.status === "Reinigung" ? `<div class="meldung orange">${esc(v)} ist zur Reinigung<small>Erst nach der Meldung „gereinigt“ wieder befüllen.</small></div>` : `<div class="meldung gruen">${esc(v)}</div>`) +
 					`<div class="panel">${zeilen.map(([k, w]) => `<div class="zeile"><div class="fehlt">${esc(k)}</div><div class="rechts">${esc(w)}</div></div>`).join("")}</div>` +
 					(reinigen ? `<div class="reihe">${r.status === "Reinigung" ? `<button class="knopf gruen" data-a="gereinigt">Gereinigt – wieder frei</button>`
-						: `<button class="knopf" data-a="zur-reinigung">Zur Reinigung</button><button class="knopf" data-a="gereinigt">Gereinigt melden</button>`}</div>` : "");
+						: `<button class="knopf" data-a="zur-reinigung">Zur Reinigung</button><button class="knopf" data-a="gereinigt">Gereinigt melden</button>`}</div>` : "") +
+					// Etikett nachdrucken (abgerissen, verschmutzt): Behälter und Gebinde
+					(r.typ === "behaelter" ? `<div class="reihe"><button class="knopf" data-a="etikett-behaelter">Etikett drucken</button></div>` : "");
 				ton(!gesperrt && !r.abgelaufen);
 				aktionen(async (a) => {
+					if (a === "etikett-behaelter") return gebindeDrucken(r.behaelter);
 					if (a !== "gereinigt" && a !== "zur-reinigung") return beiAllgemein(a);
 					try {
 						const e = await api("behaelter_reinigung", { station: zustand.station, code: r.behaelter, gereinigt: a === "gereinigt" ? 1 : 0 });
