@@ -339,8 +339,67 @@ def _rolle(drucker: str) -> frappe._dict:
 	return d
 
 
-def drucken(station: str, art: str, nve=None, codes=None, anzahl=None) -> dict:
-	"""Etikett der Art an den Drucker, der an der Station dafür eingetragen ist, in dessen Rollengröße."""
+def _bezug(station: str, art: str, nve=None, codes=None) -> dict:
+	"""Was gedruckt wird: Palette (geprüft), Gebinde-Liste oder laufender Auftrag der Packstation."""
+	if art == "palette":
+		from keks_trace import palette
+
+		nr = palette.finde(nve or "")
+		if not nr:
+			frappe.throw(_("Palette nicht gefunden."), frappe.DoesNotExistError)
+		frappe.has_permission("Palette", "read", nr, throw=True)
+		return {"palette": nr}
+	if art == "gebinde":
+		liste = gebinde(codes)
+		if not liste:
+			frappe.throw(_("Kein Gebinde angegeben."))
+		return {"liste": liste, "traeger": [e["code"] for e in liste]}
+	return {"karton": karton(station)}
+
+
+def _grund(art, bezug, grund, geprueft) -> tuple[str | None, str | None]:
+	from keks_trace import druckprotokoll
+
+	g = druckprotokoll.grund_bestimmen(art, grund, bezug.get("palette"), bezug.get("traeger", ()))
+	bemerkung = druckprotokoll.geprueft_text(geprueft, bezug.get("palette")) if g == "fehlt" else None
+	return g, bemerkung
+
+
+def _grund_noetig(art) -> dict:
+	from keks_trace import druckprotokoll
+
+	return {
+		"grund_noetig": True,
+		"art": art,
+		"gruende": [{"wert": k, "text": druckprotokoll.GRUENDE[k]} for k in druckprotokoll.NACHDRUCK],
+	}
+
+
+def vormerken(station: str, art: str, nve=None, codes=None, anzahl=None, grund=None, geprueft=None) -> dict:
+	"""Browserdruck (kein Netzwerkdrucker): Grund prüfen und den Druck protokollieren, bevor die Seite öffnet."""
+	from keks_trace import druckprotokoll
+
+	if art not in ARTEN:
+		frappe.throw(_("Unbekannte Etikettart {0}.").format(art))
+	bezug = _bezug(station, art, nve, codes)
+	g, bemerkung = _grund(art, bezug, grund, geprueft)
+	if not g:
+		return _grund_noetig(art)
+	stueck = max(1, min(cint(anzahl) or 1, MAX_KARTON)) if art == "karton" else 1
+	druckprotokoll.buchen(
+		art, g, "Browser", station, palette=bezug.get("palette"), traeger=bezug.get("traeger", ()),
+		auftrag=(bezug.get("karton") or {}).get("auftrag"), anzahl=stueck, bemerkung=bemerkung,
+	)  # fmt: skip
+	return {"ok": True, "grund": druckprotokoll.GRUENDE[g]}
+
+
+def drucken(station: str, art: str, nve=None, codes=None, anzahl=None, grund=None, geprueft=None) -> dict:
+	"""Etikett der Art an den Drucker, der an der Station dafür eingetragen ist, in dessen Rollengröße.
+
+	Ein Nachdruck ohne Anlass braucht einen Grund (druckprotokoll.py): fehlt er, wird nicht gedruckt und die
+	Antwort sagt dem Terminal, dass es fragen soll."""
+	from keks_trace import druckprotokoll
+
 	if art not in ARTEN:
 		frappe.throw(_("Unbekannte Etikettart {0}.").format(art))
 	drucker = drucker_der_station(station).get(art)
@@ -356,26 +415,28 @@ def drucken(station: str, art: str, nve=None, codes=None, anzahl=None) -> dict:
 			)
 		)
 	masse = {"dpi": r.dpi, "breite": r.etikett_breite, "hoehe": r.etikett_hoehe}
+	bezug = _bezug(station, art, nve, codes)
+	g, bemerkung = _grund(art, bezug, grund, geprueft)
+	if not g:
+		return _grund_noetig(art)
+	nr = bezug.get("palette")
 	if art == "palette":
 		from keks_trace import palette
 
-		nr = palette.finde(nve or "")
-		if not nr:
-			frappe.throw(_("Palette nicht gefunden."), frappe.DoesNotExistError)
-		frappe.has_permission("Palette", "read", nr, throw=True)
 		daten, stueck = zpl_palette(palette.etikett(nr), logo_grafik=logo(r.dpi, 10), **masse), 1
 	elif art == "karton":
 		stueck = max(1, min(cint(anzahl) or 1, MAX_KARTON))
-		daten = zpl_karton(karton(station), stueck, logo_grafik=logo(r.dpi, 12), **masse)
+		daten = zpl_karton(bezug["karton"], stueck, logo_grafik=logo(r.dpi, 12), **masse)
 	else:
-		liste = gebinde(codes)
-		if not liste:
-			frappe.throw(_("Kein Gebinde angegeben."))
-		daten, stueck = zpl_gebinde(liste, **masse), len(liste)
+		daten, stueck = zpl_gebinde(bezug["liste"], **masse), len(bezug["liste"])
 	senden(drucker, daten)
+	druckprotokoll.buchen(
+		art, g, drucker, station, palette=nr, traeger=bezug.get("traeger", ()),
+		auftrag=(bezug.get("karton") or {}).get("auftrag"), anzahl=stueck, bemerkung=bemerkung,
+	)  # fmt: skip
 	if art == "palette":
 		palette.etikett_gedruckt(nr)  # Inhalt festhalten (Hinweis „neu drucken“ bei Änderung)
-	return {"drucker": drucker, "art": art, "etiketten": stueck}
+	return {"drucker": drucker, "art": art, "etiketten": stueck, "grund": druckprotokoll.GRUENDE[g]}
 
 
 @frappe.whitelist()
@@ -388,4 +449,7 @@ def testdruck(drucker: str) -> dict:
 		frappe.throw(_("Der Testdruck braucht eine Rolle von mindestens {0} x {1} mm.").format(mb, mh))
 	daten = zpl_test(r, r.dpi, r.etikett_breite, r.etikett_hoehe, logo_grafik=logo(r.dpi, 10))
 	senden(drucker, daten, auch_inaktiv=True)
+	from keks_trace import druckprotokoll
+
+	druckprotokoll.buchen("test", "test", drucker)
 	return {"drucker": drucker}

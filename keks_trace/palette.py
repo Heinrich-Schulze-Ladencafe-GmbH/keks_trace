@@ -10,6 +10,7 @@ in ERPNext je Charge geführt; diese Datei sorgt dafür, dass beides zusammenpas
 - Eine Fertigung, deren Los schon auf einer Palette steht, kann nicht storniert werden.
 """
 
+import re
 from collections import defaultdict
 
 import frappe
@@ -160,8 +161,8 @@ def nve_neu() -> tuple[str, bool]:
 
 
 def nve_aus_scan(code: str) -> str:
-	"""Gescannte NVE normalisieren: GS1-Präfix ]C1, (00) bzw. 00 entfernen."""
-	c = (code or "").strip().replace("\x1d", "")
+	"""Gescannte oder abgetippte NVE normalisieren: Leerzeichen, GS1-Präfix ]C1, (00) bzw. 00 entfernen."""
+	c = re.sub(r"\s", "", code or "").replace("\x1d", "")  # auch abgetippt mit Leerzeichen
 	for p in ("]C1", "]c1"):
 		if c.startswith(p):
 			c = c[len(p) :]
