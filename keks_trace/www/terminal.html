@@ -111,6 +111,16 @@
 	.tab tr[data-a]:active, .tab tr.an { background: #f8d98a; }
 	.tab .z { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 	.tab a, .tab .code { color: #1a55c4; text-decoration: underline; }
+	/* Einwaage wie bei FOBIS: Bestellt / Erledigt / ToDo je Zutat */
+	.einwaage { overflow-x: auto; }
+	.einwaage .tab { margin-top: 0; font-size: 18px; }
+	.einwaage .tab th, .einwaage .tab td { padding: 8px; }
+	.einwaage td { vertical-align: top; }
+	.einwaage tr.fertig td { background: #e6f4ea; }
+	.einwaage tr.ueber td { background: #fde6c2; }
+	.einwaage td small { display: block; font-size: 15px; color: var(--muted); }
+	.einwaage .todo { font-weight: 700; }
+	.einwaage .knopf.klein { min-height: 44px; margin-top: 6px; }
 	.position { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: var(--panel); border: 1px solid #dfc56a; border-radius: 6px; padding: 12px 16px; margin: 14px 0; }
 	.position .titel { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 22px; }
 	.position .wert { color: #1a55c4; font-size: 17px; }
@@ -1380,19 +1390,28 @@
 		return ansatz.zeilen.filter((z) => z.artikel === artikelCode).reduce((s, z) => s + z.menge, 0);
 	}
 
+	// Gebinde-Text zur Zutat: „Sack 25 kg“
+	function gebindeText(z) { return (z.gebinde || []).map((g) => ein(g.einheit) + " " + mg(g.faktor, z.einheit)).join(", "); }
 	function ansatzZeigen() {
 		const r = ansatz.rezept;
+		// Einwaage-Liste wie bei FOBIS: Bestellt (Soll), Erledigt (gescannt), ToDo (fehlt noch), dazu der Lagerort
 		const zutaten = r.zutaten.map((z) => {
 			const ist = gescannt(z.artikel);
+			const todo = Math.max(rund(z.menge - ist), 0);
 			const ueber = r.rezept_pruefen && ist > 0 && Math.abs(ist - z.menge) > (z.toleranz || 0) + 1e-9;
 			const fertig = ist >= z.menge * 0.98 && !ueber;
-			return `<div class="zeile"><div><span class="${fertig ? "ok" : ""}">${ueber ? "⚠" : fertig ? "✔" : "○"} ${esc(z.name)}</span>${ueber ? ` <span class="fehlt" style="font-size:16px;color:#b45309">${esc(prozentText(ist, z.menge))}, erlaubt ± ${esc(mg(z.toleranz, z.einheit))}</span>` : ""}
-				${z.vorrat ? ` <span class="fehlt" style="font-size:16px">aus ${esc(z.vorrat)}</span>`
-					: z.silo ? (fertig ? ` <span class="fehlt" style="font-size:16px">aus ${esc(z.silo)}</span>` : ` <button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>`)
-					: ` <button class="knopf klein" data-a="auswahl" data-artikel="${esc(z.artikel)}">${fertig ? "ändern" : "Wählen"}</button>`}</div>
-				<div class="rechts ${fertig ? "ok" : "fehlt"}">${esc(mg(ist, z.einheit))} / ${esc(mg(z.menge, z.einheit))}</div></div>`;
+			// Lagerort und Gebinde unter dem Namen (Platz neben der Bildschirmtastatur); Silo steht schon auf dem Knopf
+			const ort = [z.silo && !fertig ? "" : z.lager, gebindeText(z)].filter(Boolean).join(" · ");
+			const knopf = z.vorrat ? `<small>aus ${esc(z.vorrat)}</small>`
+				: z.silo ? (fertig ? "" : `<button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>`)
+				: `<button class="knopf klein" data-a="auswahl" data-artikel="${esc(z.artikel)}">${fertig ? "ändern" : "Wählen"}</button>`;
+			return `<tr class="${fertig ? "fertig" : ueber ? "ueber" : ""}"><td>${ueber ? "⚠" : fertig ? "✔" : "○"} ${esc(z.name)}
+				${ueber ? `<small style="color:#b45309">${esc(prozentText(ist, z.menge))}, erlaubt ± ${esc(mg(z.toleranz, z.einheit))}</small>` : ""}
+				${ort ? `<small>${esc(ort)}</small>` : ""}${knopf}</td>
+				<td class="z">${esc(mg(z.menge, z.einheit))}</td><td class="z">${ist ? esc(mg(ist, z.einheit)) : "–"}</td>
+				<td class="z todo">${todo > 0 ? esc(mg(todo, z.einheit)) : "–"}</td></tr>`;
 		}).join("");
-		const extra = ansatz.zeilen.filter((z) => z.rework).map((z) => `<div class="zeile"><div class="ok">✔ Rework: ${esc(z.name)}</div><div class="rechts">${esc(mg(z.menge, z.einheit))}</div></div>`).join("");
+		const extra = ansatz.zeilen.filter((z) => z.rework).map((z) => `<tr class="fertig"><td>✔ Rework: ${esc(z.name)}</td><td class="z">–</td><td class="z">${esc(mg(z.menge, z.einheit))}</td><td class="z">–</td></tr>`).join("");
 		const liste = ansatz.zeilen.map((z, i) => `<div class="zeile"><div>${esc(z.name)}<br><span class="fehlt" style="font-size:16px">${esc(z.silo || z.behaelter || z.charge)}</span></div>
 			<div class="rechts">${esc(mg(z.menge, z.einheit))} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("");
 		const au = ansatz.auftrag;
@@ -1403,10 +1422,11 @@
 			${r.umstellung_bio ? `<div class="meldung orange">Umstellung auf Bio: hier wurde zuletzt konventionell produziert. Vor dem Buchen Reinigung bzw. Spülcharge bestätigen.</div>` : ""}
 			${r.kuebel && r.kuebel.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Grundteig-Kübel (ältester zuerst)</div><div class="gross">${r.kuebel.map((k) => esc(k.code)).join(" · ")}</div>
 				<div class="fehlt" style="font-size:16px">${r.kuebel.map((k) => esc(k.code + ": " + k.name + (k.datum ? " vom " + k.datum : "") + ", " + mg(k.menge, "Kg"))).join("<br>")}</div></div>` : ""}
-			<div class="panel">${zutaten}${extra}</div>
+			<div class="einwaage"><table class="tab"><thead><tr><th>Zutat · Lager</th><th class="z">Bestellt</th><th class="z">Erledigt</th><th class="z">ToDo</th></tr></thead>
+				<tbody>${zutaten}${extra}</tbody></table></div>
 			${sollAnpassbar() ? `<div class="reihe"><button class="knopf" data-a="soll-anpassen">Soll an Grundteig anpassen: ${esc(mg(sollAnpassbar(), r.einheit))}</button></div>` : ""}
 			${ansatz.offen
-				? zahlFeld("scan", `Menge (${esc(ein(ansatz.offen.einheit))}) für ${esc(ansatz.offen.anzeige)}`, ansatz.offen.vorschlag) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
+				? mengeEingabeHtml(ansatz.offen) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
 				: textFeld("scan", (zustand.vorschlagen ? "Vom Terminal ausgefüllt – „ändern“ zum Selbst-Auswählen; Scannen geht auch" : "Gebinde, Behälter oder Silo scannen") + (r.rework_moeglich ? " – auch Rework-Behälter" : ""))}
 			${ansatz.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">${zustand.vorschlagen ? "Wird verbraucht" : "Gescannt"}</div>${liste}</div>
 			<div class="reihe"><button class="knopf gruen" data-a="abschluss">Weiter zum Buchen</button></div>` : ""}
@@ -1417,11 +1437,14 @@
 			if (a === "auswahl") return auswahlZeigen(d.artikel);
 			if (a === "weg") { ansatz.zeilen.splice(+d.i, 1); return ansatzZeigen(); }
 			if (a === "abbrechen") { ansatz.offen = null; return ansatzZeigen(); }
+			if (a === "einheit" && ansatz.offen) return gebindeWaehlen(d.e);
 			if (a === "abschluss") return ansatzAbschluss();
 			if (a === "soll-anpassen") return sollAnpassen(sollAnpassbar());
 			beiAllgemein(a);
 		});
 		enter("scan", (v) => (ansatz.offen ? mengeEingegeben(v) : codeGescannt(v)));
+		const scanFeld = document.getElementById("scan");
+		if (ansatz.offen && scanFeld) { scanFeld.addEventListener("input", gebindeHinweis); gebindeHinweis(); }
 		fokus("scan");
 		if (ansatz.offen) setTimeout(() => document.getElementById("scan").select(), 40);
 	}
@@ -1464,6 +1487,31 @@
 		} catch (e) { /* Anzeige ist nur Info */ }
 	}
 
+	// Menge zur gescannten Zutat: in kg oder in ganzen Gebinden (Sack, Kollo), wenn am Artikel eine Umrechnung steht
+	function mengeEingabeHtml(o) {
+		const g = o.gebinde || [];
+		const zaehl = g.find((x) => x.einheit === o.zaehl);
+		return (g.length ? einheitWahl([{ einheit: o.einheit, faktor: 1 }, ...g], o.zaehl || o.einheit, o.einheit) : "") +
+			zahlFeld("scan", zaehl ? `Wie viele ${esc(ein(zaehl.einheit))} (je ${esc(mg(zaehl.faktor, o.einheit))}) für ${esc(o.anzeige)}?`
+				: `Menge (${esc(ein(o.einheit))}) für ${esc(o.anzeige)}`, o.vorschlag) +
+			(zaehl ? `<small class="feld-hinweis" id="gebinde-hinweis"></small>` : "");
+	}
+	function gebindeFaktor(o) { const g = (o.gebinde || []).find((x) => x.einheit === o.zaehl); return g ? g.faktor : 1; }
+	function gebindeHinweis() {
+		const o = ansatz.offen, h = document.getElementById("gebinde-hinweis"), f = document.getElementById("scan");
+		if (!o || !h || !f) return;
+		const n = zahl(f.value);
+		h.className = "feld-hinweis" + (n > 0 ? " ok" : "");
+		h.textContent = n > 0 ? "= " + mg(n * gebindeFaktor(o), o.einheit) + (o.todo ? " · ToDo " + mg(o.todo, o.einheit) : "") : "";
+	}
+	function gebindeWaehlen(einheit) {
+		const o = ansatz.offen;
+		o.zaehl = einheit === o.einheit ? null : einheit;
+		const f = gebindeFaktor(o);
+		o.vorschlag = o.todo > 0 ? (o.zaehl ? Math.max(1, Math.round(o.todo / f)) : rund(o.todo)) : "";
+		ansatzZeigen();
+	}
+
 	async function codeGescannt(code) {
 		if (!code) return;
 		const r = ansatz.rezept;
@@ -1474,14 +1522,18 @@
 		let ziel = passende ? passende.menge - gescannt(passende.artikel) : null;
 		if (ziel != null && info.inhalt != null && info.typ !== "silo") ziel = Math.min(ziel, info.inhalt);
 		const anzeige = (info.artikelname || code) + (info.typ === "silo" ? "" : " · " + code);
-		ansatz.offen = { code, anzeige, einheit: passende ? passende.einheit : null, vorschlag: ziel && ziel > 0 ? rund(ziel) : "" };
+		ansatz.offen = { code, anzeige, einheit: passende ? passende.einheit : null, vorschlag: ziel && ziel > 0 ? rund(ziel) : "",
+			todo: ziel && ziel > 0 ? rund(ziel) : 0, gebinde: info.typ === "silo" || !passende ? [] : passende.gebinde || [] };
+		// Geht der Rest in ganzen Gebinden auf (z. B. 50 kg = 2 Sack), gleich in Gebinden fragen
+		const ganz = ansatz.offen.gebinde.slice().reverse().find((g) => ziel >= g.faktor && Math.abs(ziel / g.faktor - Math.round(ziel / g.faktor)) < 0.02);
+		if (ganz) { ansatz.offen.zaehl = ganz.einheit; ansatz.offen.vorschlag = Math.round(ziel / ganz.faktor); }
 		// Grundteig-Kübel kommt immer ganz in den Kneter: keine Mengenabfrage
 		if (info.typ === "behaelter" && passende && passende.stufe === "Grundteig" && info.inhalt > 0) return mengeEingegeben(String(info.inhalt));
 		ansatzZeigen();
 	}
 
 	async function mengeEingegeben(wert) {
-		const menge = zahl(wert);
+		const menge = rund(zahl(wert) * gebindeFaktor(ansatz.offen), 6); // „2 Sack“ → 50 kg
 		const code = ansatz.offen.code;
 		if (menge <= 0) return meldung("rot", "Bitte eine Menge eingeben.");
 		try {

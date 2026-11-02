@@ -196,6 +196,12 @@ Keine Mitarbeiter-Anmeldung: jedes Terminal meldet sich einmal mit einem Station
 wählt beim ersten Start seine Station. Jede Buchung trägt die Station (Feld „Station (Terminal)“
 an Lagerbuchung und Lieferschein).
 
+**Einwaage wie bei FOBIS:** Die Zutatenliste beim Herstellen zeigt je Zutat **Bestellt** (Soll),
+**Erledigt** (gescannt) und **ToDo**, darunter den Lagerort (Quelllager der Stückliste, sonst Standardlager des
+Artikels, bei Silo-Zutaten das Silo). Steht am Artikel eine Maßeinheit-Umrechnung größer als die Lagereinheit
+(z. B. 1 Sack = 25 kg), fragt das Terminal nach dem Scan in **Gebinden** („Wie viele Sack?“, darunter „= 50 kg“);
+geht der Rest in ganzen Gebinden auf, ist das schon vorgewählt. Umschalten auf kg geht immer.
+
 **Datumsfelder** haben ein festes Format: nur Ziffern (TTMMJJ), die Punkte setzt das Terminal. Unter dem Feld
 steht sofort das erkannte Datum mit Wochentag oder der Fehler (gibt es nicht, unvollständig, in der
 Vergangenheit, über 10 Jahre in der Zukunft). Buchen geht erst mit gültigem Datum. Das MHD beim Wareneingang

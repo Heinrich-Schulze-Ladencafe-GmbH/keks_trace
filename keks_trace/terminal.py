@@ -258,6 +258,7 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 	faktor = flt(menge or b.quantity) / flt(b.quantity or 1)
 	silos = _silo_je_artikel()
 	vorraete = _vorraete()
+	gebinde = _gebinde_einheiten([z.item_code for z in b.items])
 	zutaten = [
 		{
 			"artikel": z.item_code,
@@ -268,6 +269,9 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 			"silo": silos.get(z.item_code),
 			"vorrat": silos.get(z.item_code) if z.item_code in vorraete else None,
 			"toleranz": _toleranz(z, flt(z.qty * faktor, 3)),
+			# Wo die Zutat liegt (wie „Kostenstelle“ bei FOBIS) und in welchen Gebinden sie gezählt werden kann
+			"lager": silos.get(z.item_code) or _lagerort(z, b.company),
+			"gebinde": gebinde.get(z.item_code, []),
 		}
 		for z in b.items
 	]
@@ -304,6 +308,34 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 
 
 REZEPT_STUFEN = ("Grundteig", "Teig veredelt", "Halbfabrikat")
+
+
+def _lagerort(bom_zeile, company: str | None) -> str | None:
+	"""Lagerort einer Rezeptzeile: Quelllager der Stückliste, sonst Standardlager des Artikels (ohne Firmenkürzel)."""
+	lager = bom_zeile.get("source_warehouse") or frappe.db.get_value(
+		"Item Default", {"parent": bom_zeile.item_code, "company": company}, "default_warehouse"
+	)
+	return (frappe.get_cached_value("Warehouse", lager, "warehouse_name") or lager) if lager else None
+
+
+def _gebinde_einheiten(artikel: list[str]) -> dict[str, list[dict]]:
+	"""Gebinde mit festem Inhalt je Artikel aus der Maßeinheit-Umrechnung am Artikel, z. B. 1 Sack = 25 kg.
+	Nur Einheiten größer als die Lagereinheit (Sack, Kollo, Karton); gezählt wird am Terminal in ganzen Gebinden."""
+	if not artikel:
+		return {}
+	lagereinheit = dict(
+		frappe.get_all("Item", filters={"name": ["in", artikel]}, fields=["name", "stock_uom"], as_list=True)
+	)
+	je = {}
+	for u in frappe.get_all(
+		"UOM Conversion Detail",
+		filters={"parenttype": "Item", "parent": ["in", artikel], "conversion_factor": [">", 1]},
+		fields=["parent", "uom", "conversion_factor"],
+		order_by="conversion_factor asc",
+	):
+		if u.uom != lagereinheit.get(u.parent):
+			je.setdefault(u.parent, []).append({"einheit": u.uom, "faktor": flt(u.conversion_factor, 6)})
+	return je
 
 
 def _rezept_modus() -> str:
