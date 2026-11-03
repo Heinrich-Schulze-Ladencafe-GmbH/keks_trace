@@ -240,6 +240,21 @@ Eine Bildschirmtastatur unten schreibt in das angetippte Feld: Ziffern bei Menge
 sie aus. Der Scanner wird an der Tippgeschwindigkeit erkannt: ein Scan landet immer im Scanfeld,
 auch wenn gerade ein Mengenfeld aktiv ist (dessen Inhalt bleibt). Echte Tastatur geht immer.
 
+### Maske wie bei FOBIS (Einwaage und Verladung)
+
+Ab 1000 px Breite sind **Einwaage** (Ansatz) und **Verladung** (Lieferung zu einem Kundenauftrag)
+zweispaltig aufgebaut:
+
+- **links** die Positionen als Tabelle (Pos, Artikel, Lager bzw. Einheit, Bestellt, Erledigt, ToDo,
+  Status, Hinweis). Antippen wählt eine Position. Darunter steht die gewählte Position groß
+  (Bestellt / Erledigt / ToDo) mit ihren Registrierungen; ✕ nimmt eine zurück.
+- **rechts** die Gruppen **Herkunft** (Scan, Silo, Charge, Vorrat), **Eingabe** (Menge, Gebinde)
+  und **Ziel** (Artikel, Kundenauftrag, Kunde). Darunter wird gebucht. Der Ziffernblock dockt
+  rechts unten an.
+
+Unter 1000 px (Handy) stehen die Spalten untereinander. Eine Lieferung ohne Kundenauftrag zeigt
+weiter die einfache Ansicht.
+
 ### Wareneingang mit Scan
 
 Zuerst das Etikett des Lieferanten scannen. **GS1-128** (oder GS1-DataMatrix/QR) mit (01) GTIN, (10) Charge,

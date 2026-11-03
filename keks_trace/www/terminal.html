@@ -86,6 +86,30 @@
 		#tasten.zahl button { min-height: 74px; }
 		#kt.blockrechts > *:not(.kopf) { max-width: calc(100% - 384px); }
 	}
+	/* Arbeitsmaske wie bei FOBIS: links Positionen und die gewählte groß, rechts Herkunft, Ziel und Eingabe.
+	   Der Ziffernblock dockt unten rechts an (wie bei FOBIS); darüber bleibt die rechte Spalte frei scrollbar. */
+	.maske { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+	.m-links { min-width: 0; }
+	.m-rechts { position: sticky; top: 72px; }
+	.m-gruppe { border: 1px solid var(--rand); border-radius: 6px; background: var(--panel2); padding: 4px 12px 10px; margin: 0 0 12px; min-width: 0; }
+	.m-gruppe legend { color: var(--blau); font-size: 16px; padding: 0 6px; }
+	.m-gruppe .zeile { padding: 6px 0; font-size: 18px; }
+	.m-gruppe .knopf { min-height: 56px; font-size: 19px; margin-top: 8px; }
+	.m-gruppe label { margin-top: 8px; }
+	.m-detail { background: var(--panel); border: 1px solid var(--rand); border-radius: 6px; padding: 10px 14px; margin: 0 0 14px; }
+	.m-detail .titel { display: flex; justify-content: space-between; gap: 12px; font-size: 22px; }
+	.m-detail .titel small { color: var(--muted); font-size: 16px; display: block; }
+	.gross3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
+	.gross3 small { display: block; color: var(--blau); font-size: 16px; }
+	.gross3 b { font-size: 42px; font-weight: 500; font-variant-numeric: tabular-nums; }
+	.gross3 i { font-style: normal; font-size: 20px; color: var(--muted); margin-left: 4px; }
+	.tab tr.gewaehlt td { background: #f8d98a !important; }
+	.tab tr[data-a] td { cursor: pointer; }
+	@media (min-width: 1000px) {
+		#kt.blockrechts > div.maske { max-width: none; }
+		#kt.blockrechts .m-rechts { padding-bottom: 380px; }
+	}
+	@media (max-width: 999px) { .maske { grid-template-columns: 1fr; } .m-rechts { position: static; } }
 	/* Statusleiste unten wie bei FOBIS: Start, letzte Meldung, Zurück */
 	#status { position: fixed; left: 0; right: 0; bottom: 0; height: 64px; z-index: 60; display: flex; align-items: center; gap: 14px; padding: 0 16px;
 		background: linear-gradient(#e8f1fc, #bcd5f2); border-top: 1px solid var(--rand); color: var(--text); box-sizing: border-box; }
@@ -1544,50 +1568,79 @@
 		return ansatz.zeilen.filter((z) => z.artikel === artikelCode).reduce((s, z) => s + z.menge, 0);
 	}
 
+	// Bausteine der Arbeitsmaske (FOBIS-Aufbau)
+	function maske(links, rechts) { return `<div class="maske"><div class="m-links">${links}</div><div class="m-rechts">${rechts}</div></div>`; }
+	function gruppe(titel, inhalt) { return inhalt ? `<fieldset class="m-gruppe"><legend>${esc(titel)}</legend>${inhalt}</fieldset>` : ""; }
+	function zeileKV(k, w) { return w == null || w === "" ? "" : `<div class="zeile"><div class="fehlt">${esc(k)}</div><div class="rechts">${esc(w)}</div></div>`; }
+	// unter: optional je Zahl ein kleiner Text darunter (z. B. „2 Paletten + 10 Karton“)
+	function grossZahlen(bestellt, erledigt, todo, einheit, unter) {
+		const u = unter || [];
+		const z = (n, i) => `<b>${esc(zahlText(rund(n)))}</b><i>${esc(ein(einheit || ""))}</i>${u[i] ? `<small style="color:var(--muted)">${esc(u[i])}</small>` : ""}`;
+		return `<div class="gross3"><div><small>Bestellt</small>${z(bestellt, 0)}</div><div><small>Erledigt</small>${z(erledigt, 1)}</div><div><small>ToDo</small>${z(Math.max(todo, 0), 2)}</div></div>`;
+	}
+
 	// Gebinde-Text zur Zutat: „Sack 25 kg“
 	function gebindeText(z) { return (z.gebinde || []).map((g) => ein(g.einheit) + " " + mg(g.faktor, z.einheit)).join(", "); }
 	function ansatzZeigen() {
 		const r = ansatz.rezept;
-		// Einwaage-Liste wie bei FOBIS: Bestellt (Soll), Erledigt (gescannt), ToDo (fehlt noch), dazu der Lagerort
-		const zutaten = r.zutaten.map((z) => {
+		const stand = (z) => {
 			const ist = gescannt(z.artikel);
-			const todo = Math.max(rund(z.menge - ist), 0);
 			const ueber = r.rezept_pruefen && ist > 0 && Math.abs(ist - z.menge) > (z.toleranz || 0) + 1e-9;
-			const fertig = ist >= z.menge * 0.98 && !ueber;
-			// Lagerort und Gebinde unter dem Namen (Platz neben der Bildschirmtastatur); Silo steht schon auf dem Knopf
-			const ort = [z.silo && !fertig ? "" : z.lager, gebindeText(z)].filter(Boolean).join(" · ");
-			const knopf = z.vorrat ? `<small>aus ${esc(z.vorrat)}</small>`
-				: z.silo ? (fertig ? "" : `<button class="knopf klein" data-a="silo-zutat" data-silo="${esc(z.silo)}">aus ${esc(z.silo)}</button>`)
-				: `<button class="knopf klein" data-a="auswahl" data-artikel="${esc(z.artikel)}">${fertig ? "ändern" : "Wählen"}</button>`;
-			return `<tr class="${fertig ? "fertig" : ueber ? "ueber" : ""}"><td>${ueber ? "⚠" : fertig ? "✔" : "○"} ${esc(z.name)}
-				${ueber ? `<small style="color:#b45309">${esc(prozentText(ist, z.menge))}, erlaubt ± ${esc(mg(z.toleranz, z.einheit))}</small>` : ""}
-				${ort ? `<small>${esc(ort)}</small>` : ""}${knopf}</td>
-				<td class="z">${esc(mg(z.menge, z.einheit))}</td><td class="z">${ist ? esc(mg(ist, z.einheit)) : "–"}</td>
-				<td class="z todo">${todo > 0 ? esc(mg(todo, z.einheit)) : "–"}</td></tr>`;
-		}).join("");
-		const extra = ansatz.zeilen.filter((z) => z.rework).map((z) => `<tr class="fertig"><td>✔ Rework: ${esc(z.name)}</td><td class="z">–</td><td class="z">${esc(mg(z.menge, z.einheit))}</td><td class="z">–</td></tr>`).join("");
-		const liste = ansatz.zeilen.map((z, i) => `<div class="zeile"><div>${esc(z.name)}<br><span class="fehlt" style="font-size:16px">${esc(z.silo || z.behaelter || z.charge)}</span></div>
-			<div class="rechts">${esc(mg(z.menge, z.einheit))} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("");
+			return { ist, todo: Math.max(rund(z.menge - ist), 0), ueber, fertig: ist >= z.menge * 0.98 && !ueber };
+		};
+		// gewählte Zutat: nach dem Scan die gescannte, sonst die erste offene
+		if (ansatz.offen && ansatz.offen.artikel) ansatz.sel = ansatz.offen.artikel;
+		if (!r.zutaten.some((z) => z.artikel === ansatz.sel)) ansatz.sel = (r.zutaten.find((z) => !stand(z).fertig) || r.zutaten[0] || {}).artikel;
+		const sel = r.zutaten.find((z) => z.artikel === ansatz.sel);
+		// Links oben: alle Zutaten wie bei FOBIS (Bestellt / Erledigt / ToDo, Lager)
+		const zeilen = r.zutaten.map((z, i) => {
+			const st = stand(z);
+			return `<tr data-a="sel" data-artikel="${esc(z.artikel)}" class="${z.artikel === ansatz.sel ? "gewaehlt" : st.fertig ? "fertig" : st.ueber ? "ueber" : ""}">
+				<td>${i + 1}</td><td>${st.ueber ? "⚠" : st.fertig ? "✔" : "○"} ${esc(z.name)}<small>${esc(z.artikel)}</small></td>
+				<td>${esc(z.silo || z.vorrat || z.lager || "")}</td>
+				<td class="z">${esc(mg(z.menge, z.einheit))}</td><td class="z">${st.ist ? esc(mg(st.ist, z.einheit)) : "–"}</td>
+				<td class="z todo">${st.todo > 0 ? esc(mg(st.todo, z.einheit)) : "–"}</td></tr>`;
+		}).join("") + ansatz.zeilen.filter((z) => z.rework).map((z) => `<tr class="fertig"><td></td><td>✔ Rework: ${esc(z.name)}</td><td>${esc(z.behaelter || "")}</td>
+			<td class="z">–</td><td class="z">${esc(mg(z.menge, z.einheit))}</td><td class="z">–</td></tr>`).join("");
+		// Links unten: die gewählte Zutat groß, mit ihren Registrierungen
+		let detail = "";
+		if (sel) {
+			const st = stand(sel);
+			const reg = ansatz.zeilen.map((z, i) => ({ z, i })).filter((x) => x.z.artikel === sel.artikel);
+			detail = `<div class="m-detail"><div class="titel"><div><b>${esc(sel.artikel)}</b> ${esc(sel.name)}<small>${esc([sel.lager, gebindeText(sel)].filter(Boolean).join(" · "))}</small></div>
+				<div class="fehlt" style="font-size:16px;text-align:right">${sel.toleranz ? "Toleranz ± " + esc(mg(sel.toleranz, sel.einheit)) : ""}${st.ueber ? `<br><b style="color:#b45309">${esc(prozentText(st.ist, sel.menge))}</b>` : ""}</div></div>
+				${grossZahlen(sel.menge, st.ist, st.todo, sel.einheit)}
+				${reg.length ? `<div style="margin-top:8px">${reg.map((x) => `<div class="zeile"><div>${esc(x.z.charge ? "Charge " + x.z.charge : "")}${x.z.behaelter ? " · " + esc(x.z.behaelter) : ""}${x.z.silo ? " · " + esc(x.z.silo) : ""}</div>
+					<div class="rechts">${esc(mg(x.z.menge, x.z.einheit))} <button class="x" data-a="weg" data-i="${x.i}">✕</button></div></div>`).join("")}</div>` : ""}</div>`;
+		}
 		const au = ansatz.auftrag;
 		const pa = zustand.linienAuftrag;
+		const links = `<div class="einwaage"><table class="tab"><thead><tr><th>Pos</th><th>Zutat</th><th>Lager</th><th class="z">Bestellt</th><th class="z">Erledigt</th><th class="z">ToDo</th></tr></thead>
+				<tbody>${zeilen}</tbody></table></div>` + detail +
+			(sollAnpassbar() ? `<div class="reihe"><button class="knopf" data-a="soll-anpassen">Soll an Grundteig anpassen: ${esc(mg(sollAnpassbar(), r.einheit))}</button></div>` : "") +
+			(r.kuebel && r.kuebel.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Grundteig-Kübel (ältester zuerst)</div><div class="gross">${r.kuebel.map((k) => esc(k.code)).join(" · ")}</div>
+				<div class="fehlt" style="font-size:16px">${r.kuebel.map((k) => esc(k.code + ": " + k.name + (k.datum ? " vom " + k.datum : "") + ", " + mg(k.menge, "Kg"))).join("<br>")}</div></div>` : "") +
+			(au || pa ? `<div class="reiter"><button class="an" type="button">Registrierungen</button></div><div class="panel" style="margin-top:0" id="registrierungen">Lädt …</div>` : "");
+		// Rechts: Herkunft (woher die gewählte Zutat kommt), Ziel, Eingabe
+		const herkunft = ansatz.offen ? zeileKV("Gescannt", ansatz.offen.anzeige) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
+			: textFeld("scan", zustand.vorschlagen ? "Scannen (oder unten wählen)" : "Gebinde, Behälter oder Silo scannen" + (r.rework_moeglich ? " – auch Rework" : "")) +
+				(sel ? (sel.vorrat ? zeileKV("Aus Vorrat", sel.vorrat)
+					: sel.silo ? `<button class="knopf" data-a="silo-zutat" data-silo="${esc(sel.silo)}">${esc(sel.name)} aus ${esc(sel.silo)}</button>`
+					: `<button class="knopf" data-a="auswahl" data-artikel="${esc(sel.artikel)}">${esc(sel.name)}: Charge wählen</button>`) : "");
+		const ziel = zeileKV("Artikel", r.name) + zeileKV("Sollmenge", mg(r.sollmenge, r.einheit)) + (au ? zeileKV("Kundenauftrag", au.auftrag + (au.kundenname ? " · " + au.kundenname : "")) : "") +
+			(r.kennzeichen && r.kennzeichen.length ? `<div class="zeile"><div class="fehlt">Kennzeichen</div><div class="rechts">${kennzeichenMarken(r.kennzeichen)}</div></div>` : "");
+		const eingabe = ansatz.offen ? mengeEingabeHtml(ansatz.offen) : `<p class="fehlt" style="font-size:16px;margin:6px 0">Erst scannen, dann die Menge.</p>`;
+		// Eingabe oben, damit der angedockte Ziffernblock sie nicht verdeckt; Ziel ist nur Information
+		const rechts = gruppe("Herkunft", herkunft) + gruppe("Eingabe", eingabe) +
+			(ansatz.zeilen.length && !ansatz.offen ? `<button class="knopf gruen" data-a="abschluss">Weiter zum Buchen<small>${ansatz.zeilen.length} Registrierung(en)</small></button>` : "") +
+			gruppe("Ziel", ziel);
 		app.innerHTML = kopf((au ? "Produktion " + au.auftrag + ": " : "") + r.name + " · " + mg(r.sollmenge, r.einheit), true) +
 			(au && au.hinweis ? hinweisHtml([{ von: "Kundenauftrag " + au.auftrag, text: au.hinweis }]) : "") +
-			(au ? positionBox(au.artikel + "  " + au.name, au.kundenname, au.menge, au.verpackt, au.offen_verpacken, au.einheit) : "") + `
-			${r.kennzeichen && r.kennzeichen.length ? `<div class="panel">${kennzeichenMarken(r.kennzeichen)} <span class="fehlt" style="font-size:16px">Nur Zutaten mit diesem Kennzeichen werden angenommen.</span></div>` : ""}
-			${r.umstellung_bio ? `<div class="meldung orange">Umstellung auf Bio: hier wurde zuletzt konventionell produziert. Vor dem Buchen Reinigung bzw. Spülcharge bestätigen.</div>` : ""}
-			${r.kuebel && r.kuebel.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Grundteig-Kübel (ältester zuerst)</div><div class="gross">${r.kuebel.map((k) => esc(k.code)).join(" · ")}</div>
-				<div class="fehlt" style="font-size:16px">${r.kuebel.map((k) => esc(k.code + ": " + k.name + (k.datum ? " vom " + k.datum : "") + ", " + mg(k.menge, "Kg"))).join("<br>")}</div></div>` : ""}
-			<div class="einwaage"><table class="tab"><thead><tr><th>Zutat · Lager</th><th class="z">Bestellt</th><th class="z">Erledigt</th><th class="z">ToDo</th></tr></thead>
-				<tbody>${zutaten}${extra}</tbody></table></div>
-			${sollAnpassbar() ? `<div class="reihe"><button class="knopf" data-a="soll-anpassen">Soll an Grundteig anpassen: ${esc(mg(sollAnpassbar(), r.einheit))}</button></div>` : ""}
-			${ansatz.offen
-				? mengeEingabeHtml(ansatz.offen) + `<button class="link" data-a="abbrechen">Scan verwerfen</button>`
-				: textFeld("scan", (zustand.vorschlagen ? "Vom Terminal ausgefüllt – „ändern“ zum Selbst-Auswählen; Scannen geht auch" : "Gebinde, Behälter oder Silo scannen") + (r.rework_moeglich ? " – auch Rework-Behälter" : ""))}
-			${ansatz.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">${zustand.vorschlagen ? "Wird verbraucht" : "Gescannt"}</div>${liste}</div>
-			<div class="reihe"><button class="knopf gruen" data-a="abschluss">Weiter zum Buchen</button></div>` : ""}
-			${au || pa ? `<div class="reiter"><button class="an" type="button">Registrierungen</button></div><div class="panel" style="margin-top:0" id="registrierungen">Lädt …</div>` : ""}`;
+			(r.umstellung_bio ? `<div class="meldung orange">Umstellung auf Bio: hier wurde zuletzt konventionell produziert. Vor dem Buchen Reinigung bzw. Spülcharge bestätigen.</div>` : "") +
+			maske(links, rechts);
 		if (au || pa) registrierungenLaden(au ? { kundenauftrag: au.auftrag } : { produktionsauftrag: pa.auftrag });
 		aktionen((a, d) => {
+			if (a === "sel") { if (!ansatz.offen) ansatz.sel = d.artikel; return ansatzZeigen(); }
 			if (a === "silo-zutat") return codeGescannt(d.silo);
 			if (a === "auswahl") return auswahlZeigen(d.artikel);
 			if (a === "weg") { ansatz.zeilen.splice(+d.i, 1); return ansatzZeigen(); }
@@ -1678,7 +1731,8 @@
 		if (ziel != null && info.inhalt != null && info.typ !== "silo") ziel = Math.min(ziel, info.inhalt);
 		const anzeige = (info.artikelname || code) + (info.typ === "silo" ? "" : " · " + code);
 		ansatz.offen = { code, anzeige, einheit: passende ? passende.einheit : null, vorschlag: ziel && ziel > 0 ? rund(ziel) : "",
-			todo: ziel && ziel > 0 ? rund(ziel) : 0, gebinde: info.typ === "silo" || !passende ? [] : passende.gebinde || [] };
+			todo: ziel && ziel > 0 ? rund(ziel) : 0, gebinde: info.typ === "silo" || !passende ? [] : passende.gebinde || [],
+			artikel: passende ? passende.artikel : null };
 		// Geht der Rest in ganzen Gebinden auf (z. B. 50 kg = 2 Sack), gleich in Gebinden fragen
 		const ganz = ansatz.offen.gebinde.slice().reverse().find((g) => ziel >= g.faktor && Math.abs(ziel / g.faktor - Math.round(ziel / g.faktor)) < 0.02);
 		if (ganz) { ansatz.offen.zaehl = ganz.einheit; ansatz.offen.vorschlag = Math.round(ziel / ganz.faktor); }
@@ -2331,6 +2385,44 @@
 		meldung("gruen", "OK: " + (anfrage.ganz ? "ganze Palette " + anfrage.palette.slice(-6) : positionen[0].name) + " · " + stk(n, positionen[0].einheit));
 	}
 
+	// Verladung nach Kundenauftrag wie bei FOBIS: links alle Positionen mit Bestellt / Erledigt / ToDo und die
+	// gewählte groß samt Registrierungen, rechts Herkunft (scannen), Ziel (Kunde, Auftrag) und Buchen
+	function verladungMaske(gescanntJe, liste, hinweise) {
+		const pos = lieferung.positionen.map((z) => {
+			const f = z.faktor || 1;
+			const jetzt = (gescanntJe[z.artikel] || 0) / f;
+			const erledigt = rund((z.geliefert || 0) + jetzt);
+			const todo = Math.max(rund(z.menge - erledigt), 0);
+			return { z, jetzt, erledigt, todo, status: todo <= 1e-6 ? "Fertig" : erledigt > 0 ? "Aktiv" : "Neu" };
+		});
+		if (lieferung.sel == null || !pos[lieferung.sel]) lieferung.sel = Math.max(0, pos.findIndex((p) => p.status !== "Fertig"));
+		const mitHinweis = pos.some((p) => p.z.hinweis);
+		const zeilen = pos.map((p, i) => `<tr data-a="sel" data-i="${i}" class="${i === lieferung.sel ? "gewaehlt" : p.status === "Fertig" ? "fertig" : ""}">
+			<td>${i + 1}</td><td>${esc(p.z.artikel)}</td><td>${esc(p.z.name)}</td><td>${esc(ein(p.z.einheit))}</td>
+			<td class="z">${esc(zerlegen(p.z.einheiten, p.z.menge * (p.z.faktor || 1)))}</td>
+			<td class="z">${p.erledigt ? esc(zerlegen(p.z.einheiten, p.erledigt * (p.z.faktor || 1))) : "–"}</td>
+			<td class="z todo">${p.todo ? esc(zerlegen(p.z.einheiten, p.todo * (p.z.faktor || 1))) : "–"}</td>
+			<td>${p.status === "Fertig" ? "✔ " : ""}${p.status}</td>${mitHinweis ? `<td>${esc(p.z.hinweis || "")}</td>` : ""}</tr>`).join("");
+		const g = pos[lieferung.sel];
+		const reg = g ? lieferung.zeilen.map((zl, i) => ({ zl, i })).filter((x) => x.zl.positionen.some((y) => y.artikel === g.z.artikel)) : [];
+		const detail = g ? `<div class="m-detail"><div class="titel"><div><b>${esc(g.z.artikel)}</b> ${esc(g.z.name)}<small>${esc(ein(g.z.einheit))}${g.z.termin ? " · Termin " + esc(g.z.termin) : ""}</small></div>
+				<div class="fehlt" style="font-size:16px;text-align:right">jetzt gescannt<br><b>${esc(zerlegen(g.z.einheiten, gescanntJe[g.z.artikel] || 0))}</b></div></div>
+				${g.z.hinweis ? hinweisHtml([{ von: "Kundenauftrag", text: g.z.hinweis }]) : ""}
+				${grossZahlen(g.z.menge, g.erledigt, g.todo, g.z.einheit, [g.z.menge, g.erledigt, g.todo].map((n) => zerlegen(g.z.einheiten, n * (g.z.faktor || 1))))}
+				${reg.length ? `<div style="margin-top:8px">${reg.map((x) => x.zl.positionen.filter((y) => y.artikel === g.z.artikel).map((y, j) => `<div class="zeile"><div>Los ${esc(y.charge)}${y.palette ? " · " + (y.versandkarton ? "Versandkarton" : "Palette") + " …" + esc(y.palette.slice(-6)) : " · lose"}</div>
+					<div class="rechts">${esc(stk(y.anzahl, y.einheit))}${j === 0 ? ` <button class="x" data-a="weg" data-i="${x.i}">✕</button>` : ""}</div></div>`).join("")).join("")}</div>` : ""}</div>` : "";
+		const links = `<div class="einwaage"><table class="tab"><thead><tr><th>Pos</th><th>Artikel</th><th>Bezeichnung</th><th>Auftrag in</th><th class="z">Bestellt</th><th class="z">Erledigt</th><th class="z">ToDo</th><th>Status</th>${mitHinweis ? "<th>Hinweis</th>" : ""}</tr></thead>
+			<tbody>${zeilen}</tbody></table></div>` + detail +
+			(lieferung.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Alle Registrierungen</div>${liste}</div>` : "");
+		const offen = pos.filter((p) => p.status !== "Fertig").length;
+		const rechts = gruppe("Herkunft", textFeld("scan", "Palette, Versandkarton oder Los scannen") +
+				`<p class="fehlt" style="font-size:16px;margin:6px 0 0">Ganze Palette oder Versandkarton: NVE scannen. Lose Kartons: Los scannen, dann die Anzahl.</p>`) +
+			gruppe("Ziel", zeileKV("Kunde", lieferung.titel) + zeileKV("Kundenauftrag", lieferung.auftrag) + zeileKV("Positionen", pos.length + " · offen " + offen)) +
+			(hinweise.length ? hinweisHtml(hinweise.map((h) => ({ von: "Kundenauftrag", text: h }))) : "") +
+			(lieferung.zeilen.length ? `<button class="knopf gruen" data-a="buchen">Lieferschein buchen<small>${lieferung.zeilen.length} Registrierung(en)${offen ? " · " + offen + " Position(en) noch offen" : ""}</small></button>` : "");
+		return maske(links, rechts);
+	}
+
 	function lieferungZeigen() {
 		const liste = lieferung.zeilen.map((z, i) => z.positionen.map((x, j) => `<div class="zeile"><div>${esc(x.name)}<br><span class="fehlt" style="font-size:16px">Los ${esc(x.charge)}${x.palette ? " · Palette …" + esc(x.palette.slice(-6)) : " · lose"}</span></div>
 			<div class="rechts">${esc(stk(x.anzahl, x.einheit))} ${j === 0 ? `<button class="x" data-a="weg" data-i="${i}">✕</button>` : ""}</div></div>`).join("")).join("");
@@ -2343,10 +2435,12 @@
 			const fertig = jetzt >= offen - 1e-6;
 			return `<div class="zeile"><div class="${fertig ? "ok" : ""}">${fertig ? "✔" : "○"} ${esc(z.name)}</div><div class="rechts ${fertig ? "ok" : "fehlt"}">${esc(zerlegen(z.einheiten, jetzt))}<br><small>von ${esc(zerlegen(z.einheiten, offen))}</small></div></div>`;
 		}).join("")}</div>` : "");
-		app.innerHTML = kopf("Lieferung an " + lieferung.titel, true) + auftragHtml +
+		if (lieferung.auftrag) app.innerHTML = kopf("Verladung " + lieferung.auftrag + ": " + lieferung.titel, true) + verladungMaske(gescanntJe, liste, hinweise);
+		else app.innerHTML = kopf("Lieferung an " + lieferung.titel, true) + auftragHtml +
 			textFeld("scan", "Palette, Versandkarton oder Los scannen") +
 			(lieferung.zeilen.length ? `<div class="panel">${liste}</div><div class="reihe"><button class="knopf gruen" data-a="buchen">Lieferschein buchen</button></div>` : "");
 		aktionen(async (a, d) => {
+			if (a === "sel") { lieferung.sel = +d.i; return lieferungZeigen(); }
 			if (a === "weg") { lieferung.zeilen.splice(+d.i, 1); return lieferungZeigen(); }
 			if (a !== "buchen") return beiAllgemein(a);
 			const knopf = app.querySelector('[data-a="buchen"]');

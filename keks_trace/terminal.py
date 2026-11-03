@@ -2265,6 +2265,8 @@ def _lieferposition(charge, anzahl, einheit, palette, aus_verkauf=False):
 		"faktor": f,
 		"menge": flt(flt(anzahl) * f, 3),
 		"palette": palette,
+		"versandkarton": bool(palette)
+		and frappe.db.get_value("Palette", palette, "typ") == paletten.VERSANDKARTON,
 		"lager": max(lager, key=lager.get),
 	}
 
