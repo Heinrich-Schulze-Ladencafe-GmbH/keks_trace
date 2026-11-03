@@ -142,16 +142,31 @@ def pruefziffer(ziffern: str) -> int:
 	return (10 - summe % 10) % 10
 
 
-def nve_neu() -> tuple[str, bool]:
-	"""Nächste NVE (18 Ziffern). Gibt (NVE, ist_test) zurück."""
+def standard_kreis() -> str | None:
+	"""Standard-Nummernkreis (DocType NVE Nummernkreis); None, solange keiner angelegt ist."""
+	return frappe.db.get_value("NVE Nummernkreis", {"standard": 1, "aktiv": 1})
+
+
+def nve_neu(kreis: str | None = None) -> tuple[str, bool]:
+	"""Nächste NVE (18 Ziffern) aus dem Nummernkreis (Standard: „Eigener“). Gibt (NVE, ist_test) zurück.
+
+	Beim eigenen Kreis kommen Basisnummer und Reserveziffer aus dem Kreis, sonst aus den Einstellungen; der
+	Zähler ist je Basisnummer derselbe wie bisher, die Nummern laufen also weiter. Nummern vom Kunden
+	(Produktion für Dritte) folgen in einem späteren Schritt."""
 	e = frappe.get_cached_doc("Keks Trace Einstellungen")
-	basis = "".join(c for c in (e.get("gs1_basisnummer") or "") if c.isdigit())
+	k = frappe.get_cached_doc("NVE Nummernkreis", kreis) if kreis else None
+	if k and not k.aktiv:
+		_fehler(_("NVE-Nummernkreis {0} ist nicht aktiv.").format(kreis))
+	if k and k.art != "Eigener":
+		_fehler(_("NVE-Nummernkreis {0} ({1}) ist noch nicht freigeschaltet.").format(kreis, k.art))
+	basis = "".join(c for c in ((k and k.basisnummer) or e.get("gs1_basisnummer") or "") if c.isdigit())
 	test = not basis
 	if test:
 		basis = TEST_BASISNUMMER
 	if not 7 <= len(basis) <= 10:
 		_fehler(_("Die GS1-Basisnummer muss 7 bis 10 Ziffern haben."))
-	reserve = str(cint(e.get("nve_reserveziffer") if e.get("nve_reserveziffer") is not None else 3) % 10)
+	ziffer = k.reserveziffer if k and k.reserveziffer not in (None, "") else e.get("nve_reserveziffer")
+	reserve = str(cint(ziffer if ziffer is not None else 3) % 10)
 	stellen = 16 - len(basis)
 	laufend = getseries(f"KT-NVE-{reserve}{basis}-", stellen)
 	koerper = f"{reserve}{basis}{laufend}"
@@ -256,7 +271,9 @@ def lose(charge: str) -> float:
 def stand(palette: str, pos=None) -> str:
 	"""Fingerabdruck des Inhalts (Los, Anzahl, Einheit) zum Vergleich mit dem gedruckten Etikett."""
 	pos = inhalt(palette) if pos is None else pos
-	return "|".join(f"{x['charge']}:{flt(x['anzahl'], 3):g}:{x['einheit']}" for x in pos)
+	text = "|".join(f"{x['charge']}:{flt(x['anzahl'], 3):g}:{x['einheit']}" for x in pos)
+	k = kartons(palette)
+	return text + ("|K:" + ",".join(sorted(k)) if k else "")
 
 
 def etikett_gedruckt(palette: str) -> None:
@@ -280,19 +297,117 @@ def etikett_aktuell(palette: str, pos=None) -> bool | None:
 def info(palette: str) -> dict:
 	p = frappe.get_doc("Palette", palette)
 	pos = inhalt(palette)
+	karton_liste = []
+	for k in kartons(palette):
+		kp = inhalt(k)
+		karton_liste.append({"nve": k, "inhalt": _summe_text(kp), "menge": flt(sum(x["menge"] for x in kp), 3),
+		                     "positionen": kp})  # fmt: skip
+	gesamt = _zusammen(pos + [x for k in karton_liste for x in k["positionen"]])
+	summe = _summe_text(pos)
+	if karton_liste:
+		summe = ", ".join(
+			x
+			for x in (f"{len(karton_liste)} Versandkarton" + ("s" if len(karton_liste) != 1 else ""), summe)
+			if x
+		)
 	return {
 		"etikett_aktuell": etikett_aktuell(palette, pos),
 		"nve": p.name,
 		"art": p.typ,
+		"versandkarton": p.typ == VERSANDKARTON,
 		"status": p.status,
 		"kunde": p.kunde,
 		"lieferschein": p.lieferschein,
 		"test": bool(p.test_nve),
 		"positionen": pos,
-		"kartons": _summe_text(pos),
-		"menge": flt(sum(x["menge"] for x in pos), 3),
-		"fuellung": fuellung(palette, pos),
+		# Versandkartons auf dieser Palette (je mit eigener NVE) und alles zusammen (für das Etikett)
+		"versandkartons": karton_liste,
+		"positionen_gesamt": gesamt,
+		"auf_palette": p.get("auf_palette") if p.typ == VERSANDKARTON and p.status in AKTIV else None,
+		"gewicht_kg": flt(p.get("gewicht_kg")) or None,
+		"sendungsnummer": p.get("sendungsnummer"),
+		"kartons": summe,
+		"menge": flt(sum(x["menge"] for x in gesamt), 3),
+		"fuellung": fuellung(palette, pos) if not karton_liste else None,
 	}
+
+
+def _zusammen(pos: list[dict]) -> list[dict]:
+	"""Positionen gleicher Charge und Einheit zusammenfassen (Palette mit Versandkartons: Etikett, Übersicht)."""
+	je = {}
+	for x in pos:
+		k = (x["charge"], x["einheit"])
+		if k in je:
+			je[k] = {
+				**je[k],
+				"anzahl": flt(je[k]["anzahl"] + x["anzahl"], 3),
+				"menge": flt(je[k]["menge"] + x["menge"], 3),
+			}
+			je[k]["anzahl_text"] = f"{je[k]['anzahl']:g}".replace(".", ",")
+		else:
+			je[k] = dict(x)
+	return list(je.values())
+
+
+# ---------------------------------------------------------------------------
+# Versandkartons: eigene NVE, stehen auf einer Palette mit NVE (eine Ebene)
+# ---------------------------------------------------------------------------
+
+VERSANDKARTON = "Versandkarton"
+
+
+def kartons(palette: str) -> list[str]:
+	"""Versandkartons, die gerade auf dieser Palette stehen (im Lager)."""
+	return frappe.get_all(
+		"Palette",
+		filters={"auf_palette": palette, "typ": VERSANDKARTON, "status": ["in", AKTIV]},
+		pluck="name",
+		order_by="creation",
+	)
+
+
+def _zuordnung(karton, palette, richtung, station=None, beleg=None):
+	frappe.get_doc(
+		{"doctype": "Versandkarton Zuordnung", "karton": karton, "palette": palette, "richtung": richtung,
+		 "zeitpunkt": now_datetime(), "station": station, "nutzer": frappe.session.user, "beleg": beleg}
+	).insert(ignore_permissions=True)  # fmt: skip
+
+
+def karton_auf_palette(karton: str, palette: str, station: str | None = None) -> dict:
+	"""Versandkarton auf eine Palette stellen. Der Karton wird dabei geschlossen (sein Inhalt bleibt seiner)."""
+	k = frappe.db.get_value("Palette", karton, ["typ", "status", "auf_palette"], as_dict=True)
+	if not k:
+		_fehler(_("Versandkarton {0} gibt es nicht.").format(karton))
+	if k.typ != VERSANDKARTON:
+		_fehler(
+			_("{0} ist kein Versandkarton, sondern eine {1}. Bitte umpacken statt aufstellen.").format(
+				karton, k.typ
+			)
+		)
+	if frappe.db.get_value("Palette", palette, "typ") == VERSANDKARTON:
+		_fehler(_("Ein Versandkarton kommt auf eine Palette, nicht in einen anderen Versandkarton."))
+	if k.status not in AKTIV:
+		_fehler(_("Versandkarton {0} ist {1}.").format(karton, k.status.lower()))
+	if not inhalt(karton):
+		_fehler(_("Versandkarton {0} ist leer.").format(karton))
+	if k.auf_palette == palette:
+		return info(palette)
+	_offen(palette)
+	if k.auf_palette:
+		_zuordnung(karton, k.auf_palette, "Ab", station)
+	frappe.db.set_value("Palette", karton, {"auf_palette": palette, "status": "Geschlossen"})
+	_zuordnung(karton, palette, "Auf", station)
+	return info(palette)
+
+
+def karton_abnehmen(karton: str, station: str | None = None, beleg: str | None = None) -> None:
+	"""Versandkarton von seiner Palette nehmen (er bleibt im Lager, eigene NVE)."""
+	palette = frappe.db.get_value("Palette", karton, "auf_palette")
+	if not palette:
+		return
+	frappe.db.set_value("Palette", karton, "auf_palette", None)
+	_zuordnung(karton, palette, "Ab", station, beleg)
+	_status_pruefen(palette)
 
 
 def _summe_text(pos):
@@ -356,12 +471,15 @@ def _etikett_hinweis(palette):
 
 def _status_pruefen(palette):
 	p = frappe.get_doc("Palette", palette)
-	if not inhalt(palette) and p.status in AKTIV:
+	if not inhalt(palette) and not kartons(palette) and p.status in AKTIV:
 		frappe.db.set_value("Palette", palette, "status", "Leer")
 
 
-def anlegen(typ: str = "Lagerpalette", station: str | None = None, kunde: str | None = None) -> str:
-	nve, test = nve_neu()
+def anlegen(
+	typ: str = "Lagerpalette", station: str | None = None, kunde: str | None = None, kreis: str | None = None
+) -> str:
+	kreis = kreis or standard_kreis()
+	nve, test = nve_neu(kreis)
 	frappe.get_doc(
 		{
 			"doctype": "Palette",
@@ -371,6 +489,7 @@ def anlegen(typ: str = "Lagerpalette", station: str | None = None, kunde: str | 
 			"station": station,
 			"kunde": kunde,
 			"test_nve": 1 if test else 0,
+			"nve_kreis": kreis,
 		}
 	).insert(ignore_permissions=True)
 	return nve
@@ -471,7 +590,9 @@ def umpacken(von, nach, charge, anzahl, einheit, station=None) -> dict:
 
 def schliessen(palette) -> dict:
 	if frappe.db.get_value("Palette", palette, "status") == "Offen":
-		frappe.db.set_value("Palette", palette, "status", "Geschlossen" if inhalt(palette) else "Leer")
+		frappe.db.set_value(
+			"Palette", palette, "status", "Geschlossen" if inhalt(palette) or kartons(palette) else "Leer"
+		)
 	return info(palette)
 
 
@@ -570,13 +691,23 @@ def lieferung_on_submit(doc, method=None):
 				doc.get("kt_station"), "Delivery Note", doc.name,
 			)  # fmt: skip
 			betroffen.add(r.kt_palette)
+	versendet = {"status": "Versendet", "lieferschein": doc.name, "kunde": doc.customer}
 	for palette in betroffen:
-		if not inhalt(palette):
-			frappe.db.set_value(
-				"Palette",
-				palette,
-				{"status": "Versendet", "lieferschein": doc.name, "kunde": doc.customer},
-			)
+		if not inhalt(palette) and not kartons(palette):
+			frappe.db.set_value("Palette", palette, versendet)
+	# Versandkartons von einer Palette: ganze Palette weg → auch sie versendet; sonst Karton von ihr abnehmen
+	aussen = defaultdict(list)
+	for k in betroffen:
+		a = frappe.db.get_value("Palette", k, "auf_palette")
+		if a:
+			aussen[a].append(k)
+	for a, ks in aussen.items():
+		if not inhalt(a) and not kartons(a):
+			frappe.db.set_value("Palette", a, versendet)
+		else:
+			for k in ks:
+				if frappe.db.get_value("Palette", k, "status") == "Versendet":
+					karton_abnehmen(k, doc.get("kt_station"), doc.name)
 
 
 def lieferung_on_cancel(doc, method=None):
@@ -590,7 +721,10 @@ def lieferung_on_cancel(doc, method=None):
 			b.palette, "Zugang", "Storno Lieferung", b.charge, b.anzahl, b.einheit,
 			beleg_typ="Delivery Note", beleg=doc.name,
 		)  # fmt: skip
-	for palette in {b.palette for b in bewegungen}:
+	zurueck = {b.palette for b in bewegungen} | set(
+		frappe.get_all("Palette", filters={"lieferschein": doc.name}, pluck="name")
+	)  # auch Paletten, die nur Versandkartons trugen
+	for palette in zurueck:
 		if frappe.db.get_value("Palette", palette, "status") in ("Versendet", "Leer"):
 			frappe.db.set_value("Palette", palette, {"status": "Geschlossen", "lieferschein": None})
 
@@ -743,7 +877,8 @@ def etikett(nve: str) -> dict:
 		"inhalt_barcode": None,
 		"inhalt_text": None,
 	}
-	pos = i["positionen"]
+	# Palette mit Versandkartons: das Etikett zeigt alles zusammen (die Kartons tragen ihr eigenes)
+	pos = daten["positionen"] = i["positionen_gesamt"]
 	# Bio nur, wenn alles auf der Palette Bio ist (Artikel verspricht es und das Los trägt es)
 	from keks_trace import kennzeichnung as kz
 

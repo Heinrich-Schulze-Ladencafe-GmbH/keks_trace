@@ -7,3 +7,4 @@
 keks_trace.patches.paletten_abgleich
 keks_trace.patches.einstellungen_neue_regeln
 keks_trace.patches.anfragetypen_test
+keks_trace.patches.nve_eigener_kreis

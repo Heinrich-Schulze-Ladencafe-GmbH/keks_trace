@@ -1,0 +1,131 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-03 20:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "kreis_name",
+  "art",
+  "aktiv",
+  "standard",
+  "column_break_1",
+  "basisnummer",
+  "reserveziffer",
+  "kunde",
+  "bemerkung"
+ ],
+ "fields": [
+  {
+   "fieldname": "kreis_name",
+   "fieldtype": "Data",
+   "label": "Name",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "art",
+   "fieldtype": "Select",
+   "label": "Art",
+   "options": "Eigener\nBereich vom Kunden\nEtiketten vom Kunden",
+   "default": "Eigener",
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "Eigener: eure GS1-Basisnummer. Die Arten vom Kunden (Produktion für Dritte) kommen in einem späteren Schritt."
+  },
+  {
+   "fieldname": "aktiv",
+   "fieldtype": "Check",
+   "label": "Aktiv",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "standard",
+   "fieldtype": "Check",
+   "label": "Standard",
+   "in_list_view": 1,
+   "description": "Gilt, wenn nichts anderes festgelegt ist. Genau ein Kreis."
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "basisnummer",
+   "fieldtype": "Data",
+   "label": "GS1-Basisnummer",
+   "description": "7 bis 10 Ziffern. Leer = aus den Keks Trace Einstellungen."
+  },
+  {
+   "fieldname": "reserveziffer",
+   "fieldtype": "Data",
+   "label": "Reserveziffer (0–9)",
+   "length": 1,
+   "description": "Leer = aus den Keks Trace Einstellungen."
+  },
+  {
+   "fieldname": "kunde",
+   "fieldtype": "Link",
+   "label": "Kunde",
+   "options": "Customer",
+   "description": "Nur bei Nummern vom Kunden."
+  },
+  {
+   "fieldname": "bemerkung",
+   "fieldtype": "Small Text",
+   "label": "Bemerkung"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-03 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "NVE Nummernkreis",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "field:kreis_name",
+ "naming_rule": "By fieldname",
+ "track_changes": 1,
+ "title_field": "kreis_name",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "description": "Woher die NVE kommt: eigener Nummernkreis (GS1) oder später Nummern vom Kunden."
+}

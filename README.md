@@ -314,6 +314,26 @@ MHD 32 Monate. Ausgedachte Werte (Beutelgrößen, Gebinde, Ruhezeit, Packmittel)
   heruntergenommen (Lieferung, Umpacken, Umlagern, Verbrauch), meldet das Terminal „Etikett neu drucken“;
   die Palettenansicht zeigt es mit grünem Knopf. Kein Korrigieren von Hand mehr.
 
+### Versandkarton mit eigener NVE
+
+- **Versandkarton** ist eine dritte Art neben Lager- und Versandpalette (Paletten → „+ Neuer Versandkarton“). Er
+  bekommt eine eigene NVE und dasselbe Etikett wie eine Palette (Layout nach der Rolle, A6). Alles, was für
+  Paletten gilt, gilt für ihn: Inhalt je Los, Etikett mit Druckprotokoll, Akte, „Wo ist dieses Los?“,
+  Rückverfolgung, Sperre. Nicht jeder Karton braucht eine NVE; lose Kartons werden weiter lose geliefert.
+- **Auf eine Palette stellen** (eine Ebene): Versandkarton → „Auf eine Palette stellen“ oder an der Palette
+  „+ Lose Kartons laden“ und die Karton-NVE scannen. Der Karton wird geschlossen, sein Inhalt bleibt seiner. Die
+  Palette zeigt ihre Versandkartons, ihr Etikett zeigt alles zusammen. Ein Karton kommt nicht in einen anderen
+  Karton. Jedes Auf- und Abnehmen steht im Protokoll **Versandkarton Zuordnung**.
+- **Lieferung:** Ganze Palette = mit allen Versandkartons (gebucht wird je Karton, die Karton-NVE steht an der
+  Position). Ein einzelner Versandkarton: seine NVE scannen; er wird von der Palette genommen, die Palette
+  bleibt im Lager. Storno stellt alles wieder her, die Kartons stehen wieder auf der Palette.
+- **DHL mit NVE:** Lieferung (DHL) → Auftrag → „Pakete als Versandkarton mit NVE“: je Paket Stück und Gewicht,
+  „Paket packen“ (Versandkarton, älteste Lose zuerst, Etikett), danach ein Lieferschein für alle Pakete. Jede
+  gescannte Sendungsnummer kommt an den nächsten Karton ohne Nummer.
+- **NVE-Nummernkreis:** Liste mit dem Standard „Eigener“ (Basisnummer und Reserveziffer aus dem Kreis, leer =
+  aus den Einstellungen; die Nummern laufen weiter). Die Arten „Bereich vom Kunden“ und „Etiketten vom Kunden“
+  (Produktion für Dritte) sind angelegt, aber noch nicht freigeschaltet. Jede Palette merkt sich ihren Kreis.
+
 ## Etikettendrucker im Netz
 
 Etiketten gehen direkt auf einen Drucker im Netz (ZPL über TCP, Port 9100), ohne Druckdialog.
@@ -614,6 +634,7 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_akte` | Druckprotokoll: Erstdruck, Nachdruck nur mit Grund, Inhalt geändert, im Ablauf, Gebinde, Browserdruck, Testdruck, nicht änderbar; NVE mit Leerzeichen; Akte Palette und Behälter; Wo ist das Los; Etikett fehlt mit geprüften und nicht geprüften Paletten; Woraus besteht das bis zur Silo-Charge mit Wareneingang und QS-Freigabe |
 | `test_einwaage` | Lagerort je Zutat (Quelllager der Stückliste vor Standardlager), Gebinde aus der Maßeinheit-Umrechnung |
 | `test_retour_hinweis` | Retour von der Linie ins Herkunftslager (Menge geprüft, Rest beim Auftragsende als Linienrest); Hinweise von Produktions- und Kundenauftrag; Tagesübersicht mit Aufträgen vom Vortag |
+| `test_versandkarton` | NVE aus dem Nummernkreis (fremde Kreise noch gesperrt); Versandkarton auf Palette mit Regeln und Protokoll, Etikett der Palette mit allem zusammen; ganze Palette liefern und Storno; einzelnen Karton von der Palette liefern; DHL-Pakete als Versandkartons mit Sendungsnummer je Karton |
 
 Die Tests rollen ihre Daten am Ende zurück. Demo-Funktionen committen nur außerhalb von Tests
 (`utils.demo_commit`); vorher schrieb ein Demo-Aufruf mitten in einem Test dessen Daten fest.

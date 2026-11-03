@@ -224,7 +224,7 @@
 
 	const BUCHUNGEN = /^(herstellen|linie_|palette|pruefung_erfassen|umlagern|lieferung|paket_lieferung|anbrechen|wareneingang|rework_erfassen|rework_linie$|silo_leer|behaelter_)/;
 	// Anfrage-ID nur für Methoden, die der Server mit @einmalig schützt (terminal.py); Test test_anfrage_liste
-	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "etikett_drucken", "etikett_vormerken", "herstellen", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_rueckgabe", "linie_zufuehren", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
+	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "etikett_drucken", "etikett_vormerken", "herstellen", "karton_abnehmen", "karton_auf_palette", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_rueckgabe", "linie_zufuehren", "paket_karton", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
 	async function api(methode, args) {
 		let r;
 		try {
@@ -1066,7 +1066,8 @@
 			`<div class="panel"><b>${esc(z.name)}</b> · Auftrag ${esc(z.auftrag)} · offen ${esc(zahlText(z.offen))} Stk<div id="dhl-info" class="fehlt" style="font-size:16px"></div></div>` +
 			`<div class="reihe" style="margin-top:0"><div>${zahlFeld("stk", "Stück im Paket bzw. in allen Paketen", z.offen)}</div><div>${zahlFeld("pakete", "Anzahl Pakete", 1)}</div></div>
 			<div id="gewichte"></div>` + textFeld("sendung", "Sendungsnummer (optional, vom DHL-Label scannen – geht auch später)") +
-			`<div class="reihe"><button class="knopf" data-a="zurueck-dhl">← Aufträge</button><button class="knopf gruen" data-a="buchen">Lieferschein buchen</button></div>`;
+			`<div class="reihe"><button class="knopf" data-a="zurueck-dhl">← Aufträge</button><button class="knopf gruen" data-a="buchen">Lieferschein buchen</button></div>
+			<div class="reihe"><button class="knopf blau" data-a="kartons">Pakete als Versandkarton mit NVE<small>je Paket eigene NVE und Etikett, Sendungsnummer je Karton</small></button></div>`;
 		let erwartet = null;
 		const neu = async () => {
 			const stk = zahl(document.getElementById("stk").value), n = Math.max(1, Math.min(20, Math.round(zahl(document.getElementById("pakete").value) || 1)));
@@ -1087,6 +1088,7 @@
 		await neu();
 		aktionen(async (a) => {
 			if (a === "zurueck-dhl") return dhlStart();
+			if (a === "kartons") return dhlKartons(z, []);
 			if (a !== "buchen") return beiAllgemein(a);
 			const gewichte = [...document.querySelectorAll("#gewichte input")].map((f) => zahl(f.value));
 			try {
@@ -1101,6 +1103,62 @@
 				});
 			} catch (err) { meldung("rot", err.message); }
 		});
+	}
+
+	// DHL mit NVE: jedes Paket ist ein Versandkarton (eigene NVE, Etikett), danach ein Lieferschein für alle
+	function dhlKartons(z, liste) {
+		const gepackt = liste.reduce((n, k) => n + (k.stueck || 0), 0);
+		const rest = Math.max(rund(z.offen - gepackt), 0);
+		app.innerHTML = kopf("DHL mit NVE: " + z.kundenname, true) +
+			`<div class="panel"><b>${esc(z.name)}</b> · Auftrag ${esc(z.auftrag)} · offen ${esc(zahlText(z.offen))} Stk${gepackt ? ` · gepackt ${esc(zahlText(gepackt))} Stk` : ""}</div>` +
+			`<div class="reihe" style="margin-top:0"><div>${zahlFeld("stk", "Stück in diesem Paket", rest || "")}</div><div>${zahlFeld("gw", "Gewicht von der Paketwaage (kg)")}</div></div>
+			<div class="reihe"><button class="knopf blau" data-a="packen">Paket packen<small>neuer Versandkarton, Etikett wird gedruckt</small></button></div>` +
+			textFeld("scan", "oder einen fertigen Versandkarton scannen") +
+			(liste.length ? `<div class="panel">${liste.map((k, i) => `<div class="zeile"><div>Versandkarton …${esc(k.nve.slice(-6))}<br><small class="fehlt">${esc(k.kartons || "")}</small></div>
+				<div class="rechts">${k.gewicht_kg ? esc(zahlText(k.gewicht_kg)) + " kg" : ""} <button class="x" data-a="weg" data-i="${i}">✕</button></div></div>`).join("")}</div>` +
+				textFeld("sendung", "Sendungsnummer (optional, vom DHL-Label scannen – geht auch später, je Paket)") : "") +
+			`<div class="reihe"><button class="knopf" data-a="zurueck-dhl">← Zurück</button>${liste.length ? `<button class="knopf gruen" data-a="buchen">Lieferschein buchen (${liste.length} Pakete)</button>` : ""}</div>`;
+		aktionen(async (a, d) => {
+			if (a === "zurueck-dhl" || a === "zurueck") return dhlErfassen(z);
+			if (a === "weg") { liste.splice(+d.i, 1); return dhlKartons(z, liste); }
+			if (a === "packen") {
+				try {
+					const stueck = zahl(document.getElementById("stk").value);
+					const k = await api("paket_karton", { station: zustand.station, kundenauftrag: z.auftrag, artikel: z.artikel, stueck, gewicht: zahl(document.getElementById("gw").value) || null });
+					etikettDrucken(k.nve);
+					liste.push({ ...k, stueck });
+					dhlKartons(z, liste);
+					return meldung("gruen", "Paket gepackt: Versandkarton …" + k.nve.slice(-6), "Etikett wird gedruckt.");
+				} catch (e) { return meldung("rot", e.message); }
+			}
+			if (a === "buchen") {
+				try {
+					const e = await api("paket_lieferung", { station: zustand.station, kundenauftrag: z.auftrag, kartons: liste.map((k) => k.nve),
+						sendungsnummer: (document.getElementById("sendung") || {}).value || null });
+					ergebnis("Lieferung " + e.kunde, ["Lieferschein: " + e.lieferschein, "Pakete: " + e.pakete + (e.gewicht_kg ? ", gewogen " + zahlText(e.gewicht_kg) + " kg" : ""),
+						"Versandkartons: " + e.versandkartons.map((n) => "…" + n.slice(-6)).join(", "), "Lose: " + e.lose.join(", "),
+						e.adresse ? "Adresse: " + e.adresse.replace(/\n/g, ", ") : "Adresse fehlt im Kundenstamm"], e.hinweise,
+						`<button class="knopf" data-a="sendung">Sendungsnummern scannen</button><button class="knopf" data-a="weiter">Nächste Lieferung</button>`)((b) => {
+						if (b === "sendung") return sendungScannen(e.lieferschein);
+						if (b === "weiter") return dhlStart();
+						beiAllgemein(b);
+					});
+				} catch (err) { meldung("rot", err.message); }
+				return;
+			}
+			beiAllgemein(a);
+		});
+		enter("scan", async (v) => {
+			if (!v) return;
+			try {
+				const i = await api("info", { code: v });
+				if (i.typ !== "palette" || !i.versandkarton) throw new Error("Bitte einen Versandkarton scannen.");
+				if (liste.some((k) => k.nve === i.nve)) throw new Error("Dieser Versandkarton ist schon dabei.");
+				liste.push(i);
+				dhlKartons(z, liste);
+			} catch (e) { meldung("rot", e.message); }
+		});
+		fokus("stk");
 	}
 
 	function sendungScannen(lieferschein, liste) {
@@ -2078,6 +2136,7 @@
 			<div class="raster" style="margin-top:16px">
 				<button class="knopf blau" data-a="neu" data-typ="Lagerpalette">+ Neue Lagerpalette<small>für die Verpackung</small></button>
 				<button class="knopf blau" data-a="neu" data-typ="Versandpalette">+ Neue Versandpalette<small>zum Kommissionieren</small></button>
+				<button class="knopf blau" data-a="neu" data-typ="Versandkarton">+ Neuer Versandkarton<small>eigene NVE, auch auf eine Palette</small></button>
 			</div>`;
 		aktionen(async (a, d) => {
 			if (a === "neu") {
@@ -2103,8 +2162,17 @@
 		return `<span class="marke ${farbe}">${esc(s)}</span>`;
 	}
 
+	// Versandkartons (eigene NVE) auf einer Palette; aktion = Knopf je Karton (z. B. abnehmen)
+	function kartonListeHtml(p, aktion) {
+		const k = p.versandkartons || [];
+		if (!k.length) return "";
+		return `<div class="panel"><div class="fehlt" style="font-size:16px">Versandkartons auf der Palette (${k.length})</div>${k.map((x, i) => `<div class="zeile">
+			<div>Versandkarton …${esc(x.nve.slice(-6))}<br><small class="fehlt">${esc(x.nve)} · ${esc(x.inhalt)}</small></div>
+			<div class="rechts">${esc(kg(x.menge))}${aktion ? ` <button class="knopf klein" data-a="${aktion}" data-i="${i}">abnehmen</button>` : ""}</div></div>`).join("")}</div>`;
+	}
+	function hatInhalt(p) { return !!(p.positionen.length || (p.versandkartons || []).length); }
 	function positionenHtml(p, aktion) {
-		if (!p.positionen.length) return `<p class="fehlt">Palette ist leer.</p>`;
+		if (!p.positionen.length) return (p.versandkartons || []).length ? "" : `<p class="fehlt">${p.versandkarton ? "Versandkarton" : "Palette"} ist leer.</p>`;
 		return p.positionen.map((x, i) => `<button class="pos" ${aktion ? `data-a="${aktion}" data-i="${i}"` : "disabled"}>
 			<span>${esc(x.name)}<small>Los ${esc(x.los || x.charge)}${x.mhd ? " · MHD " + esc(x.mhd) : ""}${x.gesperrt ? " · GESPERRT" : ""}</small></span>
 			<span class="rechts">${esc(stk(x.anzahl, x.einheit))}<small>${esc(kg(x.menge))}</small></span></button>`).join("");
@@ -2112,22 +2180,29 @@
 
 	function paletteZeigen(p, hinweis) {
 		const aktiv = p.status === "Offen" || p.status === "Geschlossen" || p.status === "Leer";
-		app.innerHTML = kopf("Palette", true) + `
+		const vk = p.versandkarton;
+		app.innerHTML = kopf(vk ? "Versandkarton" : "Palette", true) + `
 			<div class="panel"><div class="nve">${esc(p.nve.slice(0, -6))}<span style="color:#6ea0ff">${esc(p.nve.slice(-6))}</span> ${statusMarke(p.status)}
 				<br><small>${esc(p.art)}${p.kartons ? " · " + esc(p.kartons) : ""}${p.menge ? " · " + esc(kg(p.menge)) : ""}${p.lieferschein ? " · Lieferschein " + esc(p.lieferschein) : ""}</small></div>
 				${p.fuellung ? `<div style="margin-top:10px"><div style="height:14px;background:var(--panel2);border-radius:7px;overflow:hidden"><div style="height:100%;width:${Math.min(100, Math.round(p.fuellung.anteil * 100))}%;background:${p.fuellung.ueber ? "var(--rot)" : p.fuellung.voll ? "var(--gruen)" : "var(--blau)"}"></div></div>
 					<div class="fehlt" style="font-size:16px;margin-top:4px">${p.fuellung.ueber ? "ÜBERLADEN · " : p.fuellung.voll ? "VOLL · " : ""}${esc(p.fuellung.text || Math.round(p.fuellung.anteil * 100) + " % voll")}</div></div>` : ""}
 				${p.test ? `<div class="meldung orange">Test-NVE: Etikett nicht an Kunden geben (GS1-Basisnummer fehlt in den Einstellungen).</div>` : ""}
-				${p.etikett_aktuell === false && p.positionen.length ? (p.status === "Offen"
+				${vk && p.auf_palette ? `<div class="meldung">Steht auf Palette …${esc(p.auf_palette.slice(-6))}<small>${esc(p.auf_palette)}</small></div>` : ""}
+				${p.gewicht_kg || p.sendungsnummer ? `<div class="fehlt" style="font-size:16px;margin-top:6px">Paket: ${esc([p.gewicht_kg ? zahlText(p.gewicht_kg) + " kg" : "", p.sendungsnummer || ""].filter(Boolean).join(" · "))}</div>` : ""}
+				${p.etikett_aktuell === false && hatInhalt(p) ? (p.status === "Offen"
 					? `<div class="meldung">Etikett zeigt noch nicht den ganzen Inhalt<small>Nach dem Beladen mit Inhalt drucken.</small></div>`
 					: `<div class="meldung orange">Etikett passt nicht mehr zum Inhalt<small>Neu drucken und das alte überkleben, nicht von Hand korrigieren.</small></div>`) : ""}
 			</div>
 			${aktiv && p.positionen.length ? `<p class="fehlt">Position antippen, um Kartons auf eine andere Palette umzupacken.</p>` : ""}
 			${positionenHtml(p, aktiv ? "pos" : null)}
+			${kartonListeHtml(p, aktiv ? "karton-ab" : null)}
 			<div class="reihe">
-				${aktiv ? `<button class="knopf blau" data-a="laden">+ Lose Kartons laden<small>Los scannen</small></button>` : ""}
-				<button class="knopf ${p.etikett_aktuell === false && p.positionen.length ? "gruen" : ""}" data-a="etikett">${p.etikett_aktuell === false ? "Etikett neu drucken" : "Etikett drucken"}</button>
-				${p.status === "Offen" ? `<button class="knopf" data-a="schliessen">Palette schließen</button>` : ""}
+				${aktiv ? `<button class="knopf blau" data-a="laden">+ Lose Kartons laden<small>${vk ? "Los scannen" : "Los oder Versandkarton scannen"}</small></button>` : ""}
+				${aktiv && vk && p.positionen.length ? (p.auf_palette
+					? `<button class="knopf" data-a="vom-stapel">Von der Palette nehmen<small>bleibt im Lager</small></button>`
+					: `<button class="knopf" data-a="auf-palette">Auf eine Palette stellen<small>Palette scannen</small></button>`) : ""}
+				<button class="knopf ${p.etikett_aktuell === false && hatInhalt(p) ? "gruen" : ""}" data-a="etikett">${p.etikett_aktuell === false ? "Etikett neu drucken" : "Etikett drucken"}</button>
+				${p.status === "Offen" ? `<button class="knopf" data-a="schliessen">${vk ? "Karton" : "Palette"} schließen</button>` : ""}
 				${p.status === "Geschlossen" ? `<button class="knopf" data-a="oeffnen">Wieder öffnen</button>` : ""}
 			</div>`;
 		if (hinweis) meldung("gruen", hinweis);
@@ -2138,6 +2213,9 @@
 				if (a === "oeffnen") return paletteZeigen(await api("palette_oeffnen", { station: zustand.station, palette: p.nve }), "Palette geöffnet.");
 				if (a === "laden") return kartonsLaden(p);
 				if (a === "pos") return umpacken(p, p.positionen[+d.i]);
+				if (a === "karton-ab") return paletteZeigen(await api("karton_abnehmen", { station: zustand.station, karton: p.versandkartons[+d.i].nve }), "Versandkarton heruntergenommen.");
+				if (a === "vom-stapel") { await api("karton_abnehmen", { station: zustand.station, karton: p.nve }); return paletteLaden(p.nve, "Von der Palette genommen."); }
+				if (a === "auf-palette") return kartonAufPalette(p);
 			} catch (e) { return meldung("rot", e.message); }
 			if (a === "zurueck") return palettenStart();
 			beiAllgemein(a);
@@ -2151,7 +2229,10 @@
 			if (!v) return;
 			try {
 				const i = await api("info", { code: v });
-				if (i.typ !== "charge") throw new Error("Bitte das Los scannen, nicht " + (i.typ === "palette" ? "eine Palette" : "einen Behälter") + ".");
+				if (i.typ === "palette" && i.versandkarton && !p.versandkarton) {
+					return paletteZeigen(await api("karton_auf_palette", { station: zustand.station, karton: i.nve, palette: p.nve }), "Versandkarton …" + i.nve.slice(-6) + " aufgestellt.");
+				}
+				if (i.typ !== "charge") throw new Error("Bitte das Los scannen, nicht " + (i.typ === "palette" ? (p.versandkarton ? "eine Palette" : "eine Palette (nur Versandkartons kommen auf eine Palette)") : "einen Behälter") + ".");
 				const einheiten = await api("einheiten", { artikel: i.artikel });
 				anzahlAbfragen("Los " + i.charge, esc(i.artikelname) + (i.mhd ? " · MHD " + esc(i.mhd) : ""), einheiten, null, async (n, e) => {
 					try {
@@ -2160,6 +2241,26 @@
 				}, () => paletteZeigen(p));
 			} catch (e) { meldung("rot", e.message); }
 		});
+		fokus("scan");
+	}
+
+	// Versandkarton auf eine Palette stellen: Palette scannen oder neue anlegen
+	function kartonAufPalette(k) {
+		app.innerHTML = kopf("Versandkarton …" + k.nve.slice(-6) + " aufstellen", true) + textFeld("scan", "Palette scannen (NVE)") +
+			`<div class="reihe"><button class="knopf blau" data-a="neu">+ Neue Versandpalette<small>Etikett wird gedruckt</small></button></div>`;
+		const los = async (palette) => {
+			try { paletteZeigen(await api("karton_auf_palette", { station: zustand.station, karton: k.nve, palette }), "Versandkarton aufgestellt."); }
+			catch (e) { meldung("rot", e.message); }
+		};
+		aktionen(async (a) => {
+			if (a === "zurueck") return paletteZeigen(k);
+			if (a === "neu") {
+				try { const p = await api("palette_neu", { station: zustand.station, typ: "Versandpalette" }); etikettDrucken(p.nve); return los(p.nve); }
+				catch (e) { return meldung("rot", e.message); }
+			}
+			beiAllgemein(a);
+		});
+		enter("scan", (v) => v && los(v));
 		fokus("scan");
 	}
 
@@ -2235,14 +2336,15 @@
 			<div class="rechts">${esc(stk(x.anzahl, x.einheit))} ${j === 0 ? `<button class="x" data-a="weg" data-i="${i}">✕</button>` : ""}</div></div>`).join("")).join("");
 		const gescanntJe = {};
 		lieferung.zeilen.forEach((z) => z.positionen.forEach((x) => { gescanntJe[x.artikel] = (gescanntJe[x.artikel] || 0) + x.menge; }));
-		const auftragHtml = lieferung.auftrag ? `<div class="panel"><div class="fehlt" style="font-size:16px">Kundenauftrag ${esc(lieferung.auftrag)}</div>${lieferung.positionen.map((z) => {
+		const hinweise = [...new Set(lieferung.positionen.map((z) => z.hinweis).filter(Boolean))];
+		const auftragHtml = (lieferung.auftrag ? hinweisHtml(hinweise.map((h) => ({ von: "Kundenauftrag " + lieferung.auftrag, text: h }))) : "") + (lieferung.auftrag ? `<div class="panel"><div class="fehlt" style="font-size:16px">Kundenauftrag ${esc(lieferung.auftrag)}</div>${lieferung.positionen.map((z) => {
 			const offen = (z.menge - z.geliefert) * (z.faktor || 1);
 			const jetzt = gescanntJe[z.artikel] || 0;
 			const fertig = jetzt >= offen - 1e-6;
 			return `<div class="zeile"><div class="${fertig ? "ok" : ""}">${fertig ? "✔" : "○"} ${esc(z.name)}</div><div class="rechts ${fertig ? "ok" : "fehlt"}">${esc(zerlegen(z.einheiten, jetzt))}<br><small>von ${esc(zerlegen(z.einheiten, offen))}</small></div></div>`;
-		}).join("")}</div>` : "";
+		}).join("")}</div>` : "");
 		app.innerHTML = kopf("Lieferung an " + lieferung.titel, true) + auftragHtml +
-			textFeld("scan", "Palette oder Los scannen") +
+			textFeld("scan", "Palette, Versandkarton oder Los scannen") +
 			(lieferung.zeilen.length ? `<div class="panel">${liste}</div><div class="reihe"><button class="knopf gruen" data-a="buchen">Lieferschein buchen</button></div>` : "");
 		aktionen(async (a, d) => {
 			if (a === "weg") { lieferung.zeilen.splice(+d.i, 1); return lieferungZeigen(); }
@@ -2279,9 +2381,10 @@
 		const aktiv = p.status === "Offen" || p.status === "Geschlossen";
 		app.innerHTML = kopf("Palette …" + p.nve.slice(-6), true) +
 			`<div class="panel"><div class="nve">${esc(p.nve)} ${statusMarke(p.status)}<br><small>${esc(p.kartons || "")} · ${esc(kg(p.menge || 0))}</small></div></div>` +
-			(aktiv && p.positionen.length ? `<div class="reihe"><button class="knopf gruen" data-a="ganz">Ganze Palette liefern</button></div>
-				<p class="fehlt">Oder Position antippen, um nur einzelne Kartons zu nehmen (Palette wird angebrochen).</p>` : "") +
-			positionenHtml(p, aktiv ? "pos" : null);
+			(aktiv && hatInhalt(p) ? `<div class="reihe"><button class="knopf gruen" data-a="ganz">${p.versandkarton ? "Ganzen Versandkarton liefern" : "Ganze Palette liefern"}${(p.versandkartons || []).length ? `<small>mit ${p.versandkartons.length} Versandkartons</small>` : ""}</button></div>
+				${p.positionen.length ? `<p class="fehlt">Oder Position antippen, um nur einzelne Kartons zu nehmen (${p.versandkarton ? "Karton" : "Palette"} wird angebrochen).</p>` : ""}` : "") +
+			positionenHtml(p, aktiv ? "pos" : null) + kartonListeHtml(p, null) +
+			((p.versandkartons || []).length ? `<p class="fehlt">Einen einzelnen Versandkarton liefern: seine NVE scannen.</p>` : "");
 		aktionen(async (a, d) => {
 			if (a === "zurueck") return lieferungZeigen();
 			if (a === "ganz") {
@@ -2476,11 +2579,12 @@
 			try {
 				const r = await api("info", { code: v });
 				if (r.typ === "palette") {
-					document.getElementById("info").innerHTML = `<div class="meldung gruen">Palette ${esc(r.nve)}</div>
+					document.getElementById("info").innerHTML = `<div class="meldung gruen">${r.versandkarton ? "Versandkarton" : "Palette"} ${esc(r.nve)}</div>
 						<div class="panel"><div class="zeile"><div class="fehlt">Art / Status</div><div class="rechts">${esc(r.art)} · ${esc(r.status)}</div></div>
 						<div class="zeile"><div class="fehlt">Inhalt</div><div class="rechts">${esc(r.kartons || "leer")}</div></div>
+						${r.auf_palette ? `<div class="zeile"><div class="fehlt">Steht auf Palette</div><div class="rechts">…${esc(r.auf_palette.slice(-6))}</div></div>` : ""}
 						${r.lieferschein ? `<div class="zeile"><div class="fehlt">Lieferschein</div><div class="rechts">${esc(r.lieferschein)} · ${esc(r.kunde || "")}</div></div>` : ""}</div>` +
-						`<p class="fehlt">Los antippen: Woraus besteht das?</p>` + positionenHtml(r, "herkunft-pos") +
+						`<p class="fehlt">Los antippen: Woraus besteht das?</p>` + positionenHtml(r, "herkunft-pos") + kartonListeHtml(r, null) +
 						`<div class="reihe"><button class="knopf" data-a="etikett-palette">Etikett drucken</button><button class="knopf" data-a="akte">Akte</button></div>`;
 					ton(true);
 					aktionen((a, d) => {

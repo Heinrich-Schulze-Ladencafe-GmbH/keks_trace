@@ -2155,10 +2155,13 @@ def _lieferpositionen(z, aus_verkauf=False):
 		status = frappe.db.get_value("Palette", nve, "status")
 		if status not in paletten.AKTIV:
 			_fehler(_("Palette {0} ist {1}.").format(nve, status.lower()))
-		pos = paletten.inhalt(nve)
+		pos = [(p, nve) for p in paletten.inhalt(nve)]
+		# Versandkartons auf der Palette gehören dazu; gebucht wird je Karton (seine NVE an der Position)
+		for k in paletten.kartons(nve):
+			pos += [(p, k) for p in paletten.inhalt(k)]
 		if not pos:
 			_fehler(_("Palette {0} ist leer.").format(nve))
-		return [_lieferposition(p["charge"], p["anzahl"], p["einheit"], nve, aus_verkauf) for p in pos]
+		return [_lieferposition(p["charge"], p["anzahl"], p["einheit"], von, aus_verkauf) for p, von in pos]
 	if z.get("palette"):
 		nve = paletten.finde(z["palette"])
 		pos = paletten._position(nve, z.get("charge"), z.get("einheit")) if nve else None
@@ -2403,12 +2406,20 @@ def _kundenadresse(artikel=None, kunde=None) -> str | None:
 @frappe.whitelist()
 @einmalig
 def paket_lieferung(
-	station: str, kundenauftrag: str, artikel: str, stueck: float, gewichte, sendungsnummer: str | None = None
+	station: str,
+	kundenauftrag: str,
+	artikel: str | None = None,
+	stueck: float | None = None,
+	gewichte=None,
+	sendungsnummer: str | None = None,
+	kartons=None,
 ) -> dict:
 	"""Herzen direkt per DHL: Lieferschein über die Stückzahl (älteste Lose zuerst), dazu Pakete und das
 	auf der Paketwaage abgelesene Gewicht je Paket. Die Sendungsnummer kann auch später nachgetragen werden."""
 	s = _station(station)
 	_darf(s, "lieferung")
+	if kartons:
+		return _paket_lieferung_kartons(s, kundenauftrag, _liste(kartons), sendungsnummer)
 	gewichte = [flt(g, 3) for g in _liste(gewichte) if flt(g) > 0]
 	if not gewichte:
 		_fehler(_("Bitte das Gewicht jedes Pakets von der Paketwaage eintragen."))
@@ -2463,6 +2474,82 @@ def paket_lieferung(
 	}
 
 
+def _paket_lieferung_kartons(s, kundenauftrag: str, kartons: list, nummer: str | None) -> dict:
+	"""Pakete als Versandkartons: jeder Karton ganz in den Lieferschein, Gewichte aus den Kartons."""
+	kunde = frappe.db.get_value("Sales Order", kundenauftrag, "customer")
+	if not kunde:
+		_fehler(_("Kundenauftrag {0} gibt es nicht.").format(kundenauftrag))
+	nves = []
+	for code in kartons:
+		nve = paletten.finde(code)
+		if not nve or frappe.db.get_value("Palette", nve, "typ") != paletten.VERSANDKARTON:
+			_fehler(_("{0} ist kein Versandkarton.").format(code))
+		nves.append(nve)
+	if len(set(nves)) != len(nves):
+		_fehler(_("Ein Versandkarton ist doppelt gescannt."))
+	erg = lieferung(s.name, kunde, [{"palette": n, "ganz": 1} for n in nves], kundenauftrag)
+	gewichte = [flt(frappe.db.get_value("Palette", n, "gewicht_kg"), 3) for n in nves]
+	frappe.db.set_value(
+		"Delivery Note",
+		erg["lieferschein"],
+		{
+			"kt_pakete": len(nves),
+			"kt_gewicht_kg": flt(sum(gewichte), 3) or None,
+			"kt_paket_gewichte": " / ".join(f"{g:g}".replace(".", ",") for g in gewichte if g) or None,
+			"kt_sendungsnummer": None,
+		},
+	)
+	if (nummer or "").strip():
+		sendungsnummer(s.name, erg["lieferschein"], nummer)
+	return {
+		**erg,
+		"pakete": len(nves),
+		"gewicht_kg": flt(sum(gewichte), 3),
+		"versandkartons": nves,
+		"adresse": _kundenadresse(kunde=kunde),
+		"lose": sorted({b for n in nves for b in _lose_im_karton(n, erg["lieferschein"])}),
+	}
+
+
+@frappe.whitelist()
+@einmalig
+def paket_karton(
+	station: str, kundenauftrag: str, artikel: str, stueck: float, gewicht: float | None = None
+) -> dict:
+	"""Ein Paket als Versandkarton mit eigener NVE packen: Stück dieses Artikels (älteste Lose zuerst, lose im
+	Lager) in einen neuen Versandkarton, dazu das Gewicht von der Paketwaage. Geliefert wird später mit
+	paket_lieferung(kartons=…)."""
+	s = _station(station)
+	_darf(s, "lieferung")
+	kunde = frappe.db.get_value("Sales Order", kundenauftrag, "customer")
+	if not kunde:
+		_fehler(_("Kundenauftrag {0} gibt es nicht.").format(kundenauftrag))
+	stueck = flt(stueck)
+	if stueck <= EPS:
+		_fehler(_("Bitte die Stückzahl im Paket eingeben."))
+	einheit = frappe.get_cached_value("Item", artikel, "stock_uom")
+	offen, teile = stueck, []
+	for c in _lager_chargen(artikel):
+		if offen <= EPS:
+			break
+		n = min(offen, min(c["menge"], paletten.lose(c["charge"])))
+		if n > EPS:
+			teile.append((c["charge"], n))
+			offen -= n
+	if offen > EPS:
+		_fehler(
+			_("Verpackt im Lager sind nur {0}. Erst verpacken.").format(paletten._n(stueck - offen, einheit))
+		)
+	nve = paletten.anlegen(paletten.VERSANDKARTON, s.name, kunde)
+	frappe.db.set_value(
+		"Palette", nve, {"kundenauftrag": kundenauftrag, "gewicht_kg": flt(gewicht, 3) or None}
+	)
+	for charge, n in teile:
+		paletten.beladen(nve, charge, n, einheit, s.name)
+	paletten.schliessen(nve)
+	return paletten.info(nve)
+
+
 @frappe.whitelist()
 def sendungsnummer(station: str, lieferschein: str, nummer: str) -> dict:
 	"""DHL-Sendungsnummer nachtragen (vom Label scannen); mehrere Pakete: jede Nummer einzeln hinzufügen."""
@@ -2473,7 +2560,38 @@ def sendungsnummer(station: str, lieferschein: str, nummer: str) -> dict:
 	alt = frappe.db.get_value("Delivery Note", lieferschein, "kt_sendungsnummer") or ""
 	neu = "\n".join([x for x in alt.splitlines() if x.strip()] + [nummer])
 	frappe.db.set_value("Delivery Note", lieferschein, "kt_sendungsnummer", neu)
-	return {"lieferschein": lieferschein, "sendungsnummern": neu.splitlines()}
+	# Pakete als Versandkarton: die Nummer gehört zum nächsten Karton dieses Lieferscheins ohne Nummer
+	karton = None
+	for k in _versandkartons_im_lieferschein(lieferschein):
+		if not frappe.db.get_value("Palette", k, "sendungsnummer"):
+			frappe.db.set_value("Palette", k, "sendungsnummer", nummer)
+			karton = k
+			break
+	return {"lieferschein": lieferschein, "sendungsnummern": neu.splitlines(), "versandkarton": karton}
+
+
+def _lose_im_karton(karton: str, lieferschein: str) -> list[str]:
+	return frappe.get_all(
+		"Paletten Bewegung",
+		filters={"palette": karton, "beleg": lieferschein, "art": "Lieferung"},
+		pluck="charge",
+		distinct=True,
+	)
+
+
+def _versandkartons_im_lieferschein(lieferschein: str) -> list[str]:
+	return [
+		k
+		for k in dict.fromkeys(
+			frappe.get_all(
+				"Paletten Bewegung",
+				filters={"beleg_typ": "Delivery Note", "beleg": lieferschein, "art": "Lieferung"},
+				pluck="palette",
+				order_by="creation",
+			)
+		)
+		if frappe.db.get_value("Palette", k, "typ") == paletten.VERSANDKARTON
+	]
 
 
 # ---------------------------------------------------------------------------
@@ -2586,6 +2704,27 @@ def palette_neu(station: str, typ: str = "Lagerpalette", kunde: str | None = Non
 		_darf(s, "paletten")
 	nve = paletten.anlegen(typ, s.name, kunde)
 	return paletten.info(nve)
+
+
+@frappe.whitelist()
+@einmalig
+def karton_auf_palette(station: str, karton: str, palette: str) -> dict:
+	"""Versandkarton (eigene NVE) auf eine Palette mit NVE stellen."""
+	s = _station(station)
+	if not (s.f_paletten or s.f_lieferung or s.f_herstellen or s.f_palette_fertig):
+		_darf(s, "paletten")
+	return paletten.karton_auf_palette(_palette(karton), _palette(palette), s.name)
+
+
+@frappe.whitelist()
+@einmalig
+def karton_abnehmen(station: str, karton: str) -> dict:
+	"""Versandkarton von seiner Palette nehmen; er bleibt im Lager."""
+	s = _station(station)
+	nve = _palette(karton)
+	palette = frappe.db.get_value("Palette", nve, "auf_palette")
+	paletten.karton_abnehmen(nve, s.name)
+	return paletten.info(palette) if palette else paletten.info(nve)
 
 
 @frappe.whitelist()

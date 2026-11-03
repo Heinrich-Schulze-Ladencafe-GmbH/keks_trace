@@ -149,6 +149,7 @@ def palette(nve: str) -> dict:
 			}
 		)
 	ereignisse += _druck_ereignisse(palette=nr)
+	ereignisse += _zuordnungen(nr)
 	i = paletten.info(nr)
 	return {
 		"typ": "palette",
@@ -159,15 +160,67 @@ def palette(nve: str) -> dict:
 			[_("Inhalt"), i["kartons"] or _("leer")],
 			*([[_("Kunde"), p.kunde]] if p.kunde else []),
 			*([[_("Lieferschein"), p.lieferschein]] if p.lieferschein else []),
+			*_karton_zeilen(i),
 			[_("Etikett"), _etikett_text(i["etikett_aktuell"], p.etikett_gedruckt)],
 		],
 		"ereignisse": _sortiert(ereignisse),
 		# Lose auf der Palette: „Woraus besteht das?“ je Los
 		"lose": [
 			{"charge": x["charge"], "los": x.get("los") or x["charge"], "name": x.get("name")}
-			for x in i["positionen"]
+			for x in i["positionen_gesamt"]
 		],
 	}
+
+
+def _zuordnungen(nr: str) -> list[dict]:
+	"""Versandkarton auf/von einer Palette, aus Sicht des Kartons und der Palette."""
+	out = []
+	for z in frappe.get_all(
+		"Versandkarton Zuordnung",
+		or_filters={"karton": nr, "palette": nr},
+		fields=["karton", "palette", "richtung", "zeitpunkt", "station", "nutzer", "beleg"],
+	):
+		auf = z.richtung == "Auf"
+		if z.karton == nr:
+			text = (_("Auf Palette …{0} gestellt") if auf else _("Von Palette …{0} genommen")).format(
+				z.palette[-6:]
+			)
+		else:
+			text = (
+				_("Versandkarton …{0} aufgestellt") if auf else _("Versandkarton …{0} heruntergenommen")
+			).format(z.karton[-6:])
+		if z.beleg:
+			text += f" ({z.beleg})"
+		out.append(
+			{
+				"zeit": z.zeitpunkt,
+				"art": "Versandkarton",
+				"text": text,
+				"station": z.station,
+				"person": _person(z.nutzer),
+			}
+		)
+	return out
+
+
+def _karton_zeilen(i: dict) -> list[list]:
+	zeilen = []
+	if i.get("auf_palette"):
+		zeilen.append([_("Steht auf Palette"), i["auf_palette"]])
+	if i.get("versandkartons"):
+		zeilen.append(
+			[
+				_("Versandkartons darauf"),
+				", ".join(f"…{k['nve'][-6:]} ({k['inhalt']})" for k in i["versandkartons"]),
+			]
+		)
+	paket = [
+		f"{i['gewicht_kg']:g} kg".replace(".", ",") if i.get("gewicht_kg") else "",
+		i.get("sendungsnummer") or "",
+	]
+	if any(paket):
+		zeilen.append([_("Paket"), " · ".join(x for x in paket if x)])
+	return zeilen
 
 
 def _etikett_text(aktuell, gedruckt) -> str:
@@ -299,6 +352,7 @@ def fundstellen(charge: str) -> dict:
 				"art": i["art"],
 				"kunde": i["kunde"],
 				"dieses_los": ", ".join(paletten._n(z.anzahl_jetzt, z.einheit) for z in zeilen),
+				"auf_palette": i.get("auf_palette"),
 				# Gesamtinhalt nur, wenn noch andere Lose auf der Palette stehen
 				"inhalt": i["kartons"] if len(i["positionen"]) > 1 else None,
 				"etikett_aktuell": i["etikett_aktuell"],

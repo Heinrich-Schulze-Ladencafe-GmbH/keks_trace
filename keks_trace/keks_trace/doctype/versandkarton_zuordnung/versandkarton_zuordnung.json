@@ -1,0 +1,128 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-11-03 20:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "karton",
+  "palette",
+  "richtung",
+  "column_break_1",
+  "zeitpunkt",
+  "station",
+  "nutzer",
+  "beleg"
+ ],
+ "fields": [
+  {
+   "fieldname": "karton",
+   "fieldtype": "Link",
+   "label": "Versandkarton",
+   "options": "Palette",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "palette",
+   "fieldtype": "Link",
+   "label": "Palette",
+   "options": "Palette",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "search_index": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "richtung",
+   "fieldtype": "Select",
+   "label": "Richtung",
+   "options": "Auf\nAb",
+   "reqd": 1,
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "zeitpunkt",
+   "fieldtype": "Datetime",
+   "label": "Zeitpunkt",
+   "reqd": 1,
+   "in_list_view": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "station",
+   "fieldtype": "Link",
+   "label": "Station",
+   "options": "Terminal Station",
+   "read_only": 1
+  },
+  {
+   "fieldname": "nutzer",
+   "fieldtype": "Link",
+   "label": "Benutzer",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "beleg",
+   "fieldtype": "Data",
+   "label": "Beleg",
+   "read_only": 1,
+   "description": "z. B. Lieferschein, wenn der Karton allein geliefert wurde"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-11-03 20:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Keks Trace",
+ "name": "Versandkarton Zuordnung",
+ "owner": "Administrator",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "hash",
+ "naming_rule": "Random",
+ "in_create": 1,
+ "track_changes": 0,
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock User",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Stock Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "Quality Manager",
+   "read": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "description": "Protokoll: Versandkarton auf eine Palette gestellt oder heruntergenommen. Nicht änderbar."
+}
