@@ -78,10 +78,12 @@ class TestHerzen(IntegrationTestCase):
 		herz = terminal.herstellen("Herzen Verpackung", self.herz, zeilen)
 		self.assertEqual(herz["menge"], 100)
 		self.assertTrue(herz["los"])
-		self.assertEqual(
-			getdate(frappe.db.get_value("Batch", herz["charge"], "expiry_date")),
-			getdate(add_months(nowdate(), 9)),
-		)
+		# MHD 9 Monate ab Backtag. Das Tages-Los kann schon Verpackungen vom selben Tag mit älterem Backtag
+		# enthalten (Demo-Daten in der Datenbank); dann gilt der älteste Backtag (genealogie.py); deshalb nicht
+		# „heute + 9 Monate“, sondern ab dem Backtag der Charge, und der ist höchstens der der Rohlinge.
+		hb = frappe.db.get_value("Batch", herz["charge"], ["expiry_date", "kt_backtag"], as_dict=True)
+		self.assertLessEqual(getdate(hb.kt_backtag), getdate(b.kt_backtag))
+		self.assertEqual(getdate(hb.expiry_date), getdate(add_months(hb.kt_backtag, 9)))
 		# Rückwärts bis Grundteig, Glasur, Puderzucker und Schleife
 		kette = {z["charge"] for z in rueckwaerts(herz["charge"])}
 		for c in (self.teig, glasur["charge"], self.zucker, self.pack["HZ-SCHLEIFE"], rohling["charge"]):

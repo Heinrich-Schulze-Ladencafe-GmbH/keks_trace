@@ -3,6 +3,7 @@
 import pathlib
 
 import flows
+import kapitel_neu
 
 HIER = pathlib.Path(__file__).parent
 B = (HIER / "bilder").as_uri()
@@ -84,11 +85,12 @@ def html():
 <div><b>4</b>Was im Testsystem schon drin ist</div>
 <div><b>5</b>Aufgaben für die QS</div>
 <div><b>6</b>Aufgaben für das Büro</div>
-<div><b>7</b>Fehler melden</div>
-<div><b>8</b>Bekannte Grenzen des Tests</div>
+<div><b>7</b>Neu seit dem 1. November</div>
+<div><b>8</b>Fehler melden</div>
+<div><b>9</b>Bekannte Grenzen des Tests</div>
 <div><b>A</b>Fehlerbogen zum Ausdrucken</div>
 </div>
-<div class="kasten">Stand 1. November 2026 · Testserver mit ERPNext 16 und Keks Trace<br>
+<div class="kasten">Stand 3. November 2026 · Testserver mit ERPNext 16 und Keks Trace<br>
 Testfirma „Keks Test GmbH“, alle Daten sind ausgedacht.</div>
 </div>""")
 
@@ -103,7 +105,7 @@ echten Betrieb geht: Was fehlt, was ist falsch, was ist umständlich, was verste
 <li><b>Alles darf.</b> Buchen, sperren, löschen, falsche Werte eingeben: Das ist ein Testsystem. Gerade die
 Fehlbedienung ist interessant: Hält das System sie auf, und versteht man die Meldung?</li>
 <li><b>Nichts Echtes eintragen.</b> Keine echten Kunden-, Lieferanten- oder Personendaten. Die Testfirma reicht.</li>
-<li><b>Jede Auffälligkeit melden</b>, auch Kleinigkeiten und „ich hätte es anders erwartet“ (Kapitel 7).</li>
+<li><b>Jede Auffälligkeit melden</b>, auch Kleinigkeiten und „ich hätte es anders erwartet“ (Kapitel 8).</li>
 <li>Der Testserver kann jederzeit neu aufgesetzt werden. Dann sind die Testdaten weg; eure Meldungen
 sichert Malte vorher.</li>
 </ul></div>
@@ -193,7 +195,7 @@ Herzen in mehreren Größen</td></tr>
 
 	# ------------------------------------------------------------------ 5 QS
 	t.append('<div class="kapitel"><h2>5 Aufgaben für die QS</h2>')
-	t.append("<p>Die Reihenfolge ist ein Vorschlag. Notiert nebenbei, was euch auffällt, und meldet es (Kapitel 7).</p>")
+	t.append("<p>Die Reihenfolge ist ein Vorschlag. Notiert nebenbei, was euch auffällt, und meldet es (Kapitel 8).</p>")
 	t.append(aufgabe("Q1", "Rückverfolgung rückwärts und vorwärts",
 		"Kann ich in Sekunden sagen, woraus ein Los besteht und wohin eine Rohstoff-Charge gegangen ist?",
 		["Arbeitsfläche → <b>Rückverfolgung</b>.",
@@ -256,6 +258,7 @@ Herzen in mehreren Größen</td></tr>
 		"Eine Anlieferung so buchen, wie das Lager es tun wird.",
 		["Terminal, Station <b>Lager</b> → Wareneingang.",
 		 "Artikel wählen (z. B. Butter), Lieferant, Lieferanten-Charge, MHD, Menge. Kühlware fragt nach der Temperatur.",
+		 "Beim MHD nur Ziffern tippen, z. B. <code>300628</code> – die Punkte setzt das Terminal, darunter steht das erkannte Datum mit Wochentag (siehe N5).",
 		 "Einmal mit zu hoher Temperatur probieren, einmal mit einer Charge wie „Karton“."],
 		"Unplausible Chargen werden abgewiesen; zu warme Ware wird nicht angenommen und die Prüfung protokolliert. Butter ist nach dem Eingang bis zur Freigabe gesperrt.",
 		"Mit Scanner: das Etikett des Lieferanten scannen – Artikel, Charge und MHD werden vorbelegt."))
@@ -263,7 +266,7 @@ Herzen in mehreren Größen</td></tr>
 		"Sind Palettenetikett und Gebinde-Etikett vollständig und richtig?",
 		["Liste <b>Palette</b>, eine Palette öffnen; am Terminal (Paletten → Palette scannen) <b>Etikett drucken</b>.",
 		 "Prüfen: Absender, NVE, Los, MHD, Anzahl, Strichcodes. Ohne GS1-Basisnummer steht „TEST-NVE“ darauf – richtig so."],
-		"Etikett im Browser oder auf dem Etikettendrucker; nach Entnahmen meldet das Terminal „Etikett neu drucken“.", ""))
+		"Etikett im Browser oder auf dem Etikettendrucker; nach Entnahmen meldet das Terminal „Etikett neu drucken“. Ein zweiter Druck ohne Änderung fragt nach dem Grund (siehe N1).", ""))
 	t.append("</div>")
 
 	# ------------------------------------------------------------------ 6 Büro
@@ -318,8 +321,11 @@ Herzen in mehreren Größen</td></tr>
 		"Der Abverkauf wird nach MHD (älteste zuerst) gebucht; gesperrte Lose nie.", ""))
 	t.append("</div>")
 
+	# ------------------------------------------------------------------ 7 Neu seit dem 1. November
+	t += kapitel_neu.kapitel(aufgabe, bild, SERVER)
+
 	# ------------------------------------------------------------------ 7 Fehler melden
-	t.append(f"""<div class="kapitel"><h2>7 Fehler melden</h2>
+	t.append(f"""<div class="kapitel"><h2>8 Fehler melden</h2>
 <p>Jede Rückmeldung kommt als <b>Anfrage</b> in ERPNext. So ist alles an einer Stelle, mit Datum, Bildschirmfoto
 und Stand der Bearbeitung. (In ERPNext heißt so ein Eintrag „Anfrage“, gemeint ist hier: eure Meldung.)</p>
 <h3>So geht's</h3>
@@ -360,7 +366,7 @@ Station, Uhrzeit und die gescannten Nummern.</p></div>
 <b>Geklärt</b>, wenn behoben und eingespielt. Ihr seht in der Liste, was erledigt ist, und könnt es nachtesten.
 Nach einem Update einmal <code>Strg+F5</code> im Browser drücken.</p>
 
-<h2 style="margin-top:6mm">8 Bekannte Grenzen des Tests</h2>
+<h2 style="margin-top:6mm">9 Bekannte Grenzen des Tests</h2>
 <p>Damit niemand Zeit mit Bekanntem verliert – das ist absichtlich so oder noch offen:</p>
 <ul>
 <li><b>Ein Benutzer für alle</b> (Administrator). Rechte je Rolle (z. B. nur die QS gibt frei) sind gebaut, aber
@@ -369,8 +375,12 @@ im Test sieht jeder alles. Eigene Benutzer kommen vor dem echten Betrieb.</li>
 Platzhalter. Prüfpläne und Grenzwerte sind Beispiele.</li>
 <li><b>Test-NVE:</b> Ohne eingetragene GS1-Basisnummer tragen Paletten „TEST-NVE“.</li>
 <li><b>Druckformat der Rechnung</b> ist noch englisch; das XML der E-Rechnung ist davon unabhängig vollständig.</li>
-<li><b>Kein E-Mail-Versand</b> und kein HTTPS – der Testserver ist nur im Firmennetz.</li>
-<li><b>Drucker:</b> Direktdruck nur auf Etikettendruckern, die eingetragen sind; sonst druckt der Browser.</li>
+<li><b>Kein E-Mail-Versand</b> und kein HTTPS – der Testserver ist nur im Firmennetz. Deshalb geht in der
+Audit-Ansicht <code>/akte</code> am Handy noch keine Kamera: Nummer eintippen oder Handscanner nehmen.</li>
+<li><b>Drucker:</b> Direktdruck nur auf Etikettendruckern, die eingetragen und vom Server erreichbar sind
+(Port 9100, Firewall); sonst druckt der Browser.</li>
+<li><b>Hinweise</b> gibt es nur am Produktions- und am Kundenauftrag – nicht im Wareneingang, nicht im Versand
+(bewusst; Allgemeines läuft über das andere Tool).</li>
 <li><b>Nicht enthalten:</b> Waagenanbindung, Wareneingang über Bestellungen, eigene Kasse, CAPA, Schulungsnachweise.</li>
 </ul>
 </div>""")
