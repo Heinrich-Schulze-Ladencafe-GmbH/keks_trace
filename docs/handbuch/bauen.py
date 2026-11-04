@@ -90,7 +90,7 @@ def html():
 <div><b>9</b>Bekannte Grenzen des Tests</div>
 <div><b>A</b>Fehlerbogen zum Ausdrucken</div>
 </div>
-<div class="kasten">Stand 3. November 2026 · Testserver mit ERPNext 16 und Keks Trace<br>
+<div class="kasten">Stand 4. November 2026 · Testserver mit ERPNext 16 und Keks Trace<br>
 Testfirma „Keks Test GmbH“, alle Daten sind ausgedacht.</div>
 </div>""")
 
@@ -381,7 +381,7 @@ Audit-Ansicht <code>/akte</code> am Handy noch keine Kamera: Nummer eintippen od
 (Port 9100, Firewall); sonst druckt der Browser.</li>
 <li><b>Hinweise</b> gibt es nur am Produktions- und am Kundenauftrag – nicht im Wareneingang, nicht im Versand
 (bewusst; Allgemeines läuft über das andere Tool).</li>
-<li><b>Nicht enthalten:</b> Waagenanbindung, Wareneingang über Bestellungen, eigene Kasse, CAPA, Schulungsnachweise.</li>
+<li><b>Nicht enthalten:</b> Waagenanbindung, Wareneingang als Eingangsbeleg zur Bestellung (am Terminal nur Verweis, N13), eigene Kasse, CAPA, Schulungsnachweise.</li>
 </ul>
 </div>""")
 

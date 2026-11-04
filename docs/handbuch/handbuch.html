@@ -1,0 +1,633 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Keks Trace – Testhandbuch</title><style>
+@page { size: A4; margin: 18mm 17mm 18mm 17mm; }
+:root { --navy:#0b2340; --rot:#c8102e; --grau:#5b6573; --hell:#eef2f7; --linie:#d6dde6; }
+* { box-sizing: border-box; }
+body { font-family: Inter, Arial, sans-serif; font-size: 10pt; line-height: 1.45; color: #1d2733; margin: 0; }
+h1 { font-size: 26pt; color: var(--navy); margin: 0 0 4mm; line-height: 1.1; }
+h2 { font-size: 15pt; color: var(--navy); margin: 0 0 3mm; padding-bottom: 1.5mm; border-bottom: 2px solid var(--navy); break-after: avoid; }
+h3 { font-size: 11.5pt; color: var(--navy); margin: 0 0 1.5mm; break-after: avoid; }
+p { margin: 0 0 2.5mm; }
+ul, ol { margin: 0 0 2.5mm; padding-left: 5.5mm; }
+li { margin-bottom: 0.8mm; }
+code, .code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.8pt; background: var(--hell); padding: 0.3mm 1.2mm; border-radius: 1mm; }
+.kapitel { break-before: page; }
+.titel { height: 255mm; display: flex; flex-direction: column; }
+.titel .logo { width: 34mm; margin-bottom: 14mm; }
+.titel .unter { font-size: 14pt; color: var(--grau); margin-bottom: 10mm; }
+.titel .kasten { margin-top: auto; border-left: 3px solid var(--rot); padding: 2mm 0 2mm 5mm; color: var(--grau); }
+.inhalt { columns: 2; column-gap: 8mm; margin-top: 8mm; font-size: 10.5pt; }
+.inhalt div { break-inside: avoid; margin-bottom: 1.5mm; }
+.inhalt b { color: var(--navy); display: inline-block; width: 7mm; }
+figure { margin: 2mm 0 4mm; break-inside: avoid; }
+figure img { border: 1px solid var(--linie); border-radius: 1.5mm; display: block; }
+figcaption { font-size: 8.5pt; color: var(--grau); margin-top: 1.2mm; }
+.fluss { break-inside: avoid; margin: 2mm 0 5mm; }
+.box { border-radius: 1.5mm; padding: 3mm 4mm; margin: 3mm 0 4mm; break-inside: avoid; }
+.box.info { background: var(--hell); }
+.box.wichtig { background: #fdf0f2; border-left: 3px solid var(--rot); }
+.box.ok { background: #e6f4ea; }
+.box h3 { margin-bottom: 1mm; }
+.aufgabe { border: 1px solid var(--linie); border-radius: 2mm; padding: 3mm 4mm 2mm; margin: 0 0 4mm; break-inside: avoid; }
+.aufgabe .nr { display: inline-block; min-width: 9mm; height: 6mm; line-height: 6mm; text-align: center; background: var(--navy); color: #fff; border-radius: 1mm; font-size: 9pt; margin-right: 2.5mm; padding: 0 1.2mm; }
+.aufgabe .ziel { color: var(--grau); font-style: italic; }
+.aufgabe .erwartet { background: #e6f4ea; padding: 1.5mm 2.5mm; border-radius: 1mm; }
+.aufgabe .tipp { font-size: 9pt; color: var(--grau); }
+table { width: 100%; border-collapse: collapse; margin: 1mm 0 4mm; font-size: 9.3pt; break-inside: avoid; }
+th, td { text-align: left; vertical-align: top; padding: 1.6mm 2mm; border-bottom: 1px solid var(--linie); }
+th { background: var(--hell); color: var(--navy); }
+.zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }
+.bogen td { height: 11mm; }
+.bogen td:first-child { width: 42mm; color: var(--navy); font-weight: 600; }
+.klein { font-size: 8.8pt; color: var(--grau); }
+</style></head><body>
+<div class="titel">
+<img class="logo" src="file:///home/claude/keks_trace/docs/handbuch/bilder/logo.png">
+<h1>Keks Trace<br>Testhandbuch</h1>
+<div class="unter">Ausprobieren und Fehler melden – für QS und Büro</div>
+<div class="inhalt">
+<div><b>1</b>Worum es geht</div>
+<div><b>2</b>Anmelden und zurechtfinden</div>
+<div><b>3</b>Die Abläufe als Bild</div>
+<div><b>4</b>Was im Testsystem schon drin ist</div>
+<div><b>5</b>Aufgaben für die QS</div>
+<div><b>6</b>Aufgaben für das Büro</div>
+<div><b>7</b>Neu seit dem 1. November</div>
+<div><b>8</b>Fehler melden</div>
+<div><b>9</b>Bekannte Grenzen des Tests</div>
+<div><b>A</b>Fehlerbogen zum Ausdrucken</div>
+</div>
+<div class="kasten">Stand 4. November 2026 · Testserver mit ERPNext 16 und Keks Trace<br>
+Testfirma „Keks Test GmbH“, alle Daten sind ausgedacht.</div>
+</div>
+<div class="kapitel"><h2>1 Worum es geht</h2>
+<p>Keks Trace ist die neue Rückverfolgung für unsere Produktion: von der Lieferanten-Charge über Teig, Rework
+und Verpackung bis zum Kunden. Sie läuft in ERPNext. Die Mitarbeiter in der Halle buchen an Terminals
+(Tablet oder PC im Browser), QS und Büro arbeiten in der normalen ERPNext-Oberfläche.</p>
+<p>Auf dem <b>Testserver</b> könnt ihr alles ausprobieren. Ziel ist eure Rückmeldung, bevor das System in den
+echten Betrieb geht: Was fehlt, was ist falsch, was ist umständlich, was versteht man nicht?</p>
+<div class="box ok"><h3>Spielregeln</h3><ul>
+<li><b>Alles darf.</b> Buchen, sperren, löschen, falsche Werte eingeben: Das ist ein Testsystem. Gerade die
+Fehlbedienung ist interessant: Hält das System sie auf, und versteht man die Meldung?</li>
+<li><b>Nichts Echtes eintragen.</b> Keine echten Kunden-, Lieferanten- oder Personendaten. Die Testfirma reicht.</li>
+<li><b>Jede Auffälligkeit melden</b>, auch Kleinigkeiten und „ich hätte es anders erwartet“ (Kapitel 8).</li>
+<li>Der Testserver kann jederzeit neu aufgesetzt werden. Dann sind die Testdaten weg; eure Meldungen
+sichert Malte vorher.</li>
+</ul></div>
+
+<h2 style="margin-top:6mm">2 Anmelden und zurechtfinden</h2>
+<table>
+<tr><th style="width:38mm">Was</th><th>Adresse und Anmeldung</th></tr>
+<tr><td>ERPNext (QS, Büro)</td><td><code>http://192.168.60.40/app</code> · Benutzer <code>Administrator</code> · Passwort von Malte</td></tr>
+<tr><td>Terminal (Halle)</td><td><code>http://192.168.60.40/terminal</code> · gleiche Anmeldung, beim ersten Öffnen die Station wählen</td></tr>
+<tr><td>Browser</td><td>Chrome oder Edge, am PC oder Tablet. Nur im Firmennetz erreichbar.</td></tr>
+</table>
+<p>Nach der Anmeldung links <b>Keks Trace</b> wählen. Die Arbeitsfläche bündelt alles, was ihr für den Test
+braucht. Ganz oben links: <b>Test und Rückmeldung → Fehler melden</b>.</p>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/01_arbeitsflaeche.png" style="width:85%"><figcaption>Bild 1: Arbeitsfläche Keks Trace. Oben Schnellzugriffe, darunter die Bereiche.</figcaption></figure>
+<div class="box info"><h3>Drei Handgriffe, die immer helfen</h3><ul>
+<li><b>Suchen</b> (links oben, oder <code>Strg+K</code>): Name einer Maske oder eines Berichts eintippen, z. B. „Charge“, „Auftrag“.</li>
+<li><b>Listen filtern:</b> In jeder Liste oben „Filter“ – z. B. Chargen nur mit Chargenstufe „Fertigware“.</li>
+<li><b>Zurück zur Übersicht:</b> links auf „Keks Trace“ klicken.</li>
+</ul></div>
+</div>
+<div><h3>Das Terminal</h3>
+<p>Das Terminal ist für die Halle gebaut: große Knöpfe, Bildschirmtastatur, Scanner. Jede Station sieht nur
+ihre Knöpfe. Ohne Scanner tippt man Nummern einfach in das Scanfeld und drückt Enter. „Station wechseln“
+oben rechts wählt eine andere Station; so könnt ihr alle Bereiche ausprobieren.</p>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/02_terminal_lager.png" style="width:78%"><figcaption>Bild 2: Terminal an der Station Lager. Info-Scan zeigt zu jeder Nummer, was dahintersteckt.</figcaption></figure>
+<table>
+<tr><th style="width:42mm">Station</th><th>Was man dort tut</th></tr>
+<tr><td>Lager</td><td>Wareneingang (ins Silo oder als Gebinde mit Etikett), Umlagern, Paletten, Silo leer melden</td></tr>
+<tr><td>Backstube, Kneter</td><td>Grundteig und Teig herstellen (Kübel, Silo, Gebinde scannen), Rework wiegen</td></tr>
+<tr><td>Verpackung, Verpackungs-PC, Paletten-Terminal</td><td>Verpacken nach Auftrag, Los und MHD, Palette mit NVE-Etikett, Metallcheck</td></tr>
+<tr><td>Herzen Garnieren / Verpackung</td><td>eigene Linie Herzenboden</td></tr>
+<tr><td>Versand</td><td>Lieferung: Kunde und Auftrag wählen, Palette oder Kartons scannen → Lieferschein</td></tr>
+<tr><td>Lagerverkauf</td><td>Ware in den Lagerverkauf umlagern</td></tr>
+</table>
+<p class="klein">Überall gibt es den <b>Info-Scan</b>: Charge, Behälter, Silo oder Palette eingeben und sehen, was
+darin ist, wie alt es ist und ob es gesperrt ist.</p>
+</div>
+<div class="kapitel"><h2>3 Die Abläufe als Bild</h2>
+<p>Wer den Fluss kennt, versteht die Aufgaben schneller. Gelb ist, wo gescannt oder geprüft wird.</p>
+<h3>Vom Wareneingang zum Kunden</h3>
+<div class="fluss"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 810 314" width="100%" font-family="Inter, Arial, sans-serif">
+<defs><marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0b2340"/></marker><marker id="pr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c8102e"/></marker></defs>
+<path d="M162,41.0 L222,41.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M374,41.0 L434,41.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M586,41.0 L646,41.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M723.0,70 L723.0,114" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M648,145.0 L588,145.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M436,145.0 L376,145.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M224,145.0 L164,145.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M87.0,174 L87.0,218" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M723.0,174 L723.0,218" fill="none" stroke="#0b2340" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#p)"/>
+<text x="729.0" y="200.0" font-size="10.5" fill="#0b2340" text-anchor="start" paint-order="stroke" stroke="#fff" stroke-width="4">Bruch, Teigrest</text>
+<rect x="12" y="12" width="150" height="58" rx="9" fill="#fff4d6" stroke="#0b2340" stroke-width="1.3"/>
+<text x="87.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Wareneingang</text>
+<text x="87.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Terminal Lager</text>
+<text x="87.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">Charge = Lieferanten-Charge</text>
+<rect x="224" y="12" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="299.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Silo / Gebinde</text>
+<text x="299.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Mehl, Zucker, Butter …</text>
+<text x="299.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">Code auf dem Gebinde</text>
+<rect x="436" y="12" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="511.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Grundteig</text>
+<text x="511.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Backstube / Kneter</text>
+<text x="511.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">in Kübel (Behälter)</text>
+<rect x="648" y="12" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="723.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Teig veredelt</text>
+<text x="723.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">+ Zutaten</text>
+<text x="723.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">in Kübel</text>
+<rect x="648" y="116" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="723.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Backen</text>
+<text x="723.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">Backware</text>
+<text x="723.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">eigene Charge</text>
+<rect x="436" y="116" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="511.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Ware lose</text>
+<text x="511.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">+ Füllung, Schokolade</text>
+<text x="511.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">in Kiste, ggf. Freigabe</text>
+<rect x="224" y="116" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="299.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Verpacken</text>
+<text x="299.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">Los + MHD</text>
+<text x="299.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">nach Kundenauftrag</text>
+<rect x="12" y="116" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="87.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Palette</text>
+<text x="87.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">NVE-Etikett</text>
+<text x="87.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">Inhalt je Los</text>
+<rect x="12" y="220" width="150" height="58" rx="9" fill="#e6f4ea" stroke="#0b2340" stroke-width="1.3"/>
+<text x="87.0" y="243" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Lieferung</text>
+<text x="87.0" y="260" font-size="10" fill="#5b6573" text-anchor="middle">Terminal Versand</text>
+<text x="87.0" y="272" font-size="10" fill="#5b6573" text-anchor="middle">Lieferschein</text>
+<rect x="648" y="220" width="150" height="58" rx="9" fill="#fff4d6" stroke="#0b2340" stroke-width="1.3"/>
+<text x="723.0" y="243" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Rework</text>
+<text x="723.0" y="260" font-size="10" fill="#5b6573" text-anchor="middle">zurück in Grundteig oder</text>
+<text x="723.0" y="272" font-size="10" fill="#5b6573" text-anchor="middle">Teig: Regel, Allergene</text>
+<rect x="12" y="290" width="14" height="12" rx="3" fill="#fff4d6" stroke="#0b2340" stroke-width="1"/>
+<text x="32" y="300" font-size="10.5" fill="#5b6573">hier wird gescannt bzw. geprüft</text>
+<rect x="242" y="290" width="14" height="12" rx="3" fill="#e6f4ea" stroke="#0b2340" stroke-width="1"/>
+<text x="262" y="300" font-size="10.5" fill="#5b6573">geht an den Kunden</text>
+</svg></div>
+<p>Jeder Schritt erzeugt eine eigene <b>Charge</b> und merkt sich, woraus sie entstanden ist. Daraus rechnet
+die Rückverfolgung in beide Richtungen: vom Mehl zu allen Kunden, und vom Karton zurück bis zur
+Lieferanten-Charge – auch über Rework und mehrere Tage. Teig und lose Ware liegen in <b>Behältern</b> mit
+Code; ein Behälter weiß, was drin ist. Das <b>MHD</b> zählt ab Backtag und wird durch die kürzeste Füllung
+begrenzt.</p>
+<h3>Der Kreislauf der QS</h3>
+<div class="fluss"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 810 418" width="100%" font-family="Inter, Arial, sans-serif">
+<defs><marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0b2340"/></marker><marker id="pr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c8102e"/></marker></defs>
+<path d="M162,41.0 L222,41.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M374,41.0 L434,41.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M586,41.0 L646,41.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M723.0,70 L723.0,114" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M648,145.0 L588,145.0" fill="none" stroke="#c8102e" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#pr)"/>
+<text x="618.0" y="139.0" font-size="10.5" fill="#c8102e" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4">nicht i. O.</text>
+<path d="M436,145.0 L376,145.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M224,145.0 L164,145.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M162,249.0 L222,249.0" fill="none" stroke="#0b2340" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#p)"/>
+<text x="192.0" y="243.0" font-size="10.5" fill="#0b2340" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4">Test</text>
+<path d="M87.0,278 L87.0,353.0 L222,353.0" fill="none" stroke="#c8102e" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#pr)"/>
+<text x="154.5" y="347.0" font-size="10.5" fill="#c8102e" text-anchor="middle" paint-order="stroke" stroke="#fff" stroke-width="4">im Ernstfall</text>
+<rect x="12" y="12" width="150" height="58" rx="9" fill="#fff4d6" stroke="#0b2340" stroke-width="1.3"/>
+<text x="87.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Wareneingang</text>
+<text x="87.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Artikel mit „Freigabe</text>
+<text x="87.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">vor Verwendung“</text>
+<rect x="224" y="12" width="150" height="58" rx="9" fill="#fde8eb" stroke="#c8102e" stroke-width="1.3"/>
+<text x="299.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Charge gesperrt</text>
+<text x="299.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">„Freigabe durch die QS</text>
+<text x="299.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">ausstehend“</text>
+<rect x="436" y="12" width="150" height="58" rx="9" fill="#e6f4ea" stroke="#0b2340" stroke-width="1.3"/>
+<text x="511.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">QS gibt frei</text>
+<text x="511.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Charge → Freigeben</text>
+<text x="511.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">mit Bemerkung</text>
+<rect x="648" y="12" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="723.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Verwendung</text>
+<text x="723.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Backstube, Linie</text>
+<text x="723.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">Verpackung</text>
+<rect x="648" y="116" width="150" height="58" rx="9" fill="#fff4d6" stroke="#0b2340" stroke-width="1.3"/>
+<text x="723.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Prüfung am Terminal</text>
+<text x="723.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">Metalldetektor, Brix,</text>
+<text x="723.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">Temperatur …</text>
+<rect x="436" y="116" width="150" height="58" rx="9" fill="#fde8eb" stroke="#c8102e" stroke-width="1.3"/>
+<text x="511.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Abweichung</text>
+<text x="511.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">Lose seit letzter OK-</text>
+<text x="511.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">Prüfung gesperrt</text>
+<rect x="224" y="116" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="299.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">QS Tagesliste</text>
+<text x="299.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">FEFO, Einwaage,</text>
+<text x="299.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">Prüfung, Sperre</text>
+<rect x="12" y="116" width="150" height="58" rx="9" fill="#e6f4ea" stroke="#0b2340" stroke-width="1.3"/>
+<text x="87.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Durchsicht</text>
+<text x="87.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">„Tag als durchgesehen</text>
+<text x="87.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">bestätigen“ (Nachweis)</text>
+<rect x="12" y="220" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="87.0" y="243" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Rückverfolgung</text>
+<text x="87.0" y="260" font-size="10" fill="#5b6573" text-anchor="middle">vorwärts / rückwärts</text>
+<text x="87.0" y="272" font-size="10" fill="#5b6573" text-anchor="middle">Mengenbilanz</text>
+<rect x="224" y="220" width="150" height="58" rx="9" fill="#e6f4ea" stroke="#0b2340" stroke-width="1.3"/>
+<text x="299.0" y="243" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Rückverfolgungstest</text>
+<text x="299.0" y="260" font-size="10" fill="#5b6573" text-anchor="middle">Protokoll für IFS 4.18</text>
+<text x="299.0" y="272" font-size="10" fill="#5b6573" text-anchor="middle">unveränderbar</text>
+<rect x="224" y="324" width="150" height="58" rx="9" fill="#fde8eb" stroke="#c8102e" stroke-width="1.3"/>
+<text x="299.0" y="347" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Rückruf</text>
+<text x="299.0" y="364" font-size="10" fill="#5b6573" text-anchor="middle">alles vorwärts sperren</text>
+<text x="299.0" y="376" font-size="10" fill="#5b6573" text-anchor="middle">+ betroffene Kunden</text>
+<rect x="12" y="394" width="14" height="12" rx="3" fill="#fde8eb" stroke="#0b2340" stroke-width="1"/>
+<text x="32" y="404" font-size="10.5" fill="#5b6573">gesperrt / Abweichung</text>
+<rect x="242" y="394" width="14" height="12" rx="3" fill="#e6f4ea" stroke="#0b2340" stroke-width="1"/>
+<text x="262" y="404" font-size="10.5" fill="#5b6573">Nachweis oder freigegeben</text>
+</svg></div>
+<p>Rohstoffe und lose Ware mit „Freigabe vor Verwendung“ sind nach dem Eingang <b>gesperrt</b>, bis die QS sie
+freigibt. Prüfungen (CCP/CP) werden am Terminal fällig; eine Abweichung sperrt die betroffenen Lose. Alles
+Auffällige eines Tages steht in der <b>QS Tagesliste</b>; die bestätigte Durchsicht ist der Nachweis.</p>
+</div>
+<div><h3>Der Weg im Büro</h3>
+<div class="fluss"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 810 314" width="100%" font-family="Inter, Arial, sans-serif">
+<defs><marker id="p" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0b2340"/></marker><marker id="pr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c8102e"/></marker></defs>
+<path d="M162,41.0 L222,41.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M374,41.0 L434,41.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M586,41.0 L646,41.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M723.0,70 L723.0,114" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M648,145.0 L588,145.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M436,145.0 L376,145.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M162,249.0 L222,249.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M374,249.0 L434,249.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<path d="M586,249.0 L646,249.0" fill="none" stroke="#0b2340" stroke-width="1.6" marker-end="url(#p)"/>
+<rect x="12" y="12" width="150" height="58" rx="9" fill="#fff4d6" stroke="#0b2340" stroke-width="1.3"/>
+<text x="87.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Auftrag</text>
+<text x="87.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Kunde, Artikel,</text>
+<text x="87.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">Menge, Liefertermin</text>
+<rect x="224" y="12" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="299.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Produktion</text>
+<text x="299.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Produktionsplan,</text>
+<text x="299.0" y="64" font-size="10" fill="#5b6573" text-anchor="middle">Terminals</text>
+<rect x="436" y="12" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="511.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Palette</text>
+<text x="511.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Los, MHD, NVE</text>
+<rect x="648" y="12" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="723.0" y="35" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Lieferschein</text>
+<text x="723.0" y="52" font-size="10" fill="#5b6573" text-anchor="middle">Terminal Versand</text>
+<rect x="648" y="116" width="150" height="58" rx="9" fill="#fff4d6" stroke="#0b2340" stroke-width="1.3"/>
+<text x="723.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Ausgangsrechnung</text>
+<text x="723.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">aus dem Lieferschein</text>
+<text x="723.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">Steuer 7 %</text>
+<rect x="436" y="116" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="511.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">E-Rechnung</text>
+<text x="511.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">XRechnung (XML) oder</text>
+<text x="511.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">ZUGFeRD (PDF)</text>
+<rect x="224" y="116" width="150" height="58" rx="9" fill="#e6f4ea" stroke="#0b2340" stroke-width="1.3"/>
+<text x="299.0" y="139" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">DATEV-Export</text>
+<text x="299.0" y="156" font-size="10" fill="#5b6573" text-anchor="middle">Aus- und Eingangs-</text>
+<text x="299.0" y="168" font-size="10" fill="#5b6573" text-anchor="middle">rechnungen → Steuerberater</text>
+<rect x="12" y="220" width="150" height="58" rx="9" fill="#fff4d6" stroke="#0b2340" stroke-width="1.3"/>
+<text x="87.0" y="243" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Kontrakt</text>
+<text x="87.0" y="260" font-size="10" fill="#5b6573" text-anchor="middle">Rahmenauftrag</text>
+<text x="87.0" y="272" font-size="10" fill="#5b6573" text-anchor="middle">Menge, Preis fest</text>
+<rect x="224" y="220" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="299.0" y="243" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Bestellung</text>
+<text x="299.0" y="260" font-size="10" fill="#5b6573" text-anchor="middle">Abruf gegen</text>
+<text x="299.0" y="272" font-size="10" fill="#5b6573" text-anchor="middle">den Kontrakt</text>
+<rect x="436" y="220" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="511.0" y="243" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Wareneingang</text>
+<text x="511.0" y="260" font-size="10" fill="#5b6573" text-anchor="middle">Terminal Lager</text>
+<rect x="648" y="220" width="150" height="58" rx="9" fill="#eef2f7" stroke="#0b2340" stroke-width="1.3"/>
+<text x="723.0" y="243" font-size="13" font-weight="700" fill="#0b2340" text-anchor="middle">Eingangsrechnung</text>
+<text x="723.0" y="260" font-size="10" fill="#5b6573" text-anchor="middle">E-Rechnungs-Import</text>
+<text x="723.0" y="272" font-size="10" fill="#5b6573" text-anchor="middle">(XML / ZUGFeRD)</text>
+<rect x="12" y="290" width="14" height="12" rx="3" fill="#fff4d6" stroke="#0b2340" stroke-width="1"/>
+<text x="32" y="300" font-size="10.5" fill="#5b6573">legt das Büro an</text>
+<rect x="242" y="290" width="14" height="12" rx="3" fill="#e6f4ea" stroke="#0b2340" stroke-width="1"/>
+<text x="262" y="300" font-size="10.5" fill="#5b6573">geht nach draußen</text>
+</svg></div>
+<p>Oben der Verkauf: Der <b>Auftrag</b> erscheint an den Terminals (Versand, Verpackung), der Versand bucht den
+<b>Lieferschein</b>, das Büro macht daraus die <b>Ausgangsrechnung</b> und die <b>E-Rechnung</b>. Unten der
+Einkauf: <b>Kontrakt</b> (Rahmenauftrag) mit fester Menge und festem Preis, <b>Bestellungen</b> als Abrufe,
+Wareneingang am Terminal, <b>Eingangsrechnung</b> aus der E-Rechnung des Lieferanten. Am Ende gehen
+Aus- und Eingangsrechnungen per <b>DATEV-Export</b> an den Steuerberater.</p>
+
+<h2 style="margin-top:6mm">4 Was im Testsystem schon drin ist</h2>
+<p>Beim Einrichten wurden mehrere Produktionstage durchgespielt. Ihr findet:</p>
+<table>
+<tr><th style="width:38mm">Bereich</th><th>Beispiele</th></tr>
+<tr><td>Firma</td><td>Keks Test GmbH; für DATEV zusätzlich „Keks DATEV Demo GmbH“ (Kontenplan SKR04 mit Nummern)</td></tr>
+<tr><td>Kunden</td><td>KT Demo Handel, Großkunde A/B/C (Demo), Markthändler Krause (Demo), Schaustellerbetrieb Lange (Demo)</td></tr>
+<tr><td>Lieferanten</td><td>KT Demo Mühle, KT Bio Mühle (mit Öko-Zertifikat)</td></tr>
+<tr><td>Artikel</td><td>Demo-Artikel mit <code>KT-</code> vorn (Mehl, Zucker, Butter, Teige, Nussgebäck …); Honig Moppen (Rezeptur 5888, Artikel 17846);
+Herzen in mehreren Größen</td></tr>
+<tr><td>Chargen</td><td>Rohstoffe bis Fertigware, mit Rework; eine lose Ware wartet noch auf Freigabe der QS</td></tr>
+<tr><td>Aufträge, Lieferungen</td><td>sieben Aufträge, drei gebuchte Lieferscheine; ein Rückverfolgungstest</td></tr>
+<tr><td>Prüfpläne</td><td>Metalldetektor und Metallcheck je Anlage (CCP), Brix Sirup, Temperatur Kühlware, Reinigung vor Bio</td></tr>
+<tr><td>Einkauf</td><td>Zucker-Kontrakt über 50 t mit zwei Abrufen</td></tr>
+</table>
+<div class="box info"><h3>Chargen finden</h3>
+<p style="margin:0">Liste <b>Charge</b> (Arbeitsfläche → Chargen und Sperren), Filter <b>Chargenstufe</b> = z. B. „Fertigware“ oder
+„Rohstoff“. Die Nummern enden mit einer Zahlenfolge (Zeitpunkt der Einrichtung), z. B. <code>L1-261101…</code> für
+„Nusskeks mit Schokoboden“ oder <code>M-261101…</code> für Mehl. Fertigware der echten Rezepturen heißt wie
+<code>17846-2026-6447</code>: Artikel, Jahr, Los.</p></div>
+</div>
+<div class="kapitel"><h2>5 Aufgaben für die QS</h2>
+<p>Die Reihenfolge ist ein Vorschlag. Notiert nebenbei, was euch auffällt, und meldet es (Kapitel 8).</p>
+<section class="aufgabe">
+<h3><span class="nr">Q1</span>Rückverfolgung rückwärts und vorwärts</h3>
+<p class="ziel">Kann ich in Sekunden sagen, woraus ein Los besteht und wohin eine Rohstoff-Charge gegangen ist?</p>
+<ol><li>Arbeitsfläche → <b>Rückverfolgung</b>.</li><li>Charge einer Fertigware wählen (z. B. „Nusskeks mit Schokoboden“, <code>L1-…</code>), Richtung <b>Rückwärts</b>.</li><li>Liste lesen: Stufe, Charge, Artikel, Anteil in %, Herstelldatum, Ursprung, Verfall.</li><li>Dann eine Rohstoff-Charge (Mehl <code>M-…</code>) mit Richtung <b>Vorwärts</b>: bis zu welchen Kunden und Lieferscheinen?</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Rückwärts erscheinen alle Zutaten bis zur Lieferanten-Charge, auch Rework vom Vortag; vorwärts die Kunden mit Lieferschein und Palette (NVE).</p><p class="tipp"><b>Tipp:</b> Stimmt der Anteil in % mit eurem Gefühl überein? Fehlt eine Zutat, die laut Rezept drin sein müsste?</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/04_rueckverfolgung.png" style="width:82%"><figcaption>Bild 3: Rückverfolgung rückwärts eines Fertigwaren-Loses. Oben die Knöpfe für Test und Rückruf.</figcaption></figure>
+<section class="aufgabe">
+<h3><span class="nr">Q2</span>Rückverfolgungstest für das Audit (IFS 4.18)</h3>
+<p class="ziel">Den jährlichen Test als Nachweis erzeugen.</p>
+<ol><li>In der Rückverfolgung eine Charge wählen, oben <b>Rückverfolgungstest protokollieren</b>.</li><li>Anlass wählen (z. B. „Audit“), Test starten.</li><li>Im Protokoll Dauer, vorwärts/rückwärts und die <b>Mengenbilanz</b> je Charge ansehen; buchen.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Ein Protokoll RVT-… mit allen Ergebnissen; nach dem Buchen nicht mehr änderbar.</p><p class="tipp"><b>Tipp:</b> Passt die Mengenbilanz (Zugang, verbraucht, ausgeliefert, Bestand)? Wo nicht – melden.</p>
+</section>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">Q3</span>Charge freigeben und sperren</h3>
+<p class="ziel">Ware, die auf die QS wartet, freigeben; eine Charge sperren und sehen, was dann passiert.</p>
+<ol><li>Liste <b>Charge</b>, Filter Sperrstatus = „Gesperrt“. Die lose Ware „Freigabe durch die QS ausstehend“ öffnen.</li><li>Oben <b>Freigeben</b>, Bemerkung eintragen.</li><li>Eine andere Charge öffnen (z. B. einen Rohstoff), <b>Sperren</b> mit Grund.</li><li>Am Terminal (Station Backstube) diese Charge zum Herstellen scannen, im Info-Scan nachsehen.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Freigegebene Ware ist sofort verwendbar. Gesperrte Ware wird am Terminal rot abgewiesen. Jede Sperre und Freigabe steht im Protokoll <b>Chargen Sperre</b> (wer, wann, warum).</p><p class="tipp"><b>Tipp:</b> Das Protokoll lässt sich nicht ändern oder löschen – das gehört zum IFS-Nachweis.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/03_charge_gesperrt.png" style="width:72%"><figcaption>Bild 4: Gesperrte Charge mit rotem Hinweis. Oben Freigeben, Rückverfolgung, Mengenbilanz.</figcaption></figure>
+<section class="aufgabe">
+<h3><span class="nr">Q4</span>Rückruf durchspielen</h3>
+<p class="ziel">Eine Rohstoff-Charge ist auffällig: Was ist betroffen, und wie sperre ich alles?</p>
+<ol><li>Rückverfolgung, Rohstoff-Charge (z. B. Haselnuss <code>HN-…</code>), Richtung Vorwärts.</li><li>Oben <b>Rückruf: alles vorwärts sperren</b>, Grund eintragen, bestätigen.</li><li>Ergebnis lesen: gesperrte Chargen, Paletten, betroffene Kunden.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Die Charge und alles, in das sie eingeflossen ist, ist gesperrt; ausgelieferte Ware erscheint mit Kunde und Lieferschein.</p><p class="tipp"><b>Tipp:</b> Danach im Versand-Terminal versuchen, ein betroffenes Los zu liefern.</p>
+</section>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">Q5</span>Prüfung am Terminal und Abweichung</h3>
+<p class="ziel">CCP-Prüfung erfassen, wie es die Halle tun wird.</p>
+<ol><li>Terminal, Station <b>Verpackung</b>. Oben steht die fällige Prüfung „Metalldetektor Verpackung“.</li><li>Antippen und einmal mit Ergebnis in Ordnung erfassen – danach kann gebucht werden.</li><li>Noch einmal erfassen, diesmal <b>nicht in Ordnung</b>, Bemerkung schreiben.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Ohne erfasste Prüfung bucht die Station nicht (sperrend). Bei „nicht in Ordnung“ werden die Lose seit der letzten guten Prüfung gesperrt, und die Prüfung ist sofort wieder fällig.</p><p class="tipp"><b>Tipp:</b> Prüfpläne (Grenzwerte, Intervall, Korrekturmaßnahme) unter Arbeitsfläche → Prüfplan ansehen: Stimmen sie mit eurem HACCP-Plan überein?</p>
+</section>
+<section class="aufgabe">
+<h3><span class="nr">Q6</span>QS Tagesliste und Durchsicht</h3>
+<p class="ziel">Alles Auffällige eines Tages an einer Stelle sehen und die Durchsicht bestätigen.</p>
+<ol><li>Arbeitsfläche → <b>QS Tagesliste</b>, Tag wählen (Von = Bis).</li><li>Einträge lesen: FEFO (jüngere Ware genommen), Einwaage außerhalb der Toleranz, Prüfung, Sperre. „Freigaben offen“ zählt wartende Ware.</li><li>Oben <b>Tag als durchgesehen bestätigen</b>.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Nach Q5 steht die Abweichung in der Liste. Die Durchsicht wird als unveränderbares Protokoll gespeichert, je Tag einmal.</p><p class="tipp"><b>Tipp:</b> Einträge entstehen erst durch Buchungen. Eigene erzeugen: am Terminal Backstube beim Herstellen eine jüngere Charge scannen, obwohl eine ältere da ist, oder die Einwaage deutlich abweichen lassen – das Terminal fragt dann nach einem Grund.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/05_qs_tagesliste.png" style="width:70%"><figcaption>Bild 5: QS Tagesliste. Zähler oben, darunter die Einträge des Tages.</figcaption></figure>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">Q7</span>Mengenbilanz und MHD der Rohstoffe</h3>
+<p class="ziel">Stimmen die Mengen, und was läuft bald ab?</p>
+<ol><li>Arbeitsfläche → <b>Mengenbilanz</b>, eine Charge wählen: Zugang, verbraucht, zu Rework, ausgeliefert, entsorgt, Bestand, Ausbeute.</li><li>Arbeitsfläche → <b>MHD Rohstoffe</b>: was in den nächsten Tagen abläuft und was bei normalem Verbrauch übrig bleibt (rot).</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Die Bilanz geht auf; Abweichungen zwischen Lager und Rückverfolgung werden angezeigt.</p>
+</section>
+<section class="aufgabe">
+<h3><span class="nr">Q8</span>Wareneingang mit Prüfung</h3>
+<p class="ziel">Eine Anlieferung so buchen, wie das Lager es tun wird.</p>
+<ol><li>Terminal, Station <b>Lager</b> → Wareneingang.</li><li>Artikel wählen (z. B. Butter), Lieferant, Lieferanten-Charge, MHD, Menge. Kühlware fragt nach der Temperatur.</li><li>Beim MHD nur Ziffern tippen, z. B. <code>300628</code> – die Punkte setzt das Terminal, darunter steht das erkannte Datum mit Wochentag (siehe N5).</li><li>Einmal mit zu hoher Temperatur probieren, einmal mit einer Charge wie „Karton“.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Unplausible Chargen werden abgewiesen; zu warme Ware wird nicht angenommen und die Prüfung protokolliert. Butter ist nach dem Eingang bis zur Freigabe gesperrt.</p><p class="tipp"><b>Tipp:</b> Mit Scanner: das Etikett des Lieferanten scannen – Artikel, Charge und MHD werden vorbelegt.</p>
+</section>
+<section class="aufgabe">
+<h3><span class="nr">Q9</span>Etiketten ansehen</h3>
+<p class="ziel">Sind Palettenetikett und Gebinde-Etikett vollständig und richtig?</p>
+<ol><li>Liste <b>Palette</b>, eine Palette öffnen; am Terminal (Paletten → Palette scannen) <b>Etikett drucken</b>.</li><li>Prüfen: Absender, NVE, Los, MHD, Anzahl, Strichcodes. Ohne GS1-Basisnummer steht „TEST-NVE“ darauf – richtig so.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Etikett im Browser oder auf dem Etikettendrucker; nach Entnahmen meldet das Terminal „Etikett neu drucken“. Ein zweiter Druck ohne Änderung fragt nach dem Grund (siehe N1).</p>
+</section>
+</div>
+<div class="kapitel"><h2>6 Aufgaben für das Büro</h2>
+<section class="aufgabe">
+<h3><span class="nr">B1</span>Auftrag anlegen</h3>
+<p class="ziel">Einen Kundenauftrag erfassen und sehen, wo er in der Produktion auftaucht.</p>
+<ol><li>Suche „Auftrag“ → <b>Neu</b>. Kunde „KT Demo Handel“, Liefertermin in ein paar Tagen.</li><li>Position: ein Fertigware-Artikel (z. B. Honig Moppen 17846), Menge in Karton oder Palette. Speichern, <b>Buchen</b>.</li><li>Terminal, Station <b>Versand</b> → Lieferung, Kunde wählen: Erscheint der Auftrag mit Restmenge und Termin?</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Der Auftrag steht am Versand (dort sieht man alle Aufträge); die Verpackung sieht ihn, wenn der Artikel zu ihrer Linie gehört. Was geliefert und berechnet ist, führt ERPNext im Auftrag mit.</p>
+</section>
+<section class="aufgabe">
+<h3><span class="nr">B2</span>Rechnung aus dem Lieferschein und E-Rechnung</h3>
+<p class="ziel">Eine Ausgangsrechnung erzeugen, die als XRechnung gültig ist.</p>
+<ol><li>Liste <b>Lieferschein</b>, einen gebuchten Lieferschein an „KT Demo Handel“ öffnen.</li><li>Oben <b>Erstellen → Ausgangsrechnung</b>.</li><li>Prüfen bzw. setzen: <b>E-Rechnungs-Profil</b> „XRECHNUNG“, Steuervorlage „Lieferung oder sonstige Leistung im Inland“, Zahlungsbedingung, <b>Kontaktperson des Unternehmens</b> (Pflicht in der XRechnung).</li><li>Speichern. Steht oben „Bitte beachten Sie die Validierungsfehler der E-Rechnung“, die Fehler lesen. Sonst <b>Buchen</b>.</li><li>Menü <b>⋯ → E-Rechnung herunterladen</b>.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Die Steuer beträgt 7 % (Lebensmittel). Die XML-Datei lässt sich herunterladen; ohne Validierungsfehler ist sie gültig nach EN 16931.</p><p class="tipp"><b>Tipp:</b> Steht bei der Steuer etwas anderes als 7 % (z. B. 49 %), fehlt die Steuervorlage – genau so etwas bitte melden, auch wenn ihr es selbst korrigieren konntet.</p>
+</section>
+<section class="aufgabe">
+<h3><span class="nr">B3</span>Einkauf: Kontrakt und Reichweite</h3>
+<p class="ziel">Wie viel ist vom Kontrakt abgerufen, und wie lange reichen die Rohstoffe?</p>
+<ol><li>Arbeitsfläche → <b>Rahmenauftrag (Kontrakt)</b>: den Zucker-Kontrakt öffnen (Menge, abgerufen).</li><li>Eine <b>Bestellung</b> gegen den Kontrakt anlegen (Lieferant KT Demo Mühle, Häkchen „Gegen Rahmenauftrag“).</li><li>Arbeitsfläche → <b>Reichweite Rohstoffe</b>: Bestand, bestellt, Kontrakt offen, Verbrauch je Tag, reicht bis, Bedarf aus offenen Aufträgen.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Der Abruf zählt im Kontrakt mit; die Reichweite berücksichtigt die neue Bestellung.</p>
+</section>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">B4</span>Eingangsrechnung aus einer E-Rechnung</h3>
+<p class="ziel">Eine XRechnung oder ZUGFeRD-PDF eines Lieferanten einlesen.</p>
+<ol><li>Suche „E-Rechnungs-Import“ → Neu, Datei anhängen (XML oder ZUGFeRD-PDF; eine Beispieldatei bekommt ihr von Malte).</li><li>Speichern: Lieferant, Positionen und Beträge werden gelesen; erkannte Fehler stehen im Beleg.</li><li>Buchen, dann oben <b>Eingangsrechnung erstellen</b>.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Lieferant über die USt-IdNr., Artikel über die Lieferanten-Artikelnummer erkannt; die Eingangsrechnung entsteht als Entwurf.</p><p class="tipp"><b>Tipp:</b> In der Steuerzeile fehlt manchmal die Beschreibung (Pflichtfeld) – einmal eintippen, z. B. „Vorsteuer 7 %“.</p>
+</section>
+<section class="aufgabe">
+<h3><span class="nr">B5</span>DATEV-Export</h3>
+<p class="ziel">Einen Buchungsstapel für den Steuerberater erzeugen.</p>
+<ol><li>Suche „DATEV“ → Bericht <b>DATEV</b>.</li><li>Firma <b>Keks DATEV Demo GmbH</b> wählen (nur sie hat Kontonummern), Zeitraum, Belegart.</li><li>Oben <b>DATEV-Datei herunterladen</b>.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Eine ZIP-Datei mit Buchungsstapel, Kontenbeschriftungen, Kunden und Lieferanten im DATEV-Format.</p><p class="tipp"><b>Tipp:</b> Die Testfirma „Keks Test GmbH“ hat einen Kontenplan ohne Nummern; DATEV geht dort nicht – das ist bekannt. Welcher Kontenrahmen (SKR03/04) später gilt, klärt der Steuerberater.</p>
+</section>
+<section class="aufgabe">
+<h3><span class="nr">B6</span>Stammdaten durchsehen</h3>
+<p class="ziel">Sind die Angaben, die wir pflegen müssen, verständlich?</p>
+<ol><li>Suche „Element“ (so heißt der Artikel in ERPNext), einen KT-Artikel öffnen.</li><li>Ansehen: Chargenstufe, Allergengruppe, Freigabe vor Verwendung, Haltbarkeit, Einheiten (Karton, Palette), Barcodes, Bio/Vegan.</li><li>Kunde öffnen: Rechnungsadresse, USt-IdNr., Käuferreferenz (für die E-Rechnung).</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Ihr wisst, wo was steht – oder meldet, was unklar ist.</p>
+</section>
+<section class="aufgabe">
+<h3><span class="nr">B7</span>Lagerverkauf-Abschluss</h3>
+<p class="ziel">Den Tagesverkauf der Kasse einlesen.</p>
+<ol><li>Arbeitsfläche → <b>Lagerverkauf Abschluss</b> → Neu, Kassenexport (CSV/Excel mit Artikelname und Anzahl) anhängen, „Datei einlesen“.</li><li>Unbekannte Kassennamen einmal einem Artikel zuordnen (<b>Kassenartikel</b>).</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Der Abverkauf wird nach MHD (älteste zuerst) gebucht; gesperrte Lose nie.</p>
+</section>
+</div>
+<div class="kapitel"><h2>7 Neu seit dem 1. November</h2>
+<p>Diese Funktionen kamen nach der ersten Fassung dazu. Vor dem Test einmal <code>Strg+F5</code> im Browser drücken,
+damit die neue Terminal-Seite geladen wird. Die Aufgaben sind mit <b>N</b> nummeriert; QS und Büro können sie
+gemeinsam durchgehen.</p>
+<table>
+<tr><th style="width:12mm">Nr.</th><th>Was</th><th style="width:34mm">Wer testet</th></tr>
+<tr><td>N1</td><td>Nachdruck mit Grund und Druckprotokoll</td><td>QS</td></tr>
+<tr><td>N2</td><td>Palette ohne Etikett wiederfinden („Wo ist dieses Los?“)</td><td>QS, Lager</td></tr>
+<tr><td>N3</td><td>Akte und „Woraus besteht das?“</td><td>QS</td></tr>
+<tr><td>N4</td><td>Audit-Ansicht am Handy oder Tablet</td><td>QS</td></tr>
+<tr><td>N5</td><td>Datumsfeld mit festem Format</td><td>QS, Lager</td></tr>
+<tr><td>N6</td><td>Einwaage wie bei FOBIS: Bestellt / Erledigt / ToDo, Sack und Eimer</td><td>QS, Backstube</td></tr>
+<tr><td>N7</td><td>Retour: Unbenutztes von der Linie zurück ins Lager</td><td>QS, Linie</td></tr>
+<tr><td>N8</td><td>Hinweis vom Büro am Auftrag</td><td>Büro</td></tr>
+<tr><td>N9</td><td>Tagesübersicht</td><td>Büro, Schichtleitung</td></tr>
+<tr><td>N10</td><td>Verladung nach Kundenauftrag (Maske wie FOBIS)</td><td>Versand</td></tr>
+<tr><td>N11</td><td>Versandkarton mit eigener NVE</td><td>Versand, QS</td></tr>
+<tr><td>N12</td><td>Netzbild der Rückverfolgung mit Belegliste</td><td>QS, Büro</td></tr>
+<tr><td>N13</td><td>Wareneingang zu einer Bestellung</td><td>Lager, Einkauf</td></tr>
+</table>
+<section class="aufgabe">
+<h3><span class="nr">N1</span>Nachdruck mit Grund und Druckprotokoll</h3>
+<p class="ziel">Jeder Etikettendruck ist nachvollziehbar; ein zweiter Druck braucht einen Grund.</p>
+<ol><li>Terminal → <b>Info-Scan</b>, eine Palette scannen (oder die NVE abtippen; Leerzeichen und „(00)“ sind erlaubt).</li><li><b>Etikett drucken</b>. Wurde das Etikett schon gedruckt und hat sich der Inhalt nicht geändert, fragt das Terminal: <b>Beschädigt / unleserlich</b> oder <b>Etikett fehlt</b>. Einen Grund wählen.</li><li>In ERPNext: Arbeitsfläche Keks Trace → Paletten → <b>Etikettendruck (Protokoll)</b>.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Im Protokoll steht jeder Druck mit Grund (Erstdruck, Inhalt geändert, Im Ablauf, Beschädigt, Etikett fehlt, Testdruck), Drucker oder „Browser“, Station, Person und Zeit. Ändern oder löschen geht nicht.</p><p class="tipp"><b>Tipp:</b> „Erstdruck“, „Inhalt geändert“ und „Im Ablauf“ (Druck gehört zur Buchung) erkennt das System selbst – dafür fragt es nicht.</p>
+</section>
+<section class="aufgabe">
+<h3><span class="nr">N2</span>Palette ohne Etikett wiederfinden</h3>
+<p class="ziel">Das Etikett ist weg. Welche Palette ist es, und wie drucke ich es sicher nach?</p>
+<ol><li>Info-Scan → ein <b>Kartonetikett</b> von der Palette scannen (oder das Los eintippen).</li><li>Unten steht <b>Wo ist Los …?</b>: alle offenen Paletten mit diesem Los, je mit „gepackt wann, wo, von wem“, letzter Bewegung und letztem Etikettendruck.</li><li>Bei der gesuchten Palette <b>Etikett fehlt – nachdrucken</b>. Das Terminal bittet, die <b>anderen</b> Paletten mit dem Los zu scannen – sie müssen ihr Etikett noch haben.</li><li>Wenn alle gescannt sind: <b>Etikett nachdrucken</b>. Sonst <b>Andere nicht erreichbar – trotzdem drucken</b>.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Das Etikett wird gedruckt. Im Protokoll steht, welche anderen Paletten gescannt wurden und welche nicht. Wer aus Versehen die gesuchte Palette scannt, bekommt eine rote Meldung – dann hat sie ja ein Etikett.</p><p class="tipp"><b>Tipp:</b> Das Los gilt je Tag und Artikel. Mehrere Paletten mit demselben Los sind deshalb normal – genau dafür ist die Prüfung da.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/07_wo_ist_das_los.png" style="width:60%"><figcaption>Bild 7: „Wo ist Los …?“ nach dem Scan eines Kartonetiketts. Je Palette Inhalt, gepackt, zuletzt, Etikett.</figcaption></figure>
+</div>
+<div>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/08_etikett_fehlt.png" style="width:68%"><figcaption>Bild 8: Etikett fehlt. Erst die anderen Paletten mit dem Los scannen, dann nachdrucken.</figcaption></figure>
+<section class="aufgabe">
+<h3><span class="nr">N3</span>Akte und „Woraus besteht das?“</h3>
+<p class="ziel">In Sekunden zeigen, was mit einer Palette passiert ist und woraus ein Los besteht – bis zum Wareneingang.</p>
+<ol><li>Info-Scan → Palette scannen → <b>Akte</b>: Lebenslauf (angelegt, gepackt, umgepackt, geliefert, Etiketten), neueste zuerst.</li><li>Oben ein Los antippen: <b>Woraus besteht Los …?</b></li><li>Zuerst die <b>Rohstoffe und Packmittel</b>: Charge, Wareneingang (Zeit, Station, Lieferant, „direkt in Silo …“), MHD, QS-Freigabe.</li><li>Darunter der <b>Herstellungsweg</b> Stufe für Stufe: Buchung, Station, Person, Prüfungen. Stufen lassen sich auf- und zuklappen.</li><li>Auch für Behälter: Kübel scannen → Akte (Befüllungen mit Charge, geleert, gereinigt).</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Alle Zutaten erscheinen mit ihrer Herkunft. „Möglicherweise enthalten“ steht bei Silo-Chargen, die nur durch Vermischung im Silo dabei sein können.</p><p class="tipp"><b>Tipp:</b> Vergleicht mit der Rückverfolgung in ERPNext (Q1): Gleiche Chargen? Sehr lange Ketten (viel Rework) werden am Terminal gekürzt.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/09_akte_palette.png" style="width:64%"><figcaption>Bild 9: Akte einer Palette mit Lebenslauf; oben der Knopf zu „Woraus besteht das?“.</figcaption></figure>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">N4</span>Audit-Ansicht am Handy oder Tablet</h3>
+<p class="ziel">Beim Rundgang mit dem Auditor eine Palette zeigen: was drin ist und woher.</p>
+<ol><li>Am Handy oder Tablet <code>http://192.168.60.40/akte</code> öffnen und anmelden.</li><li>NVE, Los oder Behälter eintippen (oder mit Handscanner scannen), <b>Zeigen</b>.</li><li>Palette: Akte und je Los „Woraus besteht …?“. Los: direkt die Herkunft und darunter, wo es liegt.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Die Seite passt auf das Handy, nichts ist abgeschnitten. Sie zeigt nur an, ändern geht nicht.</p><p class="tipp"><b>Tipp:</b> Die Kamera als Scanner geht erst mit HTTPS (später) und dann nur in Chrome auf Android. Am Surface: Handscanner oder eintippen.</p>
+</section>
+<div class="zwei"><div><figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/10_audit_handy.png" style="width:52%"><figcaption>Bild 10: Audit-Ansicht am Handy: Rohstoffe mit Wareneingang und MHD.</figcaption></figure></div>
+<div><figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/14_datumsfeld.png" style="width:100%"><figcaption>Bild 11: Datumsfeld – halb eingegeben, gültig mit Wochentag, gibt es nicht, in der Vergangenheit.</figcaption></figure></div></div>
+<section class="aufgabe">
+<h3><span class="nr">N5</span>Datumsfeld mit festem Format</h3>
+<p class="ziel">Ein MHD kann nicht mehr falsch oder unvollständig gebucht werden.</p>
+<ol><li>Terminal Lager → Wareneingang → einen Artikel mit MHD wählen (z. B. Butter).</li><li>Ins MHD nur Ziffern tippen: <code>300628</code>. Dann <code>310227</code> (gibt es nicht) und ein Datum von gestern.</li><li>Jeweils <b>Buchen</b> versuchen.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Gültig: grün „= Freitag, 30.06.2028“. Ungültig, unvollständig, abgelaufen oder über 10 Jahre in der Zukunft: rot, Buchen geht nicht. Das MHD ist bei Artikeln mit MHD Pflicht.</p><p class="tipp"><b>Tipp:</b> Dasselbe Feld gilt am Verpackungs-PC für „MHD kürzen“.</p>
+</section>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">N6</span>Einwaage wie bei FOBIS</h3>
+<p class="ziel">Beim Herstellen sehen, was bestellt, erledigt und noch zu tun ist – und in Sack oder Eimer zählen.</p>
+<ol><li>Terminal Backstube → Herstellen → ein Rezept wählen, Sollmenge bestätigen.</li><li>Ab Surface-Breite ist die Maske zweispaltig: <b>links</b> die Zutaten mit <b>Bestellt</b>, <b>Erledigt</b>, <b>ToDo</b> und Lagerort, darunter die angetippte Zutat groß mit ihren Registrierungen; <b>rechts</b> Herkunft, Eingabe und Ziel.</li><li>Eine Zutat mit Gebinde scannen: Das Terminal fragt „Wie viele Sack?“ und zeigt darunter „= 50 kg“. Umschalten auf kg geht immer.</li><li>Dieselbe Zutat aus zwei Säcken scannen: Erledigt zählt zusammen.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Erledigte Zeilen werden grün, außerhalb der Toleranz orange. Gebucht wird in kg.</p><p class="tipp"><b>Tipp:</b> Gebinde kommen aus der <b>Maßeinheit-Umrechnung</b> am Artikel (z. B. Sack = 25), der Lagerort aus dem <b>Quelllager</b> der Stückliste oder dem <b>Standardlager</b> des Artikels. Fehlt beides, steht nichts da – dann bitte melden, welche Angaben fehlen.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/11_einwaage_gebinde.png" style="width:80%"><figcaption>Bild 12: Einwaage: links die Zutaten, rechts Herkunft und Eingabe; Honig gescannt, gefragt wird in Eimern.</figcaption></figure>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">N7</span>Retour: Unbenutztes zurück ins Lager</h3>
+<p class="ziel">Was an die Linie ging, aber nicht verbraucht wurde, soll nicht als Linienrest verloren gehen.</p>
+<ol><li>Terminal an der Linie → <b>An die Linie</b> → <b>Retour ins Lager</b>.</li><li>In der Liste stehen Rohstoffe und Packmittel des laufenden Auftrags mit Menge auf der Linie und „Zurück nach“.</li><li>Eine Zeile antippen, Menge eingeben (z. B. halber Sack), <b>Zurück ins Lager buchen</b>.</li><li>Danach <b>Auftrag beenden</b>: Liegt noch etwas auf der Linie, bietet das Terminal vorher die Retour an.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Die Menge ist wieder im Lager, aus dem sie kam; nur der Rest wird beim Auftragsende als Linienrest ausgebucht. Silo-Ware geht nicht zurück.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/15_retour.png" style="width:70%"><figcaption>Bild 13: Retour gebucht; in der Liste steht nur noch, was auf der Linie bleibt.</figcaption></figure>
+<section class="aufgabe">
+<h3><span class="nr">N8</span>Hinweis vom Büro am Auftrag</h3>
+<p class="ziel">Eine wichtige Information erreicht die Linie und die Verpackung, ohne Zettel.</p>
+<ol><li>Einen <b>Produktionsauftrag</b> öffnen, Feld <b>Hinweis an Linie und Verpackung</b>, z. B. „Mit Clip, neue Folie 2026“. Speichern.</li><li>Oder am <b>Kundenauftrag</b> das Feld <b>Hinweis an Produktion und Verpackung</b> füllen.</li><li>Am Terminal der Linie bzw. am Verpackungs-PC den Auftrag öffnen.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Der Hinweis steht groß und gelb über dem Auftrag: an der Linie, am Verpackungs-PC, an der Packstation, beim Verpacken nach Kundenauftrag, in den Auftragslisten und in der Tagesübersicht.</p><p class="tipp"><b>Tipp:</b> Gilt etwas immer (z. B. „mit Clip“ für einen Artikel), gehört es in die Spezifikation, nicht in den Hinweis.</p>
+</section>
+</div>
+<div>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/12_hinweis_linie.png" style="width:64%"><figcaption>Bild 14: Hinweis über dem laufenden Auftrag an der Linie, darunter der Knopf „Retour ins Lager“.</figcaption></figure>
+<section class="aufgabe">
+<h3><span class="nr">N9</span>Tagesübersicht</h3>
+<p class="ziel">Auf einen Blick sehen, welche Aufträge heute laufen, offen oder fertig sind.</p>
+<ol><li>An jedem Terminal → <b>Tagesübersicht</b>.</li><li>Je Linie: Status, Auftrag, Artikel mit Hinweis, Kunde, bestellt und gebucht mit Balken. Oben die Zähler offen und fertig.</li><li>Mit <b>Vortag</b> und <b>Folgetag</b> blättern.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Heute stehen auch Aufträge von früheren Tagen dabei, die noch freigegeben sind oder laufen („vom …“), damit nichts liegen bleibt.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/13_tagesuebersicht.png" style="width:68%"><figcaption>Bild 15: Tagesübersicht mit Status, Hinweis und Fortschritt.</figcaption></figure>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">N10</span>Verladung nach Kundenauftrag</h3>
+<p class="ziel">Beim Verladen sehen, was bestellt, schon verladen und noch offen ist – wie in FOBIS.</p>
+<ol><li>Terminal Versand → <b>Lieferung</b> → Kunde → einen <b>Kundenauftrag</b> wählen.</li><li>Links stehen alle Positionen mit Bestellt, Erledigt, ToDo und Status (Neu, Aktiv, Fertig). Eine Zeile antippen: darunter steht sie groß, mit den Registrierungen.</li><li>Rechts unter <b>Herkunft</b> eine Palette, einen Versandkarton oder ein Kartonetikett scannen.</li><li>Mit ✕ eine Registrierung zurücknehmen. Zum Schluss <b>Lieferschein buchen</b>.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> ToDo sinkt mit jedem Scan; fertige Positionen werden grün. Ein Artikel, der nicht im Auftrag steht, wird abgelehnt.</p><p class="tipp"><b>Tipp:</b> Ohne Kundenauftrag bleibt die einfache Lieferung wie bisher.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/16_verladung.png" style="width:80%"><figcaption>Bild 16: Verladung: links die Positionen des Auftrags, rechts Herkunft und Ziel.</figcaption></figure>
+<section class="aufgabe">
+<h3><span class="nr">N11</span>Versandkarton mit eigener NVE</h3>
+<p class="ziel">Ein Karton bekommt eine eigene NVE, kann auf eine Palette mit NVE und einzeln geliefert werden.</p>
+<ol><li>ERPNext → Paletten → <b>+ Neuer Versandkarton</b>, Kartons eines Loses laden, Etikett drucken.</li><li>Am Versandkarton <b>Auf eine Palette stellen</b> und die Paletten-NVE scannen.</li><li>Info-Scan auf die Palette: Sie zeigt ihre Versandkartons; ihr Etikett zeigt alles zusammen.</li><li>Einen einzelnen Karton liefern: in der Lieferung seine NVE scannen. Danach die ganze Palette liefern.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Beim einzelnen Karton bleibt die Palette im Lager, der Karton steht nicht mehr auf ihr. Bei der ganzen Palette stehen im Lieferschein die NVEs der Kartons. Jedes Auf- und Abnehmen steht im Protokoll <b>Versandkarton Zuordnung</b>.</p><p class="tipp"><b>Tipp:</b> DHL: Lieferung (DHL) → Auftrag → „Pakete als Versandkarton mit NVE“. Je Paket Stück und Gewicht; jede gescannte Sendungsnummer kommt an den nächsten Karton ohne Nummer.</p>
+</section>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">N12</span>Netzbild der Rückverfolgung</h3>
+<p class="ziel">Auf einen Blick sehen, woraus ein Los besteht und wohin es ging – bis zum Kunden. Für Audit und Rückruf.</p>
+<ol><li>Im Browser <code>/netz</code> öffnen oder in der Akte bei einem Los <b>Netzbild: woher und wohin</b>.</li><li>Ein Los, eine Charge oder eine Palette eingeben oder scannen, <b>Zeichnen</b>.</li><li>Einen Kasten anklicken: Der Weg wird blau, der Rest blass. An den Linien steht die Menge; rechts stehen Wareneingang, Freigabe, Herstellung, Prüfungen und wo das Los jetzt liegt.</li><li><b>Von hier aus zeichnen</b>, z. B. bei einem Rohstoff: Dann sieht man alle Kunden, die ihn bekommen haben.</li><li>Unten <b>Belege in der Kette</b>: Einkauf und Verkauf, als CSV oder zum Drucken.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Das gewählte Los steht in der Mitte, links die Herkunft, rechts die Verwendung. Rot heißt gesperrt, orange heißt Prüfung mit Abweichung, gestrichelt heißt „möglicherweise enthalten“ (Silo). Packmittel sind gebündelt („Packmittel (6)“), ein Klick klappt sie auf.</p><p class="tipp"><b>Tipp:</b> Für den großen Bildschirm oder das Surface gedacht. Am Handy geht es, ist aber eng – dort ist die Akte besser.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/17_netzbild.png" style="width:100%"><figcaption>Bild 17: Netzbild. Ein Grundteig ist angeklickt: sein Weg ist hervorgehoben, rechts die Details.</figcaption></figure>
+</div>
+<div>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/18_netz_belege.png" style="width:92%"><figcaption>Bild 18: Packmittel aufgeklappt, darunter die Belege in der Kette (Einkauf und Verkauf).</figcaption></figure>
+</div>
+<div>
+<section class="aufgabe">
+<h3><span class="nr">N13</span>Wareneingang zu einer Bestellung</h3>
+<p class="ziel">Beim Wareneingang festhalten, zu welcher Bestellung die Lieferung gehört.</p>
+<ol><li>Im Büro eine Bestellung (Einkauf) anlegen und buchen, z. B. 100 kg Salz.</li><li>Terminal Lager → <b>Wareneingang</b> → den Artikel wählen.</li><li>Unter <b>Bestellung</b> stehen die offenen Bestellungen mit dem Artikel, mit offener Menge und Termin. Gibt es nur eine, ist sie schon gewählt. Die Bestellung setzt den Lieferanten.</li><li>40 kg buchen. Den Wareneingang wieder öffnen: offen sind noch 60 kg.</li><li>Im Netzbild oder in der Akte das Los ansehen.</li></ol>
+<p class="erwartet"><b>Das sollte passieren:</b> Die Bestellung steht am Wareneingang, in der Akte und in der Belegliste des Netzbilds. Passt der Lieferant nicht zur Bestellung oder ist sie geschlossen, bucht das Terminal nicht.</p><p class="tipp"><b>Tipp:</b> Die Bestellung ist nur ein Verweis. In ERPNext zählt sie den Eingang nicht als geliefert (das tut nur ein Eingangsbeleg). Ist alles da, die Bestellung im Büro schließen.</p>
+</section>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/19_wareneingang_bestellung.png" style="width:70%"><figcaption>Bild 19: Wareneingang mit Auswahl der offenen Bestellung.</figcaption></figure>
+</div>
+<div class="kapitel"><h2>8 Fehler melden</h2>
+<p>Jede Rückmeldung kommt als <b>Anfrage</b> in ERPNext. So ist alles an einer Stelle, mit Datum, Bildschirmfoto
+und Stand der Bearbeitung. (In ERPNext heißt so ein Eintrag „Anfrage“, gemeint ist hier: eure Meldung.)</p>
+<h3>So geht's</h3>
+<ol>
+<li>Arbeitsfläche Keks Trace → <b>Test und Rückmeldung → Fehler melden (Anfrage)</b> → <b>Neu</b>.</li>
+<li><b>Betreff:</b> kurz und eindeutig, mit Art vorn: <code>FEHLER:</code>, <code>WUNSCH:</code> oder <code>FRAGE:</code>.</li>
+<li><b>Anfragetyp:</b> Fehler, Wunsch oder Frage. <b>Priorität:</b> High (hoch), wenn Rückverfolgung, Sperre, MHD oder Rechnung
+falsch sind; Medium (mittel), wenn etwas nicht geht; Low (niedrig) für Kleinigkeiten.</li>
+<li><b>Beschreibung</b> nach dem Muster unten. <b>Bildschirmfoto:</b> unter Windows <code>Win+Umschalt+S</code>, Bereich
+markieren, dann in die Beschreibung mit <code>Strg+V</code> einfügen. Klappt das nicht: Bild speichern und rechts
+unter <b>Anhänge</b> (+) hochladen.</li>
+<li><b>Speichern.</b> Die Anfrage bekommt eine Nummer (ISS-2026-…).</li>
+</ol>
+<figure><img src="file:///home/claude/keks_trace/docs/handbuch/bilder/06_anfrage_neu.png" style="width:78%"><figcaption>Bild 6: Neue Anfrage mit Betreff, Anfragetyp und Beschreibung.</figcaption></figure>
+</div>
+<div><h3>Was in eine gute Meldung gehört</h3>
+<table>
+<tr><th style="width:44mm">Frage</th><th>Beispiel</th></tr>
+<tr><td>Wo?</td><td>Station Versand / Maske Ausgangsrechnung / Bericht Rückverfolgung</td></tr>
+<tr><td>Was wolltest du tun?</td><td>Palette an KT Demo Handel liefern</td></tr>
+<tr><td>Was hast du gemacht?</td><td>Lieferung → Kunde gewählt → Palette 3020000000000000… gescannt → Buchen</td></tr>
+<tr><td>Was ist passiert?</td><td>Rote Meldung „…“ (Text abschreiben oder Foto) / Etikett zeigt MHD 30.04.2026</td></tr>
+<tr><td>Was hast du erwartet?</td><td>MHD 30.04.2027 wie auf dem Karton</td></tr>
+<tr><td>Nummern</td><td>Charge, Palette (NVE), Beleg (z. B. MAT-DN-2026-00003), Uhrzeit</td></tr>
+<tr><td>Wiederholbar?</td><td>Ja, zweimal probiert / nur einmal passiert</td></tr>
+</table>
+<div class="zwei">
+<div class="box wichtig"><h3>So hilft es wenig</h3><p style="margin:0">„Lieferung geht nicht.“</p></div>
+<div class="box ok"><h3>So hilft es</h3><p style="margin:0">„FEHLER: Lieferung bricht bei gemischter Palette ab. Station Versand, Kunde KT Demo Handel,
+Palette 3020…0036, 22:14 Uhr. Meldung: ‚Palette enthält gesperrtes Los‘. Erwartet: nur das gesperrte Los
+weglassen. Foto anbei. Zweimal probiert.“</p></div>
+</div>
+<div class="box info"><h3>In der Halle ohne PC</h3><p style="margin:0">Am Terminal gibt es kein Meldeformular. Mit dem Handy die Meldung auf dem Bildschirm fotografieren und den
+<b>Fehlerbogen</b> (letzte Seite) ausfüllen; später als Anfrage eintragen oder an Malte geben. Wichtig sind
+Station, Uhrzeit und die gescannten Nummern.</p></div>
+<h3>Was mit eurer Meldung passiert</h3>
+<p>Malte sieht alle Anfragen in der Liste und setzt den Status: <b>Offen</b> → <b>Beantwortet</b> oder <b>Zurückgestellt</b> →
+<b>Geklärt</b>, wenn behoben und eingespielt. Ihr seht in der Liste, was erledigt ist, und könnt es nachtesten.
+Nach einem Update einmal <code>Strg+F5</code> im Browser drücken.</p>
+
+<h2 style="margin-top:6mm">9 Bekannte Grenzen des Tests</h2>
+<p>Damit niemand Zeit mit Bekanntem verliert – das ist absichtlich so oder noch offen:</p>
+<ul>
+<li><b>Ein Benutzer für alle</b> (Administrator). Rechte je Rolle (z. B. nur die QS gibt frei) sind gebaut, aber
+im Test sieht jeder alles. Eigene Benutzer kommen vor dem echten Betrieb.</li>
+<li><b>Ausgedachte Werte:</b> Bei den Pilot-Rezepturen sind Beutelgrößen, Gebinde, Ruhezeiten und Packmittel
+Platzhalter. Prüfpläne und Grenzwerte sind Beispiele.</li>
+<li><b>Test-NVE:</b> Ohne eingetragene GS1-Basisnummer tragen Paletten „TEST-NVE“.</li>
+<li><b>Druckformat der Rechnung</b> ist noch englisch; das XML der E-Rechnung ist davon unabhängig vollständig.</li>
+<li><b>Kein E-Mail-Versand</b> und kein HTTPS – der Testserver ist nur im Firmennetz. Deshalb geht in der
+Audit-Ansicht <code>/akte</code> am Handy noch keine Kamera: Nummer eintippen oder Handscanner nehmen.</li>
+<li><b>Drucker:</b> Direktdruck nur auf Etikettendruckern, die eingetragen und vom Server erreichbar sind
+(Port 9100, Firewall); sonst druckt der Browser.</li>
+<li><b>Hinweise</b> gibt es nur am Produktions- und am Kundenauftrag – nicht im Wareneingang, nicht im Versand
+(bewusst; Allgemeines läuft über das andere Tool).</li>
+<li><b>Nicht enthalten:</b> Waagenanbindung, Wareneingang als Eingangsbeleg zur Bestellung (am Terminal nur Verweis, N13), eigene Kasse, CAPA, Schulungsnachweise.</li>
+</ul>
+</div>
+<div class="kapitel"><h2>A Fehlerbogen</h2>
+<p class="klein">Für die Halle zum Ausdrucken. Später als Anfrage in ERPNext eintragen oder an Malte geben.</p>
+<table class="bogen"><tr><td>Name</td><td></td></tr><tr><td>Datum, Uhrzeit</td><td></td></tr><tr><td>Station / Maske</td><td></td></tr><tr><td>Was wolltest du tun?</td><td></td></tr><tr><td>Was hast du gemacht?</td><td style="height:20mm"></td></tr><tr><td>Was ist passiert? (Meldung)</td><td style="height:20mm"></td></tr><tr><td>Was hast du erwartet?</td><td></td></tr><tr><td>Nummern (Charge, NVE, Beleg)</td><td></td></tr><tr><td>Art</td><td>☐ Fehler &nbsp;&nbsp; ☐ Wunsch &nbsp;&nbsp; ☐ Frage</td></tr><tr><td>Wichtigkeit</td><td>☐ hoch (falsches Ergebnis) &nbsp; ☐ mittel (geht nicht) &nbsp; ☐ niedrig</td></tr><tr><td>Foto gemacht?</td><td>☐ ja &nbsp;&nbsp; ☐ nein</td></tr></table>
+<p class="klein">Anfrage-Nr. (wird im Büro eingetragen): ______________________</p>
+</div>
+</body></html>

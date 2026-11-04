@@ -475,7 +475,7 @@
 	function mehr(d) {
 		const t = [];
 		const w = d.wareneingang;
-		if (w) t.push(`<div class="ereignis"><b>Wareneingang</b> ${esc(w.zeit || "")}<small>${esc([w.lieferant, w.lieferschein ? "Lieferschein " + w.lieferschein : "", zahl(w.menge), w.silo ? "in " + w.silo : w.lager, w.beleg].filter(Boolean).join(" · "))}</small></div>`);
+		if (w) t.push(`<div class="ereignis"><b>Wareneingang</b> ${esc(w.zeit || "")}<small>${esc([w.lieferant, w.bestellung ? "Bestellung " + w.bestellung : "", w.lieferschein ? "Lieferschein " + w.lieferschein : "", zahl(w.menge), w.silo ? "in " + w.silo : w.lager, w.beleg].filter(Boolean).join(" · "))}</small></div>`);
 		const f = d.freigabe;
 		if (f) t.push(`<div class="ereignis"><b>${f.aktion === "Freigeben" ? "Freigegeben" : "Gesperrt"}</b> ${esc(f.zeit || "")}<small>${esc([f.person, f.grund].filter(Boolean).join(" · "))}</small></div>`);
 		const h = d.herstellung;
@@ -506,10 +506,10 @@
 		el.innerHTML = `<div class="reihe"><h2>Belege in der Kette</h2>
 			<div class="reiter">${["Alle", "Einkauf", "Verkauf"].map((a) => `<button data-f="${a}" class="${a === belegFilter ? "an" : ""}">${a} ${anzahl(a)}</button>`).join("")}</div>
 			<button class="btn klein" id="csv">CSV</button><button class="btn klein" onclick="window.print()">Drucken</button></div>
-			<div class="tab-wrap"><table class="tab"><thead><tr><th>Art</th><th>Beleg</th><th>Datum</th><th>Lieferant / Kunde</th><th>Nummer extern</th>
+			<div class="tab-wrap"><table class="tab"><thead><tr><th>Art</th><th>Beleg</th><th>Datum</th><th>Lieferant / Kunde</th><th>Bestellung / Auftrag</th><th>Nummer extern</th>
 				<th>Artikel</th><th>Bezeichnung</th><th>Charge</th><th class="z">Menge</th></tr></thead>
 			<tbody>${zeilen.map((b) => `<tr data-c="${esc(b.charge)}"><td><span class="art ${b.art === "Einkauf" ? "ein" : "ver"}">${esc(b.art)}</span></td>
-				<td>${esc(b.beleg || "–")}</td><td>${esc(b.datum || "")}</td><td>${esc(b.partner || "")}</td><td>${esc(b.extern || "")}</td>
+				<td>${esc(b.beleg || "–")}</td><td>${esc(b.datum || "")}</td><td>${esc(b.partner || "")}</td><td>${esc(b.bestellung || "")}</td><td>${esc(b.extern || "")}</td>
 				<td>${esc(b.artikel || "")}</td><td>${esc(b.artikelname || "")}</td><td>${esc(b.charge)}</td>
 				<td class="z">${esc(zahl(b.menge))} ${esc(b.einheit || "")}</td></tr>`).join("")}</tbody></table></div>`;
 		el.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { belegFilter = b.dataset.f; belegeZeigen(); }));
@@ -522,9 +522,9 @@
 		$("csv").addEventListener("click", () => csv(alle));
 	}
 	function csv(alle) {
-		const kopf = ["Art", "Beleg", "Datum", "Lieferant/Kunde", "Nummer extern", "Artikel", "Bezeichnung", "Charge", "Menge", "Einheit"];
+		const kopf = ["Art", "Beleg", "Datum", "Lieferant/Kunde", "Bestellung/Auftrag", "Nummer extern", "Artikel", "Bezeichnung", "Charge", "Menge", "Einheit"];
 		const feld = (v) => { const s = String(v == null ? "" : v); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-		const text = [kopf].concat(alle.map((b) => [b.art, b.beleg, b.datum, b.partner, b.extern, b.artikel, b.artikelname, b.charge,
+		const text = [kopf].concat(alle.map((b) => [b.art, b.beleg, b.datum, b.partner, b.bestellung, b.extern, b.artikel, b.artikelname, b.charge,
 			b.menge == null ? "" : String(b.menge).replace(".", ","), b.einheit])).map((z) => z.map(feld).join(";")).join("\r\n");
 		const a = document.createElement("a");
 		a.href = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));

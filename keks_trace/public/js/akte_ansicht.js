@@ -96,7 +96,7 @@
 	}
 	function wareneingang(w) {
 		if (!w) return "kein Wareneingang gefunden";
-		return ["Wareneingang " + (w.zeit || ""), w.lieferant ? "Lieferant " + w.lieferant : "", w.lieferschein ? "Lieferschein " + w.lieferschein : "",
+		return ["Wareneingang " + (w.zeit || ""), w.lieferant ? "Lieferant " + w.lieferant : "", w.bestellung ? "Bestellung " + w.bestellung : "", w.lieferschein ? "Lieferschein " + w.lieferschein : "",
 			w.silo ? "direkt in " + w.silo : w.lager ? "nach " + w.lager : "", w.beleg].filter(Boolean).join(" · ");
 	}
 	function freigabe(f) {

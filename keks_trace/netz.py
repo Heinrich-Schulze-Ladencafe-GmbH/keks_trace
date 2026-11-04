@@ -131,6 +131,8 @@ def _lieferungen(chargen: list[str]) -> list[dict]:
 		"""
 		select sbe.batch_no as charge, dn.name as lieferschein, dn.customer as kunde,
 			dn.customer_name as kundenname, dn.posting_date as datum, dn.po_no as bestellnummer,
+			(select max(dni.against_sales_order) from `tabDelivery Note Item` dni where dni.parent = dn.name)
+				as auftrag,
 			sum(abs(sbe.qty)) as menge
 		from `tabSerial and Batch Entry` sbe
 		join `tabSerial and Batch Bundle` sbb on sbb.name = sbe.parent
@@ -226,6 +228,7 @@ def netz(charge: str) -> dict:
 				"beleg": w["beleg"] if w else None,
 				"datum": w["zeit"] if w else None,
 				"partner": (w or {}).get("lieferant") or n["lieferant"],
+				"bestellung": (w or {}).get("bestellung"),
 				"extern": (w or {}).get("lieferschein"),
 				"artikel": n["artikel"],
 				"artikelname": n["name"],
@@ -242,6 +245,7 @@ def netz(charge: str) -> dict:
 				"beleg": z.lieferschein,
 				"datum": akte_modul._datum(z.datum),
 				"partner": z.kundenname or z.kunde,
+				"bestellung": z.auftrag,
 				"extern": z.bestellnummer,
 				"artikel": n.get("artikel"),
 				"artikelname": n.get("name"),

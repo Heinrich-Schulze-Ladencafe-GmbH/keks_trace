@@ -2071,6 +2071,8 @@
 			(art.bio ? `<div class="panel">${kennzeichenMarken(["Bio"])} <span class="fehlt" style="font-size:16px">Nur Lieferanten mit gültigem Öko-Zertifikat.</span></div>` : "") +
 			(art.bio && !lief.length ? `<div class="meldung rot">Kein Lieferant mit gültigem Öko-Zertifikat hinterlegt. Annahme als Bio nicht möglich.<small>Zertifikat beim Lieferanten im Büro eintragen.</small></div>` : "") +
 			(lief.length ? `<label>Lieferant${art.bio ? "" : " (optional)"}</label><select id="lieferant" class="feld">${art.bio ? "" : `<option value="">–</option>`}${lief.map((l) => `<option value="${esc(l.lieferant)}">${esc(l.name)}${l.bio_ok ? " · Bio-zertifiziert" : ""}</option>`).join("")}</select>` : "") +
+			((art.bestellungen || []).length ? `<label for="bestellung">Bestellung</label><select id="bestellung" class="feld"></select>
+				<small class="feld-hinweis">Offene Bestellungen mit diesem Artikel. Mit Bestellung steht sie in der Rückverfolgung.</small>` : "") +
 			`<div id="etikett-info"></div>` +
 			textFeld("scan", "Charge des Lieferanten (Etikett scannen oder Charge eingeben)") +
 			`${art.has_expiry_date ? datumFeld("mhd", "MHD", { pflicht: true, abHeute: true }) : ""}
@@ -2085,6 +2087,25 @@
 			zahlFeld("menge", `<span id="menge-text">${art.silo ? "Menge" : "Menge je Gebinde"}</span> (${esc(ein(art.stock_uom))})`) +
 			pruefFelder(art.pruefungen, "pw") +
 			`<div class="reihe"><button class="knopf gruen" data-a="buchen">Buchen</button></div>`;
+		// Bestellung: Auswahl passend zum Lieferanten; Bestellung wählen setzt den Lieferanten
+		const bestFeld = document.getElementById("bestellung");
+		const liefFeld = document.getElementById("lieferant");
+		const bestFuellen = () => {
+			if (!bestFeld) return;
+			const l = liefFeld ? liefFeld.value : "";
+			const alt = bestFeld.value;
+			const liste = art.bestellungen.filter((b) => !l || b.lieferant === l);
+			bestFeld.innerHTML = `<option value="">– ohne Bestellung –</option>` + liste.map((b) => `<option value="${esc(b.bestellung)}">${esc(b.bestellung)} · ${esc(b.lieferantname || b.lieferant)} · offen ${esc(mg(b.offen, art.stock_uom))}${b.termin ? " · Termin " + esc(b.termin) : ""}</option>`).join("");
+			bestFeld.value = liste.some((b) => b.bestellung === alt) ? alt : liste.length === 1 ? liste[0].bestellung : "";
+		};
+		if (bestFeld) {
+			bestFuellen();
+			bestFeld.addEventListener("change", () => {
+				const b = art.bestellungen.find((x) => x.bestellung === bestFeld.value);
+				if (b && liefFeld && [...liefFeld.options].some((o) => o.value === b.lieferant)) liefFeld.value = b.lieferant;
+			});
+			if (liefFeld) liefFeld.addEventListener("change", bestFuellen);
+		}
 		const zielFeld = document.getElementById("ziel");
 		if (zielFeld) zielFeld.addEventListener("change", () => {
 			const silo = !!zielFeld.value;
@@ -2138,6 +2159,7 @@
 					gebindeart: silo ? null : gebindeart,
 					etiketten: etiketten ? 1 : 0,
 					pruefwerte: pruefWerte(art.pruefungen, "pw"),
+					bestellung: bestFeld ? bestFeld.value || null : null,
 				});
 				if (e.abgelehnt) {
 					app.innerHTML = kopf(e.name, true) + `<div class="meldung rot">Annahme verweigert<small>${e.gruende.map(esc).join("<br>")}</small></div>` +
@@ -2149,6 +2171,7 @@
 				const druck = (grund) => gebindeDrucken(e.gebinde, grund);
 				if (e.gebinde && e.gebinde.length) druck("ablauf");
 				ergebnis(e.name, ["Charge: " + e.charge, "Menge: " + mg(e.menge, art.stock_uom), "Ort: " + e.lager,
+					e.bestellung ? "Bestellung: " + e.bestellung : "",
 					e.gebinde && e.gebinde.length ? "Gebinde: " + e.gebinde.join(", ") : "", e.mhd ? "MHD: " + e.mhd : ""].filter(Boolean),
 					(e.gesperrt ? ["Gesperrt bis zur Freigabe durch die QS (" + (e.sperrgrund || "") + ")"] : []).concat(e.hinweise || []),
 					e.gebinde && e.gebinde.length ? `<button class="knopf" data-a="etiketten">Gebinde-Etiketten drucken</button>` : "")((a2) => (a2 === "etiketten" ? druck(null) : beiAllgemein(a2)));

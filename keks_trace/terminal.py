@@ -802,7 +802,64 @@ def wareneingang_artikel() -> list[dict]:
 		a["pruefungen"] = [
 			pruefung.beschreibung(p) for p in pruefung.fuer_artikel(pruefung.WARENEINGANG, a["artikel"])
 		]
+		a["bestellungen"] = _bestellungen(a["artikel"])
 	return artikel
+
+
+BESTELLUNG_OFFEN = ("To Receive and Bill", "To Receive")
+
+
+def _bestellungen(artikel: str) -> list[dict]:
+	"""Offene Bestellungen (Einkauf) mit diesem Artikel, älteste Liefertermine zuerst.
+
+	Offen = bestellt minus Eingangsbelege (ERPNext zählt die selbst) minus Wareneingänge am Terminal mit Verweis
+	auf die Bestellung (die zählt ERPNext nicht). Menge in der Lagereinheit.
+	"""
+	zeilen = frappe.db.sql(
+		"""
+		select po.name as bestellung, po.supplier as lieferant, po.supplier_name as lieferantname,
+			po.transaction_date as datum, min(poi.schedule_date) as termin,
+			sum(poi.stock_qty) as bestellt, sum(poi.received_qty * poi.conversion_factor) as erhalten
+		from `tabPurchase Order Item` poi
+		join `tabPurchase Order` po on po.name = poi.parent
+		where poi.item_code = %(a)s and po.docstatus = 1 and po.status in %(offen)s
+		group by po.name, po.supplier, po.supplier_name, po.transaction_date
+		order by termin, po.name
+		limit 30
+		""",
+		{"a": artikel, "offen": BESTELLUNG_OFFEN},
+		as_dict=True,
+	)
+	if not zeilen:
+		return []
+	am_terminal = dict(
+		frappe.db.sql(
+			"""
+			select se.kt_bestellung, sum(sed.transfer_qty) from `tabStock Entry Detail` sed
+			join `tabStock Entry` se on se.name = sed.parent
+			where se.docstatus = 1 and sed.item_code = %(a)s and se.kt_bestellung in %(b)s
+			group by se.kt_bestellung
+			""",
+			{"a": artikel, "b": tuple(z.bestellung for z in zeilen)},
+		)
+	)
+	ergebnis = []
+	for z in zeilen:
+		offen = flt(z.bestellt) - flt(z.erhalten) - flt(am_terminal.get(z.bestellung))
+		if offen <= EPS:
+			continue
+		ergebnis.append(
+			{
+				"bestellung": z.bestellung,
+				"lieferant": z.lieferant,
+				"lieferantname": z.lieferantname,
+				"datum": formatdate(z.datum) if z.datum else None,
+				"termin": formatdate(z.termin) if z.termin else None,
+				"bestellt": flt(z.bestellt, 3),
+				"offen": flt(offen, 3),
+			}
+		)
+	return ergebnis
 
 
 def _lieferanten() -> list[dict]:
@@ -2003,8 +2060,11 @@ def wareneingang(
 	gebindeart: str | None = None,
 	pruefwerte=None,
 	etiketten=1,
+	bestellung: str | None = None,
 ) -> dict:
 	"""Wareneingang mit Lieferantencharge, ins Rohstofflager oder direkt ins Silo.
+
+	bestellung = Bestellung (Einkauf), zu der die Lieferung gehört. Optional; ohne Lieferant gilt der der Bestellung.
 
 	gebinde = Anzahl Gebinde (Sack, Fass, IBC, ...); menge ist dann die Menge JE Gebinde.
 	etiketten = 1: jedes Gebinde bekommt einen eigenen Code (Etikett) und wird in der Backstube gescannt.
@@ -2036,6 +2096,7 @@ def wareneingang(
 			_fehler(_("Auf diesem Etikett steht keine Charge im Strichcode. Bitte die Charge abtippen."))
 		lieferantencharge = g["charge"]
 	_pruefe_lieferantencharge(artikel, lieferantencharge)
+	lieferant = _pruefe_bestellung(bestellung, artikel, lieferant)
 	if frappe.get_cached_value("Item", artikel, "has_expiry_date") and not mhd:
 		_fehler(_("Bitte das MHD eingeben."))
 	if mhd:
@@ -2119,6 +2180,7 @@ def wareneingang(
 			"posting_date": jetzt.date(),
 			"posting_time": jetzt.time().strftime("%H:%M:%S"),
 			"kt_station": s.name,
+			"kt_bestellung": bestellung or None,
 			"items": zeilen,
 		}
 	)
@@ -2137,8 +2199,35 @@ def wareneingang(
 		"gesperrt": b.kt_status == "Gesperrt",
 		"sperrgrund": b.kt_sperrgrund,
 		"buchung": se.name,
+		"bestellung": bestellung or None,
 		"hinweise": pruef_hinweise + _meldungen(),
 	}
+
+
+def _pruefe_bestellung(bestellung: str | None, artikel: str, lieferant: str | None) -> str | None:
+	"""Bestellung muss offen sein, den Artikel enthalten und zum Lieferanten passen. Gibt den Lieferanten zurück."""
+	if not bestellung:
+		return lieferant
+	po = frappe.db.get_value("Purchase Order", bestellung, ["docstatus", "status", "supplier"], as_dict=True)
+	if not po or po.docstatus != 1:
+		_fehler(_("Bestellung {0} gibt es nicht oder sie ist nicht gebucht.").format(bestellung))
+	if po.status not in BESTELLUNG_OFFEN:
+		_fehler(_("Bestellung {0} ist nicht mehr offen ({1}).").format(bestellung, _(po.status)))
+	if not frappe.db.exists("Purchase Order Item", {"parent": bestellung, "item_code": artikel}):
+		_fehler(
+			_("In Bestellung {0} ist {1} nicht bestellt.").format(
+				bestellung, frappe.get_cached_value("Item", artikel, "item_name")
+			)
+		)
+	if lieferant and lieferant != po.supplier:
+		_fehler(
+			_("Bestellung {0} ist bei {1}, nicht bei {2}.").format(
+				bestellung,
+				frappe.get_cached_value("Supplier", po.supplier, "supplier_name"),
+				frappe.get_cached_value("Supplier", lieferant, "supplier_name"),
+			)
+		)
+	return po.supplier
 
 
 def _lieferpositionen(z, aus_verkauf=False):

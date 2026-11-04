@@ -269,6 +269,13 @@ Lieferanten-Etikett und landet bei derselben Charge. Ohne Charge im Strichcode d
 ein Etikett je Gebinde. Der Scanner muss das Trennzeichen FNC1 als ASCII 29 senden (Einstellung am Scanner),
 sonst kann eine Charge mitten im Code die folgenden Felder verschlucken.
 
+**Bestellung:** Gibt es offene Bestellungen (Einkauf) mit dem Artikel, steht unter dem Lieferanten eine Auswahl
+mit offener Menge und Termin. Bei nur einer ist sie vorgewählt. Die Bestellung setzt den Lieferanten, ein
+anderer Lieferant oder eine geschlossene Bestellung wird abgelehnt. Gespeichert wird sie an der Buchung
+(`Bestellung (Einkauf)`), sie steht in der Akte und in der Belegliste des Netzbilds. Offen ist bestellt minus
+Eingangsbelege minus Wareneingänge am Terminal zur Bestellung. Es bleibt ein Verweis: ERPNext zählt den
+Eingang an der Bestellung nicht als geliefert. Ist alles da, die Bestellung im Büro schließen.
+
 Gescannt werden Behälter-Codes, Silo-Namen, Paletten (NVE) oder Chargennummern. Jede Zeile wird beim Scannen
 geprüft (Rezept, Sperre, Verfall, Rework-Regel, Allergene, Bestand im Behälter/Silo). Stationen
 werden unter **Terminal Station** gepflegt (Typ und Lagerorte); `keks_trace.demo.stammdaten`
@@ -672,13 +679,15 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_einwaage` | Lagerort je Zutat (Quelllager der Stückliste vor Standardlager), Gebinde aus der Maßeinheit-Umrechnung |
 | `test_retour_hinweis` | Retour von der Linie ins Herkunftslager (Menge geprüft, Rest beim Auftragsende als Linienrest); Hinweise von Produktions- und Kundenauftrag; Tagesübersicht mit Aufträgen vom Vortag |
 | `test_versandkarton` | NVE aus dem Nummernkreis (fremde Kreise noch gesperrt); Versandkarton auf Palette mit Regeln und Protokoll, Etikett der Palette mit allem zusammen; ganze Palette liefern und Storno; einzelnen Karton von der Palette liefern; DHL-Pakete als Versandkartons mit Sendungsnummer je Karton |
+| `test_netz` | Netzbild: rückwärts bis zum Wareneingang, vorwärts bis zum Lieferschein, Kanten mit Menge; Belegliste Einkauf/Verkauf; Palette als Einstieg (auch versendet); gesperrt sichtbar |
+| `test_wareneingang_bestellung` | Wareneingang zu einer offenen Bestellung: Auswahl, offene Menge sinkt, Lieferant aus der Bestellung; falscher Lieferant, Artikel nicht bestellt, Bestellung geschlossen abgelehnt; Verweis in Akte und Belegliste |
 
 Die Tests rollen ihre Daten am Ende zurück. Demo-Funktionen committen nur außerhalb von Tests
 (`utils.demo_commit`); vorher schrieb ein Demo-Aufruf mitten in einem Test dessen Daten fest.
 
 ## Bewusst noch nicht enthalten
 
-Waagenanbindung, Druckerstatus (Papier leer), Wareneingang über Bestellungen, eigene Kasse mit TSE und Kundendisplay,
+Waagenanbindung, Druckerstatus (Papier leer), Wareneingang als Eingangsbeleg zur Bestellung (am Terminal nur Verweis), eigene Kasse mit TSE und Kundendisplay,
 Abweichungsmanagement/CAPA, SOPs und Schulungsnachweise.
 
 ## Offene fachliche Annahmen (von der QS zu bestätigen)

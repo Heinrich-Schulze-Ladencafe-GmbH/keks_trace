@@ -18,6 +18,10 @@ gemeinsam durchgehen.</p>
 <tr><td>N7</td><td>Retour: Unbenutztes von der Linie zurück ins Lager</td><td>QS, Linie</td></tr>
 <tr><td>N8</td><td>Hinweis vom Büro am Auftrag</td><td>Büro</td></tr>
 <tr><td>N9</td><td>Tagesübersicht</td><td>Büro, Schichtleitung</td></tr>
+<tr><td>N10</td><td>Verladung nach Kundenauftrag (Maske wie FOBIS)</td><td>Versand</td></tr>
+<tr><td>N11</td><td>Versandkarton mit eigener NVE</td><td>Versand, QS</td></tr>
+<tr><td>N12</td><td>Netzbild der Rückverfolgung mit Belegliste</td><td>QS, Büro</td></tr>
+<tr><td>N13</td><td>Wareneingang zu einer Bestellung</td><td>Lager, Einkauf</td></tr>
 </table>""")
 	t.append(aufgabe(
 		"N1", "Nachdruck mit Grund und Druckprotokoll",
@@ -87,14 +91,15 @@ gemeinsam durchgehen.</p>
 		"N6", "Einwaage wie bei FOBIS",
 		"Beim Herstellen sehen, was bestellt, erledigt und noch zu tun ist – und in Sack oder Eimer zählen.",
 		["Terminal Backstube → Herstellen → ein Rezept wählen, Sollmenge bestätigen.",
-		 "Die Liste zeigt je Zutat <b>Bestellt</b>, <b>Erledigt</b>, <b>ToDo</b>; darunter klein den Lagerort und das Gebinde (z. B. „Sack 25 kg“).",
+		 "Ab Surface-Breite ist die Maske zweispaltig: <b>links</b> die Zutaten mit <b>Bestellt</b>, <b>Erledigt</b>, <b>ToDo</b> "
+		 "und Lagerort, darunter die angetippte Zutat groß mit ihren Registrierungen; <b>rechts</b> Herkunft, Eingabe und Ziel.",
 		 "Eine Zutat mit Gebinde scannen: Das Terminal fragt „Wie viele Sack?“ und zeigt darunter „= 50 kg“. Umschalten auf kg geht immer.",
 		 "Dieselbe Zutat aus zwei Säcken scannen: Erledigt zählt zusammen."],
 		"Erledigte Zeilen werden grün, außerhalb der Toleranz orange. Gebucht wird in kg.",
 		"Gebinde kommen aus der <b>Maßeinheit-Umrechnung</b> am Artikel (z. B. Sack = 25), der Lagerort aus dem "
 		"<b>Quelllager</b> der Stückliste oder dem <b>Standardlager</b> des Artikels. Fehlt beides, steht nichts da – "
 		"dann bitte melden, welche Angaben fehlen."))
-	t.append(bild("11_einwaage_gebinde.png", "Bild 12: Einwaage mit Bestellt / Erledigt / ToDo; Honig gescannt, gefragt wird in Eimern.", "58%"))
+	t.append(bild("11_einwaage_gebinde.png", "Bild 12: Einwaage: links die Zutaten, rechts Herkunft und Eingabe; Honig gescannt, gefragt wird in Eimern.", "80%"))
 	t.append("</div>")
 
 	t.append("<div>")
@@ -129,5 +134,67 @@ gemeinsam durchgehen.</p>
 		 "Mit <b>Vortag</b> und <b>Folgetag</b> blättern."],
 		"Heute stehen auch Aufträge von früheren Tagen dabei, die noch freigegeben sind oder laufen („vom …“), damit nichts liegen bleibt.", ""))
 	t.append(bild("13_tagesuebersicht.png", "Bild 15: Tagesübersicht mit Status, Hinweis und Fortschritt.", "68%"))
+	t.append("</div>")
+
+	t.append("<div>")
+	t.append(aufgabe(
+		"N10", "Verladung nach Kundenauftrag",
+		"Beim Verladen sehen, was bestellt, schon verladen und noch offen ist – wie in FOBIS.",
+		["Terminal Versand → <b>Lieferung</b> → Kunde → einen <b>Kundenauftrag</b> wählen.",
+		 "Links stehen alle Positionen mit Bestellt, Erledigt, ToDo und Status (Neu, Aktiv, Fertig). Eine Zeile antippen: "
+		 "darunter steht sie groß, mit den Registrierungen.",
+		 "Rechts unter <b>Herkunft</b> eine Palette, einen Versandkarton oder ein Kartonetikett scannen.",
+		 "Mit ✕ eine Registrierung zurücknehmen. Zum Schluss <b>Lieferschein buchen</b>."],
+		"ToDo sinkt mit jedem Scan; fertige Positionen werden grün. Ein Artikel, der nicht im Auftrag steht, wird abgelehnt.",
+		"Ohne Kundenauftrag bleibt die einfache Lieferung wie bisher."))
+	t.append(bild("16_verladung.png", "Bild 16: Verladung: links die Positionen des Auftrags, rechts Herkunft und Ziel.", "80%"))
+	t.append(aufgabe(
+		"N11", "Versandkarton mit eigener NVE",
+		"Ein Karton bekommt eine eigene NVE, kann auf eine Palette mit NVE und einzeln geliefert werden.",
+		["ERPNext → Paletten → <b>+ Neuer Versandkarton</b>, Kartons eines Loses laden, Etikett drucken.",
+		 "Am Versandkarton <b>Auf eine Palette stellen</b> und die Paletten-NVE scannen.",
+		 "Info-Scan auf die Palette: Sie zeigt ihre Versandkartons; ihr Etikett zeigt alles zusammen.",
+		 "Einen einzelnen Karton liefern: in der Lieferung seine NVE scannen. Danach die ganze Palette liefern."],
+		"Beim einzelnen Karton bleibt die Palette im Lager, der Karton steht nicht mehr auf ihr. Bei der ganzen Palette "
+		"stehen im Lieferschein die NVEs der Kartons. Jedes Auf- und Abnehmen steht im Protokoll <b>Versandkarton Zuordnung</b>.",
+		"DHL: Lieferung (DHL) → Auftrag → „Pakete als Versandkarton mit NVE“. Je Paket Stück und Gewicht; jede gescannte "
+		"Sendungsnummer kommt an den nächsten Karton ohne Nummer."))
+	t.append("</div>")
+
+	t.append("<div>")
+	t.append(aufgabe(
+		"N12", "Netzbild der Rückverfolgung",
+		"Auf einen Blick sehen, woraus ein Los besteht und wohin es ging – bis zum Kunden. Für Audit und Rückruf.",
+		["Im Browser <code>/netz</code> öffnen oder in der Akte bei einem Los <b>Netzbild: woher und wohin</b>.",
+		 "Ein Los, eine Charge oder eine Palette eingeben oder scannen, <b>Zeichnen</b>.",
+		 "Einen Kasten anklicken: Der Weg wird blau, der Rest blass. An den Linien steht die Menge; rechts stehen "
+		 "Wareneingang, Freigabe, Herstellung, Prüfungen und wo das Los jetzt liegt.",
+		 "<b>Von hier aus zeichnen</b>, z. B. bei einem Rohstoff: Dann sieht man alle Kunden, die ihn bekommen haben.",
+		 "Unten <b>Belege in der Kette</b>: Einkauf und Verkauf, als CSV oder zum Drucken."],
+		"Das gewählte Los steht in der Mitte, links die Herkunft, rechts die Verwendung. Rot heißt gesperrt, orange heißt "
+		"Prüfung mit Abweichung, gestrichelt heißt „möglicherweise enthalten“ (Silo). Packmittel sind gebündelt "
+		"(„Packmittel (6)“), ein Klick klappt sie auf.",
+		"Für den großen Bildschirm oder das Surface gedacht. Am Handy geht es, ist aber eng – dort ist die Akte besser."))
+	t.append(bild("17_netzbild.png", "Bild 17: Netzbild. Ein Grundteig ist angeklickt: sein Weg ist hervorgehoben, rechts die Details.", "100%"))
+	t.append("</div>")
+	t.append("<div>")
+	t.append(bild("18_netz_belege.png", "Bild 18: Packmittel aufgeklappt, darunter die Belege in der Kette (Einkauf und Verkauf).", "92%"))
+	t.append("</div>")
+
+	t.append("<div>")
+	t.append(aufgabe(
+		"N13", "Wareneingang zu einer Bestellung",
+		"Beim Wareneingang festhalten, zu welcher Bestellung die Lieferung gehört.",
+		["Im Büro eine Bestellung (Einkauf) anlegen und buchen, z. B. 100 kg Salz.",
+		 "Terminal Lager → <b>Wareneingang</b> → den Artikel wählen.",
+		 "Unter <b>Bestellung</b> stehen die offenen Bestellungen mit dem Artikel, mit offener Menge und Termin. "
+		 "Gibt es nur eine, ist sie schon gewählt. Die Bestellung setzt den Lieferanten.",
+		 "40 kg buchen. Den Wareneingang wieder öffnen: offen sind noch 60 kg.",
+		 "Im Netzbild oder in der Akte das Los ansehen."],
+		"Die Bestellung steht am Wareneingang, in der Akte und in der Belegliste des Netzbilds. Passt der Lieferant nicht "
+		"zur Bestellung oder ist sie geschlossen, bucht das Terminal nicht.",
+		"Die Bestellung ist nur ein Verweis. In ERPNext zählt sie den Eingang nicht als geliefert (das tut nur ein "
+		"Eingangsbeleg). Ist alles da, die Bestellung im Büro schließen."))
+	t.append(bild("19_wareneingang_bestellung.png", "Bild 19: Wareneingang mit Auswahl der offenen Bestellung.", "70%"))
 	t.append("</div>")
 	return t

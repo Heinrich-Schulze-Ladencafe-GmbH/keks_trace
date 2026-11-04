@@ -342,6 +342,16 @@ CUSTOM_FIELDS = {
 			"description": "Für diesen Kundenauftrag verpackt (Terminal Verpackung).",
 		},
 		{
+			"fieldname": "kt_bestellung",
+			"label": "Bestellung (Einkauf)",
+			"fieldtype": "Link",
+			"options": "Purchase Order",
+			"read_only": 1,
+			"insert_after": "kt_kundenauftrag",
+			"description": "Wareneingang am Terminal zu dieser Bestellung. Nur Verweis: die Bestellung zählt den Eingang "
+			"nicht als geliefert (das tut nur ein Eingangsbeleg).",
+		},
+		{
 			"fieldname": "kt_rezept_abweichung",
 			"label": "Rezept-Abweichung",
 			"fieldtype": "Small Text",

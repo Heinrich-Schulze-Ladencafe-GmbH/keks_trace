@@ -415,7 +415,7 @@ def _wareneingang(charge: str) -> dict | None:
 		return None
 	z = z[0]
 	lieferant = frappe.db.get_value("Batch", charge, "supplier")
-	lieferschein = station = None
+	lieferschein = station = bestellung = None
 	if z.typ == "Purchase Receipt":
 		pr = (
 			frappe.db.get_value(
@@ -424,8 +424,11 @@ def _wareneingang(charge: str) -> dict | None:
 			or frappe._dict()
 		)
 		lieferant, lieferschein = pr.supplier or lieferant, pr.supplier_delivery_note
+		bestellung = frappe.db.get_value(
+			"Purchase Receipt Item", {"parent": z.beleg, "purchase_order": ["is", "set"]}, "purchase_order"
+		)
 	else:
-		station = frappe.db.get_value("Stock Entry", z.beleg, "kt_station")
+		station, bestellung = frappe.db.get_value("Stock Entry", z.beleg, ["kt_station", "kt_bestellung"])
 	return {
 		"beleg": z.beleg,
 		"zeit": _zeit(z.zeit),
@@ -437,6 +440,7 @@ def _wareneingang(charge: str) -> dict | None:
 		if lieferant
 		else None,
 		"lieferschein": lieferschein,
+		"bestellung": bestellung,
 	}
 
 
