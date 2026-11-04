@@ -104,6 +104,10 @@ if [ "$UPDATE" -eq 1 ]; then
 	fi
 	schritt "Datenbank anpassen und Oberfläche bauen"
 	als_frappe "bench --site ${SITE} migrate && bench build --app keks_trace && bench --site ${SITE} clear-cache"
+	# Demosystem: Scheduler an, damit der Demo-Tag jeden Morgen um 4:30 Uhr frisch vorbereitet wird
+	if [ -f "$BENCH/sites/$SITE/private/.kt_demo_fertig" ]; then
+		als_frappe "bench --site ${SITE} scheduler enable" >/dev/null
+	fi
 	supervisorctl restart all >/dev/null
 	schritt "Fertig: $(als_frappe 'git -C apps/keks_trace log --oneline -1')"
 	exit 0
@@ -315,6 +319,10 @@ if [ "$DEMO" -eq 1 ] && [ ! -f "$MARKE" ]; then
 	demo demo_erechnung.einrichten
 	demo demo_erechnung.datev        # DATEV-Testfirma mit SKR04-Kontonummern und Beispielbelegen
 	sudo -u "$BENCH_USER" touch "$MARKE"
+fi
+if [ -f "$MARKE" ]; then
+	demo demo_tag.vorbereiten   # Stand für heute und Drehbuch unter /demo
+	als_frappe "bench --site ${SITE} scheduler enable" >/dev/null   # danach jeden Morgen um 4:30 Uhr
 fi
 
 # ---------------------------------------------------------------------------
