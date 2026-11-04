@@ -1,0 +1,185 @@
+{% extends "templates/base.html" %}
+{% block title %}Demo{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block style %}
+<style>
+	:root {
+		color-scheme: light;
+		--bg: #f3f5f8; --flaeche: #fff; --linie: #e3e7ee; --text: #18202b; --leise: #667085; --akzent: #2563eb;
+		--gruen: #079455; --gruen-hell: #ecfdf3; --orange: #dc6803; --orange-hell: #fffaeb; --rot: #d92d20; --rot-hell: #fef3f2;
+		--schatten: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .10);
+	}
+	html, body { background: var(--bg) !important; color: var(--text); margin: 0; }
+	body { font: 15.5px/1.5 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+	* { box-sizing: border-box; }
+	.seite { max-width: 980px; margin: 0 auto; padding: 24px 16px 60px; }
+	h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -.02em; }
+	.unter { color: var(--leise); margin: 0 0 20px; }
+	.karte { background: var(--flaeche); border: 1px solid var(--linie); border-radius: 14px; box-shadow: var(--schatten); padding: 18px 20px; margin-bottom: 14px; }
+	.stand { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+	.stand .text { flex: 1 1 320px; }
+	.ampel { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: 1px; }
+	.ampel.gruen { background: var(--gruen); } .ampel.orange { background: var(--orange); } .ampel.rot { background: var(--rot); }
+	.btn { font: inherit; font-weight: 600; padding: 9px 15px; border-radius: 10px; border: 1px solid var(--linie); background: #fff; color: var(--text); cursor: pointer; text-decoration: none; display: inline-block; white-space: nowrap; }
+	.btn:hover { background: #f7f8fa; }
+	.btn.primaer { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+	.btn.klein { padding: 5px 11px; font-size: 13.5px; }
+	.btn[disabled] { opacity: .5; cursor: default; }
+	.fakten { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 14px; }
+	.fakt { background: #f9fafb; border-radius: 10px; padding: 10px 12px; }
+	.fakt small { display: block; color: var(--leise); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+	.fakt b { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+	.zeitleiste { display: flex; gap: 4px; margin: 6px 0 18px; }
+	.zeitleiste div { height: 6px; border-radius: 3px; background: #c7d7fe; }
+	.zeitleiste div.hoch { background: var(--akzent); }
+	.schritt { display: grid; grid-template-columns: 56px 1fr; gap: 14px; }
+	.schritt .nr { width: 44px; height: 44px; border-radius: 12px; background: #eff4ff; color: var(--akzent); font-weight: 750; display: grid; place-items: center; font-size: 18px; }
+	.schritt.hoch .nr { background: var(--akzent); color: #fff; }
+	.schritt h2 { font-size: 18px; margin: 2px 0 2px; letter-spacing: -.01em; }
+	.wo { color: var(--leise); font-size: 13.5px; }
+	.schritt ol { margin: 10px 0 6px; padding-left: 20px; }
+	.schritt li { margin: 3px 0; }
+	.sagen { border-left: 3px solid var(--akzent); background: #f5f8ff; padding: 8px 12px; border-radius: 0 8px 8px 0; margin: 10px 0 4px; font-size: 14.5px; }
+	.sagen::before { content: "Sagen: "; font-weight: 700; color: var(--akzent); }
+	.achtung { border-left: 3px solid var(--orange); background: var(--orange-hell); padding: 8px 12px; border-radius: 0 8px 8px 0; margin: 8px 0 4px; font-size: 14px; }
+	.links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+	code, .wert { background: #f2f4f7; border-radius: 6px; padding: 1px 6px; font-size: 13.5px; font-family: ui-monospace, Consolas, monospace; }
+	.meldung { padding: 10px 12px; border-radius: 10px; margin-top: 12px; }
+	.meldung.rot { background: var(--rot-hell); color: #912018; }
+	.meldung.orange { background: var(--orange-hell); color: #93370d; }
+	@media print { .btn, .links, #knoepfe { display: none !important; } .karte { box-shadow: none; break-inside: avoid; } body { font-size: 13px; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="seite" id="demo" data-darf="{{ darf }}">
+	<h1>Demo-Drehbuch</h1>
+	<p class="unter">Keks Trace für GL und QS · etwa 15 Minuten · Höhepunkt ist der Rückruf in Schritt 6.</p>
+	<section class="karte stand" id="stand"><div class="text">Lädt …</div></section>
+	<div id="drehbuch"></div>
+</div>
+{% endblock %}
+{% block script %}
+{% raw %}<script>
+(function () {
+	"use strict";
+	const $ = (id) => document.getElementById(id);
+	const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+	const darf = $("demo").dataset.darf === "1";
+	const zahl = (n) => Number(n || 0).toLocaleString("de-DE", { maximumFractionDigits: 3 });
+	let warte = null;
+
+	async function api(methode, args, post) {
+		const r = await fetch("/api/method/keks_trace.demo_tag." + methode + (post ? "" : "?" + new URLSearchParams(args || {})), {
+			method: post ? "POST" : "GET",
+			headers: { Accept: "application/json", "Content-Type": "application/json", "X-Frappe-CSRF-Token": window.csrf_token || (window.frappe && frappe.csrf_token) || "" },
+			body: post ? JSON.stringify(args || {}) : undefined,
+		});
+		let d = {};
+		try { d = await r.json(); } catch (e) { /* leer */ }
+		if (!r.ok) {
+			let text = "Fehler " + r.status;
+			try { text = JSON.parse(JSON.parse(d._server_messages)[0]).message; } catch (e) { if (d.exception) text = d.exception; }
+			throw new Error(String(text).replace(/<[^>]+>/g, ""));
+		}
+		return d.message;
+	}
+
+	function standZeigen(s) {
+		let ampel, text;
+		if (s.laeuft) { ampel = "orange"; text = `Wird gerade vorbereitet (seit ${esc(s.laeuft)}). Das dauert ein bis zwei Minuten …`; }
+		else if (s.heute) { ampel = "gruen"; text = `Für heute vorbereitet um ${esc(s.zeit)}.`; }
+		else if (s.datum) { ampel = "orange"; text = `Zuletzt vorbereitet am ${esc(s.zeit)}. Für eine Demo bitte heute neu vorbereiten.`; }
+		else { ampel = "rot"; text = "Noch nicht vorbereitet."; }
+		const knoepfe = darf && s.erlaubt ? `<div id="knoepfe" class="links">
+			<button class="btn primaer" data-a="start" ${s.laeuft ? "disabled" : ""}>${s.heute ? "Noch einmal prüfen" : "Für heute vorbereiten"}</button>
+			${s.heute ? `<button class="btn" data-a="neu" ${s.laeuft ? "disabled" : ""}>Neues Herz bis zum Kunden</button>` : ""}</div>` : "";
+		const d = s.durchlauf || {};
+		$("stand").innerHTML = `<div class="text"><span class="ampel ${ampel}"></span><b>${text}</b>
+			${!s.erlaubt ? `<div class="meldung orange">Das ist kein Demosystem. Vorbereiten geht nur auf dem Testserver.</div>` : ""}
+			${s.fehler ? `<div class="meldung rot">Letzter Versuch fehlgeschlagen: ${esc(s.fehler)}</div>` : ""}
+			${s.datum ? `<div class="fakten">
+				<div class="fakt"><small>Kundenauftrag</small><b>${esc(s.kundenauftrag)}</b><br>${esc(s.kunde || "")}</div>
+				<div class="fakt"><small>Bestellung Puderzucker</small><b>${esc(s.bestellung)}</b><br>offen ${esc(zahl(s.bestellung_offen))} kg</div>
+				<div class="fakt"><small>Für den Rückruf</small>Puderzucker <b>${esc(d.puderzucker || "")}</b><br>bis ${esc(s.kunde_durchlauf || "")}</div>
+				<div class="fakt"><small>Fertiges Los</small><b>Los ${esc(d.los || "")}</b><br>Lieferschein ${esc(d.lieferschein || "")}</div>
+			</div>` : ""}</div>${knoepfe}`;
+		$("stand").querySelectorAll("[data-a]").forEach((b) => b.addEventListener("click", () => starten(b.dataset.a === "neu" ? 1 : 0)));
+		drehbuch(s);
+		clearTimeout(warte);
+		if (s.laeuft) warte = setTimeout(laden, 4000);
+	}
+	async function laden() {
+		try { standZeigen(await api("stand")); }
+		catch (e) { $("stand").innerHTML = `<div class="meldung rot">${esc(e.message)}</div>`; }
+	}
+	async function starten(neu) {
+		try { await api("starten", { neu }, true); laden(); }
+		catch (e) { $("stand").insertAdjacentHTML("beforeend", `<div class="meldung rot">${esc(e.message)}</div>`); }
+	}
+
+	// ------------------------------------------------------------------ Drehbuch
+	const t = (station) => `/terminal?station=${encodeURIComponent(station)}`;
+	function schritt(nr, titel, wo, minuten, inhalt, links, hoch) {
+		return `<section class="karte schritt${hoch ? " hoch" : ""}"><div class="nr">${nr}</div><div>
+			<h2>${titel}</h2><div class="wo">${[wo, minuten ? minuten + " Min." : ""].filter(Boolean).join(" · ")}</div>${inhalt}
+			${links && links.length ? `<div class="links">${links.map(([text, url]) => `<a class="btn klein" href="${esc(url)}" target="_blank">${esc(text)}</a>`).join("")}</div>` : ""}
+		</div></section>`;
+	}
+	function drehbuch(s) {
+		const d = s.durchlauf || {};
+		const w = (x, ersatz) => `<span class="wert">${esc(x || ersatz)}</span>`;
+		const teile = [
+			[1, 2], [2, 3], [3, 3], [4, 1], [5, 2], [6, 4, true],
+		];
+		$("drehbuch").innerHTML =
+			`<div class="zeitleiste">${teile.map(([, m, h]) => `<div class="${h ? "hoch" : ""}" style="flex:${m}"></div>`).join("")}</div>` +
+			schritt(0, "Vorher (5 Minuten vor Beginn)", "Büro", 0, `<ol>
+				<li>Oben „Für heute vorbereitet“ prüfen. Wenn nicht grün: <b>Für heute vorbereiten</b>.</li>
+				<li>Drei Geräte: <b>Surface</b> mit dem Terminal, <b>Laptop/Beamer</b> mit ERPNext und Netzbild, <b>Handy</b> mit der Akte.</li>
+				<li>Am Terminal einmal <code>Strg+F5</code>, damit die neue Seite geladen ist.</li></ol>`) +
+			schritt(1, "Der Auftrag kommt rein", "ERPNext, Büro", 2, `<ol>
+				<li>Kundenauftrag ${w(s.kundenauftrag, "…")} öffnen: Herzen in Stück, je Größe und Spruch.</li>
+				<li>Feld <b>Hinweis an Produktion und Verpackung</b> zeigen: Der Text erscheint später am Terminal beim Auftrag.</li></ol>
+				<div class="sagen">Das Büro arbeitet in ERPNext wie bisher. Was die Produktion wissen muss, hängt am Auftrag – kein Zettel.</div>`,
+				[["Kundenauftrag öffnen", "/app/sales-order/" + (s.kundenauftrag || "")]]) +
+			schritt(2, "Wareneingang zur Bestellung", "Terminal, Station Lager", 3, `<ol>
+				<li><b>Wareneingang</b> → Artikel <b>Puderzucker</b> antippen.</li>
+				<li>Bestellung ${w(s.bestellung, "…")} ist schon gewählt, der Lieferant auch.</li>
+				<li>Charge des Lieferanten eintippen, z. B. <code>PZ-DEMO-1</code>. MHD als Ziffern, z. B. <code>300627</code>. Menge 25 kg, ein Sack. <b>Buchen</b>.</li>
+				<li>Zum Zeigen einmal ein MHD von gestern tippen: Das Terminal nimmt die Ware nicht an.</li></ol>
+				<div class="sagen">Jede Lieferung bekommt ihre Charge, ihr MHD und ihre Bestellung. Abgelaufene Ware kommt gar nicht erst rein.</div>`,
+				[["Terminal Lager", t("Lager")], ["Bestellung ansehen", "/app/purchase-order/" + (s.bestellung || "")]]) +
+			schritt(3, "Einwaage: Zuckerguss anmischen", "Terminal, Station Herzen Garnieren", 3, `<ol>
+				<li><b>Herstellen</b> → <b>Zuckerglasur</b> → Sollmenge 10 kg bestätigen.</li>
+				<li>Die Maske zeigen: links die Zutaten mit <b>Bestellt / Erledigt / ToDo</b>, rechts Herkunft und Eingabe, Ziffernblock fest rechts.</li>
+				<li>Puderzucker antippen → <b>Charge wählen</b> → die Charge von eben. Menge 9,5. Dann Eiweiß 0,5. <b>Weiter zum Buchen</b>.</li></ol>
+				<div class="sagen">Der Puderzucker von eben steckt jetzt nachweisbar im Guss. Niemand schreibt etwas ab.</div>`,
+				[["Terminal Herzen Garnieren", t("Herzen Garnieren")]]) +
+			schritt(4, "Was läuft heute?", "Terminal, beliebige Station", 1, `<ol>
+				<li><b>Tagesübersicht</b>: je Linie die Aufträge mit Status, Hinweis und Fortschritt.</li></ol>`,
+				[["Terminal Herzen Garnieren", t("Herzen Garnieren")]]) +
+			schritt(5, "Verladung nach Auftrag", "Terminal, Station Versand", 2, `<ol>
+				<li><b>Lieferung</b> → Kunde ${w(s.kunde, "…")} → Auftrag ${w(s.kundenauftrag, "…")}.</li>
+				<li>Links die Positionen mit Bestellt, Erledigt, ToDo und Status. Eine Zeile antippen: groß darunter.</li>
+				<li>Nur zeigen, nicht buchen – die Herzen dafür sind noch nicht verpackt.</li></ol>
+				<div class="sagen">Wie FOBIS, nur dass jede gescannte Palette und jeder Versandkarton mit NVE sofort im Lieferschein und in der Rückverfolgung steht.</div>`,
+				[["Terminal Versand", t("Versand")]]) +
+			schritt(6, "Rückruf: Wo ist der Puderzucker hin?", "Netzbild, Laptop · Akte, Handy", 4, `<ol>
+				<li>Netzbild für den Puderzucker ${w(d.puderzucker, "…")} öffnen (heute früh vorbereitet, vom Wareneingang bis zum Kunden).</li>
+				<li>Den Puderzucker anklicken: Der Weg wird blau – Guss, garnierte Herzen, Los ${w(d.los, "…")}, Lieferschein an ${w(s.kunde_durchlauf, "…")}.</li>
+				<li>Unten <b>Belege in der Kette</b>: Einkauf und Verkauf, als CSV für die Behörde oder den Kunden.</li>
+				<li>Am Handy die <b>Akte</b> öffnen und das Los ${w(d.los, "…")} eintippen: Herkunft und Verbleib in der Tasche.</li></ol>
+				<div class="sagen">Vom Sack Puderzucker bis zum Kunden in einer Minute, nicht in einem halben Tag. Das ist die Frage, die IFS und jeder Rückruf stellen.</div>
+				<div class="achtung">Nicht live sperren, wenn danach noch jemand am Terminal weiterarbeiten will: Eine Sperre gilt sofort überall.</div>`,
+				[["Netzbild Puderzucker", "/netz?code=" + encodeURIComponent(d.puderzucker || "")], ["Netzbild Fertigware", "/netz?code=" + encodeURIComponent(d.charge || "")],
+				 ["Akte", "/akte?code=" + encodeURIComponent(d.charge || "")]], true) +
+			schritt(7, "Zum Schluss", "", 1, `<ol>
+				<li>Testhandbuch zeigen: Jeder kann es selbst durchspielen und Fehler melden.</li>
+				<li>Fragen aufschreiben – als Anfrage in ERPNext.</li></ol>`);
+	}
+
+	laden();
+})();
+</script>{% endraw %}
+{% endblock %}

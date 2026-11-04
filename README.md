@@ -235,9 +235,14 @@ Die Knöpfe sind je Station einstellbar (**Terminal Station**: Haken je Funktion
 Stufen); der Typ belegt sie nur vor. Der Server prüft bei jeder Buchung, ob die Station die
 Funktion darf.
 
-Eine Bildschirmtastatur unten schreibt in das angetippte Feld: Ziffern bei Mengen und Datum
-(MHD als `300628` oder `30.06.28`), Buchstaben bei Text. OK springt ins nächste Feld, ▾ blendet
-sie aus. Der Scanner wird an der Tippgeschwindigkeit erkannt: ein Scan landet immer im Scanfeld,
+Eine Bildschirmtastatur schreibt in das angetippte Feld: Ziffern bei Mengen und Datum
+(MHD als `300628` oder `30.06.28`), Buchstaben bei Text. OK springt ins nächste Feld.
+
+**Ab 1000 px (Surface, Terminal) steht der Ziffernblock fest rechts**, wie bei FOBIS. Er wird nicht ein-
+und ausgeblendet, der Inhalt springt nicht. Ohne aktives Feld gehen die Ziffern ins Scanfeld. Auch Scan- und
+Suchfelder starten mit Ziffern (dort ist „,“ ein „-“); **ABC** schaltet auf Buchstaben, **123** zurück.
+Reine Freitextfelder (Grund, Bemerkung) starten mit Buchstaben. Ohne Feld auf dem Bildschirm ist der Block
+blass. Am Handy (unter 1000 px) erscheint die Tastatur wie bisher nur bei Bedarf, ▾ blendet sie aus. Der Scanner wird an der Tippgeschwindigkeit erkannt: ein Scan landet immer im Scanfeld,
 auch wenn gerade ein Mengenfeld aktiv ist (dessen Inhalt bleibt). Echte Tastatur geht immer.
 
 ### Maske wie bei FOBIS (Einwaage und Verladung)
@@ -591,6 +596,29 @@ MHD-Begrenzung durch die Füllung (MHD = MHD des Nougats statt Backtag + 270 Tag
 
 > Nur auf einem Testsystem ausführen. Die Demo bucht echte Lagerbewegungen.
 
+### Demo-Tag und Drehbuch (`/demo`)
+
+```bash
+bench --site <site> execute keks_trace.demo_tag.vorbereiten   # oder auf /demo: „Für heute vorbereiten“
+```
+
+Legt jeden Morgen einen sauberen Demostand an, alle Daten relativ zu heute:
+
+1. Zuckerguss-Tank leer melden und frisch anmischen (Haltbarkeit 2 Tage; alter Guss würde das Garnieren
+   blockieren).
+2. Herzen-Stammdaten, Kundenaufträge (mit Hinweis an die Produktion) und Vorrat auffüllen.
+3. Eine offene Bestellung Puderzucker für heute: In der Demo wird der Wareneingang dazu live gebucht.
+4. Ein Herz komplett bis zum Kunden. Daran zeigt die QS den Rückruf im Netzbild. Am selben Tag wird es
+   nicht noch einmal angelegt („Neues Herz bis zum Kunden“ erzwingt es).
+
+Die Seite **`/demo`** zeigt den Stand von heute und das **Drehbuch** für GL und QS (etwa 15 Minuten, sieben
+Schritte mit Klicks, „Sagen:“-Sätzen und Direktlinks). Vorbereiten dürfen nur System Manager und nur auf
+einem Demosystem: Marke der Testserver-Einrichtung (`private/.kt_demo_fertig`) oder `developer_mode`. Auf
+dem Testserver läuft es zusätzlich jeden Morgen um 4:30 Uhr von selbst (Scheduler); auf anderen Systemen tut
+der Job nichts.
+
+Terminal-Direktlink: `/terminal?station=Lager` setzt die Station und öffnet sie.
+
 ### Herzen-Demo ohne viel Klicken
 
 ```bash
@@ -681,6 +709,7 @@ bench --site keks.localhost run-tests --module keks_trace.tests.test_rework_kett
 | `test_versandkarton` | NVE aus dem Nummernkreis (fremde Kreise noch gesperrt); Versandkarton auf Palette mit Regeln und Protokoll, Etikett der Palette mit allem zusammen; ganze Palette liefern und Storno; einzelnen Karton von der Palette liefern; DHL-Pakete als Versandkartons mit Sendungsnummer je Karton |
 | `test_netz` | Netzbild: rückwärts bis zum Wareneingang, vorwärts bis zum Lieferschein, Kanten mit Menge; Belegliste Einkauf/Verkauf; Palette als Einstieg (auch versendet); gesperrt sichtbar |
 | `test_wareneingang_bestellung` | Wareneingang zu einer offenen Bestellung: Auswahl, offene Menge sinkt, Lieferant aus der Bestellung; falscher Lieferant, Artikel nicht bestellt, Bestellung geschlossen abgelehnt; Verweis in Akte und Belegliste |
+| `test_demo_tag` | Demo-Tag: offene Bestellung, ein Herz bis zum Kunden, frischer Guss im Tank, Hinweis am Auftrag; zweiter Lauf am selben Tag nimmt den vorhandenen; ohne Marke tut der Morgenjob nichts |
 
 Die Tests rollen ihre Daten am Ende zurück. Demo-Funktionen committen nur außerhalb von Tests
 (`utils.demo_commit`); vorher schrieb ein Demo-Aufruf mitten in einem Test dessen Daten fest.

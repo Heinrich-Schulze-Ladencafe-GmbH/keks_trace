@@ -85,6 +85,7 @@
 			border: 1px solid var(--rand); border-radius: 6px; }
 		#tasten.zahl button { min-height: 74px; }
 		#kt.blockrechts > *:not(.kopf) { max-width: calc(100% - 384px); }
+		#tasten.leer button { opacity: .45; }
 	}
 	/* Arbeitsmaske wie bei FOBIS: links Positionen und die gewählte groß, rechts Herkunft, Ziel und Eingabe.
 	   Der Ziffernblock dockt unten rechts an (wie bei FOBIS); darüber bleibt die rechte Spalte frei scrollbar. */
@@ -137,6 +138,7 @@
 	.tab a, .tab .code { color: #1a55c4; text-decoration: underline; }
 	/* Einwaage wie bei FOBIS: Bestellt / Erledigt / ToDo je Zutat */
 	.einwaage { overflow-x: auto; }
+	.einwaage td.z { white-space: normal; min-width: 90px; }
 	.einwaage .tab { margin-top: 0; font-size: 18px; }
 	.einwaage .tab th, .einwaage .tab td { padding: 8px; }
 	.einwaage td { vertical-align: top; }
@@ -469,43 +471,84 @@
 	document.addEventListener("pointerdown", (e) => { angetippt = e.target.closest("input[data-art]"); gedrueckt = true; }, true);
 	document.addEventListener("pointerup", () => { gedrueckt = false; losgelassen = performance.now(); }, true);
 	document.addEventListener("pointercancel", () => { gedrueckt = false; losgelassen = performance.now(); }, true);
+	// Breiter Bildschirm (Surface, Terminal): Ziffernblock FEST rechts wie bei FOBIS – kein Ein- und Ausblenden,
+	// der Inhalt springt nicht. Ohne aktives Feld gehen die Ziffern ins Scanfeld (Suchen über Nummern).
+	// Auch Scan- und Textfelder bekommen erst die Ziffern; „ABC“ schaltet auf Buchstaben, „123“ zurück.
+	// Schmaler Bildschirm (Handy): wie bisher, Tastatur nur bei Bedarf.
+	const fest = () => window.innerWidth >= 1000;
+	let abc = false; // Buchstaben gewünscht (nur für das aktuelle Feld)
+	function aktivesFeld() {
+		const f = document.activeElement;
+		return f && f.dataset && f.dataset.art && app.contains(f) ? f : null;
+	}
+	function zielFeld() {
+		const sichtbar = (x) => x.offsetParent && !x.disabled && !x.readOnly;
+		return [...app.querySelectorAll("input[data-scan]")].find(sichtbar) || [...app.querySelectorAll("input[data-art]")].find(sichtbar) || null;
+	}
+	function belegen(art) {
+		if (art === tastenArt) return;
+		tastenArt = art;
+		if (art === "text") {
+			tasten.className = "text";
+			tasten.innerHTML = BELEGUNG.text.map((r) => r.split("").map((z) => `<button type="button" data-z="${z}">${z}</button>`).join("")).join("") +
+				`<button type="button" data-z="⌫" class="breit weg">⌫</button><button type="button" data-z="C" class="breit weg">C</button>` +
+				(fest() ? `<button type="button" data-z="123" class="breit weg">123</button>` : `<button type="button" data-z="ZU" class="breit">▾</button>`) +
+				`<button type="button" data-z="OK" class="ok" style="grid-column: span 4">OK</button>`;
+		} else {
+			// art: zahl, datum oder zahltext (Ziffern für ein Scan-/Textfeld)
+			const belegung = BELEGUNG[art === "zahltext" ? "zahl" : art].map((z) => (z === "," && art === "zahltext" ? "-" : z));
+			tasten.className = "zahl";
+			tasten.innerHTML = belegung.map((z) => {
+				if (z === "ZU" && fest()) return `<button type="button" data-z="ABC" class="weg">ABC</button>`;
+				return `<button type="button" data-z="${z}" class="${z === "OK" ? "ok" : z === "⌫" || z === "C" ? "weg" : ""}">${z === "ZU" ? "▾" : z}</button>`;
+			}).join("");
+		}
+	}
 	function tastenZeigen() {
 		const f = document.activeElement;
 		let art = f && f.dataset ? f.dataset.art : null;
-		if (art === "text" && angetippt !== f) art = null;
 		clearTimeout(tastenTimer);
+		if (fest()) {
+			// immer sichtbar; Buchstaben nur auf Wunsch
+			const feldArt = aktivesFeld() ? art : null;
+			if (feldArt !== "text") abc = false;
+			// Scanfelder (Nummern) starten mit Ziffern, reine Freitextfelder (Grund, Bemerkung) mit Buchstaben
+			const freitext = feldArt === "text" && !f.hasAttribute("data-scan") && !f.hasAttribute("data-nummern");
+			belegen(feldArt === "text" ? (abc || freitext ? "text" : "zahltext") : feldArt || "zahltext");
+			tasten.style.display = "grid";
+			tasten.classList.toggle("leer", !aktivesFeld() && !zielFeld());
+			if (tastenArt === "text") { app.classList.remove("blockrechts"); app.style.paddingBottom = tasten.offsetHeight + 40 + "px"; }
+			else { app.classList.add("blockrechts"); app.style.paddingBottom = ""; }
+			if (aktivesFeld()) setTimeout(() => f.scrollIntoView({ block: "nearest", behavior: "smooth" }), 20);
+			return;
+		}
+		if (art === "text" && angetippt !== f) art = null;
 		if (!art && tasten.style.display === "grid" && (gedrueckt || performance.now() - losgelassen < 400)) {
 			tastenTimer = setTimeout(tastenZeigen, 150);
 			return;
 		}
 		if (!art) { tasten.style.display = "none"; app.style.paddingBottom = ""; app.classList.remove("blockrechts"); tastenArt = null; return; }
-		if (art !== tastenArt) {
-			tastenArt = art;
-			if (art === "text") {
-				tasten.className = "text";
-				tasten.innerHTML = BELEGUNG.text.map((r) => r.split("").map((z) => `<button type="button" data-z="${z}">${z}</button>`).join("")).join("") +
-					`<button type="button" data-z="⌫" class="breit weg">⌫</button><button type="button" data-z="C" class="breit weg">C</button>` +
-					`<button type="button" data-z="ZU" class="breit">▾</button><button type="button" data-z="OK" class="ok" style="grid-column: span 4">OK</button>`;
-			} else {
-				tasten.className = "zahl";
-				tasten.innerHTML = BELEGUNG[art].map((z) =>
-					`<button type="button" data-z="${z}" class="${z === "OK" ? "ok" : z === "⌫" || z === "C" ? "weg" : ""}">${z === "ZU" ? "▾" : z}</button>`).join("");
-			}
-		}
+		belegen(art);
 		tasten.style.display = "grid";
-		if (art !== "text" && window.innerWidth >= 1000) { app.classList.add("blockrechts"); app.style.paddingBottom = ""; }
-		else { app.classList.remove("blockrechts"); app.style.paddingBottom = tasten.offsetHeight + 40 + "px"; }
+		app.classList.remove("blockrechts"); app.style.paddingBottom = tasten.offsetHeight + 40 + "px";
 		setTimeout(() => f.scrollIntoView({ block: "nearest", behavior: "smooth" }), 20);
 	}
 	document.addEventListener("focusin", tastenZeigen);
 	document.addEventListener("focusout", () => setTimeout(tastenZeigen, 60));
+	window.addEventListener("resize", () => { tastenArt = null; tastenZeigen(); });
+	// neuer Bildschirm (app.innerHTML): Zustand des festen Blocks neu bestimmen (Scanfeld da oder nicht)
+	new MutationObserver(() => { if (fest()) tastenZeigen(); }).observe(app, { childList: true });
 	tasten.addEventListener("pointerdown", (e) => e.preventDefault()); // Fokus bleibt im Feld
 	tasten.addEventListener("click", (e) => {
 		const b = e.target.closest("[data-z]");
-		const f = document.activeElement;
-		if (!b || !f || !f.dataset || !f.dataset.art) return;
+		if (!b) return;
+		let f = aktivesFeld();
+		if (!f && fest()) { f = zielFeld(); if (f) f.focus(); }
+		if (!f) return;
 		const z = b.dataset.z;
-		if (z === "OK") return weiter(f);
+		if (z === "ABC") { abc = true; tastenArt = null; return tastenZeigen(); }
+		if (z === "123") { abc = false; tastenArt = null; belegen("zahltext"); app.classList.add("blockrechts"); app.style.paddingBottom = ""; return; }
+		if (z === "OK") { abc = false; return weiter(f); }
 		if (z === "ZU") return f.blur();
 		const markiert = f.value && f.selectionStart === 0 && f.selectionEnd === f.value.length;
 		if (markiert && z !== "⌫" && z !== "C") f.value = ""; // markierter Vorschlag wird überschrieben
@@ -594,7 +637,7 @@
 		if (!zeilen.length) { el.innerHTML = `<p class="fehlt">Keine Einträge.</p>`; return; }
 		const MAX = 50;
 		const text = zeilen.map((z) => spalten.map(([, f]) => (typeof f === "function" ? f(z) : z[f]) || "").join(" ").toLowerCase());
-		el.innerHTML = `<input class="feld" data-art="text" inputmode="none" autocomplete="off" placeholder="${esc(platzhalter || "Suchen …")}">
+		el.innerHTML = `<input class="feld" data-art="text" data-nummern inputmode="none" autocomplete="off" placeholder="${esc(platzhalter || "Suchen …")}">
 			<div class="treffer"></div><p class="fehlt mehr" style="font-size:16px"></p>`;
 		const f = el.querySelector("input"), box = el.querySelector(".treffer"), mehr = el.querySelector(".mehr");
 		const zeigen = () => {
@@ -1617,6 +1660,8 @@
 		const pa = zustand.linienAuftrag;
 		const links = `<div class="einwaage"><table class="tab"><thead><tr><th>Pos</th><th>Zutat</th><th>Lager</th><th class="z">Bestellt</th><th class="z">Erledigt</th><th class="z">ToDo</th></tr></thead>
 				<tbody>${zeilen}</tbody></table></div>` + detail +
+			// Buchen links unter der Zutat: rechts unten steht fest der Ziffernblock
+			(ansatz.zeilen.length && !ansatz.offen ? `<div class="reihe"><button class="knopf gruen" data-a="abschluss">Weiter zum Buchen<small>${ansatz.zeilen.length} Registrierung(en)</small></button></div>` : "") +
 			(sollAnpassbar() ? `<div class="reihe"><button class="knopf" data-a="soll-anpassen">Soll an Grundteig anpassen: ${esc(mg(sollAnpassbar(), r.einheit))}</button></div>` : "") +
 			(r.kuebel && r.kuebel.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Grundteig-Kübel (ältester zuerst)</div><div class="gross">${r.kuebel.map((k) => esc(k.code)).join(" · ")}</div>
 				<div class="fehlt" style="font-size:16px">${r.kuebel.map((k) => esc(k.code + ": " + k.name + (k.datum ? " vom " + k.datum : "") + ", " + mg(k.menge, "Kg"))).join("<br>")}</div></div>` : "") +
@@ -1630,10 +1675,8 @@
 		const ziel = zeileKV("Artikel", r.name) + zeileKV("Sollmenge", mg(r.sollmenge, r.einheit)) + (au ? zeileKV("Kundenauftrag", au.auftrag + (au.kundenname ? " · " + au.kundenname : "")) : "") +
 			(r.kennzeichen && r.kennzeichen.length ? `<div class="zeile"><div class="fehlt">Kennzeichen</div><div class="rechts">${kennzeichenMarken(r.kennzeichen)}</div></div>` : "");
 		const eingabe = ansatz.offen ? mengeEingabeHtml(ansatz.offen) : `<p class="fehlt" style="font-size:16px;margin:6px 0">Erst scannen, dann die Menge.</p>`;
-		// Eingabe oben, damit der angedockte Ziffernblock sie nicht verdeckt; Ziel ist nur Information
-		const rechts = gruppe("Herkunft", herkunft) + gruppe("Eingabe", eingabe) +
-			(ansatz.zeilen.length && !ansatz.offen ? `<button class="knopf gruen" data-a="abschluss">Weiter zum Buchen<small>${ansatz.zeilen.length} Registrierung(en)</small></button>` : "") +
-			gruppe("Ziel", ziel);
+		// Eingabe oben, damit der Ziffernblock sie nicht verdeckt; Ziel ist nur Information
+		const rechts = gruppe("Herkunft", herkunft) + gruppe("Eingabe", eingabe) + gruppe("Ziel", ziel);
 		app.innerHTML = kopf((au ? "Produktion " + au.auftrag + ": " : "") + r.name + " · " + mg(r.sollmenge, r.einheit), true) +
 			(au && au.hinweis ? hinweisHtml([{ von: "Kundenauftrag " + au.auftrag, text: au.hinweis }]) : "") +
 			(r.umstellung_bio ? `<div class="meldung orange">Umstellung auf Bio: hier wurde zuletzt konventionell produziert. Vor dem Buchen Reinigung bzw. Spülcharge bestätigen.</div>` : "") +
@@ -2421,7 +2464,7 @@
 		if (lieferung.sel == null || !pos[lieferung.sel]) lieferung.sel = Math.max(0, pos.findIndex((p) => p.status !== "Fertig"));
 		const mitHinweis = pos.some((p) => p.z.hinweis);
 		const zeilen = pos.map((p, i) => `<tr data-a="sel" data-i="${i}" class="${i === lieferung.sel ? "gewaehlt" : p.status === "Fertig" ? "fertig" : ""}">
-			<td>${i + 1}</td><td>${esc(p.z.artikel)}</td><td>${esc(p.z.name)}</td><td>${esc(ein(p.z.einheit))}</td>
+			<td>${i + 1}</td><td>${esc(p.z.name)}<small style="display:block;color:var(--muted)">${esc(p.z.artikel)} · in ${esc(ein(p.z.einheit))}</small></td>
 			<td class="z">${esc(zerlegen(p.z.einheiten, p.z.menge * (p.z.faktor || 1)))}</td>
 			<td class="z">${p.erledigt ? esc(zerlegen(p.z.einheiten, p.erledigt * (p.z.faktor || 1))) : "–"}</td>
 			<td class="z todo">${p.todo ? esc(zerlegen(p.z.einheiten, p.todo * (p.z.faktor || 1))) : "–"}</td>
@@ -2434,15 +2477,15 @@
 				${grossZahlen(g.z.menge, g.erledigt, g.todo, g.z.einheit, [g.z.menge, g.erledigt, g.todo].map((n) => zerlegen(g.z.einheiten, n * (g.z.faktor || 1))))}
 				${reg.length ? `<div style="margin-top:8px">${reg.map((x) => x.zl.positionen.filter((y) => y.artikel === g.z.artikel).map((y, j) => `<div class="zeile"><div>Los ${esc(y.charge)}${y.palette ? " · " + (y.versandkarton ? "Versandkarton" : "Palette") + " …" + esc(y.palette.slice(-6)) : " · lose"}</div>
 					<div class="rechts">${esc(stk(y.anzahl, y.einheit))}${j === 0 ? ` <button class="x" data-a="weg" data-i="${x.i}">✕</button>` : ""}</div></div>`).join("")).join("")}</div>` : ""}</div>` : "";
-		const links = `<div class="einwaage"><table class="tab"><thead><tr><th>Pos</th><th>Artikel</th><th>Bezeichnung</th><th>Auftrag in</th><th class="z">Bestellt</th><th class="z">Erledigt</th><th class="z">ToDo</th><th>Status</th>${mitHinweis ? "<th>Hinweis</th>" : ""}</tr></thead>
-			<tbody>${zeilen}</tbody></table></div>` + detail +
-			(lieferung.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Alle Registrierungen</div>${liste}</div>` : "");
 		const offen = pos.filter((p) => p.status !== "Fertig").length;
+		const links = `<div class="einwaage"><table class="tab"><thead><tr><th>Pos</th><th>Artikel</th><th class="z">Bestellt</th><th class="z">Erledigt</th><th class="z">ToDo</th><th>Status</th>${mitHinweis ? "<th>Hinweis</th>" : ""}</tr></thead>
+			<tbody>${zeilen}</tbody></table></div>` + detail +
+			(lieferung.zeilen.length ? `<div class="reihe"><button class="knopf gruen" data-a="buchen">Lieferschein buchen<small>${lieferung.zeilen.length} Registrierung(en)${offen ? " · " + offen + " Position(en) noch offen" : ""}</small></button></div>` : "") +
+			(lieferung.zeilen.length ? `<div class="panel"><div class="fehlt" style="font-size:16px">Alle Registrierungen</div>${liste}</div>` : "");
 		const rechts = gruppe("Herkunft", textFeld("scan", "Palette, Versandkarton oder Los scannen") +
 				`<p class="fehlt" style="font-size:16px;margin:6px 0 0">Ganze Palette oder Versandkarton: NVE scannen. Lose Kartons: Los scannen, dann die Anzahl.</p>`) +
 			gruppe("Ziel", zeileKV("Kunde", lieferung.titel) + zeileKV("Kundenauftrag", lieferung.auftrag) + zeileKV("Positionen", pos.length + " · offen " + offen)) +
-			(hinweise.length ? hinweisHtml(hinweise.map((h) => ({ von: "Kundenauftrag", text: h }))) : "") +
-			(lieferung.zeilen.length ? `<button class="knopf gruen" data-a="buchen">Lieferschein buchen<small>${lieferung.zeilen.length} Registrierung(en)${offen ? " · " + offen + " Position(en) noch offen" : ""}</small></button>` : "");
+			(hinweise.length ? hinweisHtml(hinweise.map((h) => ({ von: "Kundenauftrag", text: h }))) : "");
 		return maske(links, rechts);
 	}
 
@@ -2825,6 +2868,9 @@
 	}
 
 	// ------------------------------------------------------------------ Start
+	// Direktlink /terminal?station=Lager (Drehbuch der Demo, Lesezeichen am Gerät): Station merken, Adresse aufräumen
+	const stationAusLink = new URLSearchParams(location.search).get("station");
+	if (stationAusLink) { speichern("kt_station", stationAusLink); history.replaceState(null, "", location.pathname); }
 	async function init() {
 		const station = laden("kt_station");
 		if (!station) return stationWaehlen();
