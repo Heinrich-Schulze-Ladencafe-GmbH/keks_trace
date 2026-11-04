@@ -17,6 +17,7 @@
 	.knopf.klein { min-height: 44px; }
 	.reihe { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
 	.reihe .knopf { flex: 1 1 200px; }
+	a.knopf { text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
 	.meldung { padding: 12px 14px; border-radius: 6px; margin: 10px 0; background: #fbd9d9; color: #7a1717; }
 	.gross { font-size: 24px; font-weight: 700; overflow-wrap: anywhere; }
 	video { width: 100%; max-height: 50vh; background: #000; border-radius: 6px; margin-top: 10px; }
@@ -108,6 +109,7 @@
 				const h = await api("herkunft", { code: r.charge });
 				inhalt.innerHTML = `<div class="gross">${esc(r.artikelname || "")} · Los ${esc(r.fundstellen ? r.fundstellen.los : r.charge)}</div>` +
 					(r.sperrstatus === "Gesperrt" ? `<div class="meldung">GESPERRT: ${esc(r.sperrgrund || "")}</div>` : "") +
+					`<div class="reihe"><a class="knopf" href="/netz?code=${encodeURIComponent(r.charge)}">Netzbild: woher und wohin</a></div>` +
 					KtAkte.herkunftHtml(h) + KtAkte.fundstellenHtml(r.fundstellen, false);
 				return knoepfe();
 			}

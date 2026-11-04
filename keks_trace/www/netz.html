@@ -1,0 +1,572 @@
+{% extends "templates/base.html" %}
+{% block title %}Rückverfolgung{% endblock %}
+{% block navbar %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block style %}
+<style>
+	/* Netzbild der Rückverfolgung: ruhig und hell, Farbe nur mit Bedeutung (Stufe als Streifen, Status als Marke). */
+	:root {
+		color-scheme: light;
+		--bg: #f3f5f8; --flaeche: #ffffff; --linie: #e3e7ee; --text: #18202b; --leise: #667085; --akzent: #2563eb;
+		--rot: #d92d20; --rot-hell: #fef3f2; --orange: #dc6803; --orange-hell: #fffaeb; --gruen: #079455;
+		--schatten: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .10);
+		--s-rohstoff: #0e9384; --s-packmittel: #98a2b3; --s-zwischen: #f79009; --s-rework: #7a5af8;
+		--s-backware: #e04f16; --s-fertig: #2e90fa; --s-kunde: #344054;
+	}
+	html, body { background: var(--bg) !important; color: var(--text); margin: 0; }
+	body { font: 15px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+	* { box-sizing: border-box; }
+	#nz { display: flex; flex-direction: column; min-height: 100vh; }
+	.kopf { position: sticky; top: 0; z-index: 20; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+		padding: 12px 20px; background: rgba(255, 255, 255, .92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--linie); }
+	.kopf h1 { font-size: 18px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
+	.kopf .wer { color: var(--leise); font-size: 14px; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.suche { display: flex; gap: 8px; }
+	.suche input { width: 280px; max-width: 60vw; font: inherit; padding: 9px 12px; border: 1px solid var(--linie); border-radius: 10px; background: #fff; outline: none; }
+	.suche input:focus { border-color: var(--akzent); box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }
+	.btn { font: inherit; font-weight: 600; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--linie); background: #fff; color: var(--text); cursor: pointer; white-space: nowrap; }
+	.btn:hover { background: #f7f8fa; }
+	.btn.primaer { background: var(--akzent); border-color: var(--akzent); color: #fff; }
+	.btn.primaer:hover { background: #1d4ed8; }
+	.btn.klein { padding: 5px 10px; font-size: 13px; }
+	a.link { color: var(--akzent); text-decoration: none; font-weight: 600; font-size: 14px; }
+
+	.haupt { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; padding: 16px 20px; flex: 1; }
+	.karte { background: var(--flaeche); border: 1px solid var(--linie); border-radius: 14px; box-shadow: var(--schatten); }
+	#leinwand { position: relative; height: calc(100vh - 150px); min-height: 420px; overflow: hidden; }
+	#scroll { position: absolute; inset: 0; overflow: auto; cursor: grab; touch-action: pan-x pan-y; }
+	#scroll.zieht { cursor: grabbing; }
+	#scroll svg { display: block; }
+	.werkzeuge { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 6px; z-index: 3; }
+	.legende { position: absolute; right: 12px; bottom: 12px; z-index: 3; display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; max-width: 70%;
+		background: rgba(255, 255, 255, .9); border: 1px solid var(--linie); border-radius: 10px; padding: 6px 10px; font-size: 12px; color: var(--leise); }
+	.legende span { display: inline-flex; align-items: center; gap: 5px; }
+	.legende i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+	.legende .strich { width: 18px; height: 0; border-top: 2px dashed #98a2b3; border-radius: 0; }
+	.leer { padding: 60px 24px; text-align: center; color: var(--leise); }
+	.fehler { margin: 16px; padding: 12px 14px; border-radius: 10px; background: var(--rot-hell); color: #912018; border: 1px solid #fecdca; }
+
+	/* Knoten (HTML in foreignObject) */
+	.kn { height: 100%; border-radius: 12px; background: #fff; border: 1px solid var(--linie); box-shadow: var(--schatten);
+		padding: 8px 10px 8px 14px; position: relative; overflow: hidden; cursor: pointer; transition: opacity .15s, box-shadow .15s, transform .15s; }
+	.kn:hover { box-shadow: 0 4px 12px rgba(16, 24, 40, .12); }
+	.kn::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--streifen, #98a2b3); }
+	.kn .n { font-weight: 650; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.kn .u { font-size: 12px; color: var(--leise); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+	.kn .m { position: absolute; right: 8px; top: 7px; display: flex; gap: 4px; }
+	.marke { font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; letter-spacing: .02em; }
+	.marke.rot { background: var(--rot-hell); color: var(--rot); border: 1px solid #fecdca; }
+	.marke.orange { background: var(--orange-hell); color: var(--orange); border: 1px solid #fedf89; }
+	.marke.blau { background: #eff4ff; color: var(--akzent); border: 1px solid #c7d7fe; }
+	.marke.grau { background: #f2f4f7; color: var(--leise); border: 1px solid var(--linie); }
+	.kn.start { border: 2px solid var(--akzent); box-shadow: 0 0 0 4px rgba(37, 99, 235, .14), var(--schatten); }
+	.kn.gesperrt { border-color: #fda29b; background: #fffbfa; }
+	.kn.kunde { background: #f9fafb; }
+	.kn.kunde .n::before { content: "→ "; color: var(--leise); }
+	.kn.gruppe { background: #f9fafb; border-style: dashed; }
+	.kn.gewaehlt { box-shadow: 0 0 0 3px var(--akzent), 0 6px 18px rgba(37, 99, 235, .18); }
+	.blass { opacity: .22; }
+	.kante { fill: none; stroke: #c1c8d3; stroke-width: 1.6; transition: opacity .15s; }
+	.kante.silo { stroke-dasharray: 5 4; }
+	.kante.hell { stroke: var(--akzent); stroke-width: 2.6; }
+	.kante.blass { opacity: .12; }
+	.mengen text { font-size: 11px; font-weight: 600; fill: var(--akzent); paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+	.spalte { font-size: 11.5px; font-weight: 700; fill: #98a2b3; letter-spacing: .06em; text-transform: uppercase; }
+
+	/* Details rechts */
+	#details { padding: 18px; position: sticky; top: 76px; align-self: start; max-height: calc(100vh - 92px); overflow: auto; }
+	#details h2 { font-size: 17px; margin: 6px 0 2px; letter-spacing: -.01em; }
+	#details .unter { color: var(--leise); font-size: 13px; }
+	#details h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--leise); margin: 18px 0 6px; }
+	.stufe { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--leise); text-transform: uppercase; letter-spacing: .05em; }
+	.stufe i { width: 10px; height: 10px; border-radius: 3px; background: var(--streifen); }
+	dl.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 10px 0 0; font-size: 14px; }
+	dl.kv dt { color: var(--leise); }
+	dl.kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+	.verw { list-style: none; padding: 0; margin: 0; }
+	.verw li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+	.verw li:hover { background: #f2f4f7; }
+	.verw li b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.verw li span { color: var(--leise); white-space: nowrap; font-variant-numeric: tabular-nums; }
+	.ereignis { font-size: 13.5px; padding: 8px 10px; border-radius: 8px; background: #f9fafb; margin-bottom: 6px; }
+	.ereignis small { display: block; color: var(--leise); }
+	.knoepfe { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+	.hinweis { font-size: 13px; color: var(--leise); }
+
+	/* Belegliste */
+	.belege { margin: 0 20px 24px; padding: 16px 18px; }
+	.belege .reihe { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+	.belege h2 { font-size: 16px; margin: 0; flex: 1; }
+	.reiter { display: inline-flex; background: #f2f4f7; border-radius: 10px; padding: 3px; }
+	.reiter button { font: inherit; font-size: 13px; font-weight: 600; border: 0; background: none; padding: 5px 12px; border-radius: 8px; cursor: pointer; color: var(--leise); }
+	.reiter button.an { background: #fff; color: var(--text); box-shadow: var(--schatten); }
+	.tab-wrap { overflow: auto; }
+	table.tab { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+	table.tab th { text-align: left; font-size: 12px; font-weight: 600; color: var(--leise); padding: 8px 10px; border-bottom: 1px solid var(--linie); white-space: nowrap; background: #fafbfc; }
+	table.tab td { padding: 8px 10px; border-bottom: 1px solid #f0f2f5; white-space: nowrap; }
+	table.tab tr { cursor: pointer; }
+	table.tab tbody tr:hover { background: #f7f9fc; }
+	table.tab .z { text-align: right; }
+	.art { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+	.art.ein { background: #ecfdf3; color: var(--gruen); }
+	.art.ver { background: #eff4ff; color: var(--akzent); }
+
+	@media (max-width: 1100px) {
+		.haupt { grid-template-columns: 1fr; }
+		#details { position: static; max-height: none; }
+		#leinwand { height: 65vh; }
+	}
+	@media (max-width: 600px) {
+		.kopf { padding: 10px 12px; position: static; }
+		.legende { display: none !important; }
+		.suche input { width: 100%; max-width: none; }
+		.suche { flex: 1 1 100%; }
+		.haupt { padding: 12px; }
+		.belege { margin: 0 12px 16px; }
+	}
+	@media print {
+		.kopf .suche, .werkzeuge, .reiter, .knoepfe, #csv { display: none !important; }
+		#leinwand { height: auto; overflow: visible; }
+		#scroll { position: static; overflow: visible; }
+		.haupt { grid-template-columns: 1fr; }
+		.karte { box-shadow: none; }
+	}
+</style>
+{% endblock %}
+{% block content %}
+<div id="nz" data-code="{{ code | e }}">
+	<header class="kopf">
+		<h1>Rückverfolgung</h1>
+		<div class="wer" id="wer"></div>
+		<form class="suche" id="suche">
+			<input id="code" placeholder="Los, Charge oder Palette" autocomplete="off" spellcheck="false">
+			<button class="btn primaer" type="submit">Zeichnen</button>
+		</form>
+		<a class="link" href="/akte">Akte</a>
+		<a class="link" href="/app">ERPNext</a>
+	</header>
+	<div class="haupt">
+		<section class="karte" id="leinwand">
+			<div id="scroll"><div class="leer">Los, Charge oder Palette eingeben oder scannen. Das gewählte Los steht in der Mitte:
+				links, woraus es besteht, rechts, wohin es ging – bis zum Kunden.</div></div>
+			<div class="legende" id="legende" hidden></div>
+			<div class="werkzeuge" id="werkzeuge" hidden>
+				<button class="btn klein" data-z="-" title="Verkleinern">−</button>
+				<button class="btn klein" data-z="+" title="Vergrößern">+</button>
+				<button class="btn klein" data-z="fit">Einpassen</button>
+				<button class="btn klein" data-z="alle" id="alle-auf" hidden>Packmittel aufklappen</button>
+			</div>
+		</section>
+		<aside class="karte" id="details"><p class="hinweis">Einen Kasten anklicken: Details hier, der Weg im Bild wird hervorgehoben.</p></aside>
+	</div>
+	<section class="karte belege" id="belege" hidden></section>
+</div>
+{% endblock %}
+{% block script %}
+{% raw %}<script>
+(function () {
+	"use strict";
+	const $ = (id) => document.getElementById(id);
+	const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+	const zahl = (n) => n == null ? "" : Number(n).toLocaleString("de-DE", { maximumFractionDigits: 3 });
+
+	// Stufe → Farbe und Spaltenname. Reihenfolge wie trace._STUFEN_REIHENFOLGE.
+	const STUFEN = {
+		"Rohstoff": ["--s-rohstoff", 0], "Packmittel": ["--s-packmittel", 1], "Halbfabrikat": ["--s-zwischen", 2],
+		"Grundteig": ["--s-zwischen", 3], "Teig veredelt": ["--s-zwischen", 4], "Rework": ["--s-rework", 5],
+		"Backware": ["--s-backware", 6], "Ware lose": ["--s-fertig", 7], "Fertigware": ["--s-fertig", 8],
+	};
+	const farbe = (n) => `var(${n.art === "kunde" ? "--s-kunde" : n.art === "gruppe" ? "--s-packmittel" : (STUFEN[n.stufe] || ["--s-packmittel"])[0]})`;
+	const W = 236, H = 70, SPALT = 92, ZEILE = 16, RAND = 40, KOPF = 34;
+
+	let daten = null;          // Antwort von netz.netz
+	let offen = new Set();     // aufgeklappte Packmittel-Gruppen (Ziel-Knoten)
+	let gewaehlt = null;       // id des gewählten Knotens
+	let massstab = 1;
+	let bild = null;           // {knoten, kanten, pos, breite, hoehe}
+	let belegFilter = "Alle";
+
+	async function api(methode, args) {
+		const r = await fetch("/api/method/keks_trace.netz." + methode + "?" + new URLSearchParams(args), { headers: { Accept: "application/json" } });
+		let d = {};
+		try { d = await r.json(); } catch (e) { /* leer */ }
+		if (!r.ok) {
+			let text = "Fehler " + r.status;
+			try { text = JSON.parse(JSON.parse(d._server_messages)[0]).message; } catch (e) { if (d.exception) text = d.exception; }
+			throw new Error(String(text).replace(/<[^>]+>/g, ""));
+		}
+		return d.message;
+	}
+
+	// ------------------------------------------------------------------ Laden
+	async function laden(code, merken) {
+		code = (code || "").trim();
+		if (!code) return;
+		$("scroll").innerHTML = `<div class="leer">Lädt …</div>`;
+		try {
+			const d = await api("netz", { charge: code });
+			if (d.auswahl) return auswahlZeigen(code, d.auswahl);
+			daten = d; offen = new Set(); gewaehlt = d.start; massstab = 1;
+			if (merken !== false) history.pushState({ code: d.start }, "", "?code=" + encodeURIComponent(d.start));
+			const s = d.knoten.find((n) => n.id === d.start);
+			$("wer").textContent = s ? `${s.name} · ${s.los ? "Los " + s.los : "Charge " + s.charge}` : d.start;
+			document.title = "Rückverfolgung " + (s && s.los ? s.los : d.start);
+			zeichnen(true);
+			details(gewaehlt);
+			belegeZeigen();
+		} catch (e) {
+			$("scroll").innerHTML = `<div class="fehler">${esc(e.message)}</div>`;
+		}
+	}
+	function auswahlZeigen(code, liste) {
+		$("scroll").innerHTML = liste.length
+			? `<div class="leer"><p>Auf ${esc(code)} liegen mehrere Lose. Welches soll gezeichnet werden?</p>
+				<div class="knoepfe" style="justify-content:center">${liste.map((l) => `<button class="btn" data-c="${esc(l.charge)}">${esc(l.name || "")} · ${esc(l.los ? "Los " + l.los : l.charge)}</button>`).join("")}</div></div>`
+			: `<div class="leer">Die Palette ist leer.</div>`;
+		$("scroll").querySelectorAll("[data-c]").forEach((b) => b.addEventListener("click", () => laden(b.dataset.c)));
+	}
+
+	// ------------------------------------------------------------------ Netz aufbereiten
+	// Packmittel, die nur in einen Knoten gehen, werden je Ziel zu einem Kasten „Packmittel (n)“ gebündelt.
+	function aufbereiten() {
+		const knoten = new Map(daten.knoten.map((n) => [n.id, n]));
+		const rein = new Map(), raus = new Map();
+		daten.kanten.forEach((k) => {
+			(raus.get(k.von) || raus.set(k.von, []).get(k.von)).push(k);
+			(rein.get(k.nach) || rein.set(k.nach, []).get(k.nach)).push(k);
+		});
+		const weg = new Set();
+		const neu = [];
+		const ziele = new Map();
+		knoten.forEach((n) => {
+			if (n.stufe !== "Packmittel" || n.id === daten.start || (rein.get(n.id) || []).length) return;
+			const r = raus.get(n.id) || [];
+			if (r.length !== 1) return;
+			(ziele.get(r[0].nach) || ziele.set(r[0].nach, []).get(r[0].nach)).push(n);
+		});
+		let gebuendelt = false;
+		ziele.forEach((liste, ziel) => {
+			if (liste.length < 3 || offen.has(ziel)) return;
+			gebuendelt = true;
+			const gid = "G:" + ziel;
+			liste.forEach((n) => weg.add(n.id));
+			knoten.set(gid, { id: gid, art: "gruppe", seite: liste[0].seite, name: `Packmittel (${liste.length})`, ziel, teile: liste, stufe: "Packmittel" });
+			neu.push({ von: gid, nach: ziel, menge: null });
+		});
+		weg.forEach((id) => knoten.delete(id));
+		const kanten = daten.kanten.filter((k) => !weg.has(k.von) && !weg.has(k.nach)).concat(neu);
+		$("alle-auf").hidden = !gebuendelt;
+		return { knoten, kanten };
+	}
+
+	// Spalten: jeder Knoten rechts von allem, woraus er besteht; Rohstoffe so weit rechts wie möglich
+	// (direkt vor ihrem ersten Verbraucher); Kunden in der letzten Spalte. Reihenfolge in der Spalte nach dem
+	// Mittelwert der Nachbarn (wenige Kreuzungen).
+	function anordnen(knoten, kanten) {
+		const eltern = new Map(), kinder = new Map();
+		knoten.forEach((_, id) => { eltern.set(id, []); kinder.set(id, []); });
+		kanten.forEach((k) => { if (eltern.has(k.nach) && kinder.has(k.von)) { eltern.get(k.nach).push(k.von); kinder.get(k.von).push(k.nach); } });
+		// topologische Reihenfolge (Kreise, die es nicht geben sollte, hinten anhängen)
+		const grad = new Map([...knoten.keys()].map((id) => [id, eltern.get(id).length]));
+		const reihe = [...knoten.keys()].filter((id) => !grad.get(id));
+		for (let i = 0; i < reihe.length; i++) kinder.get(reihe[i]).forEach((c) => { grad.set(c, grad.get(c) - 1); if (!grad.get(c)) reihe.push(c); });
+		knoten.forEach((_, id) => { if (!reihe.includes(id)) reihe.push(id); });
+		const rang = new Map();
+		reihe.forEach((id) => rang.set(id, Math.max(0, ...eltern.get(id).map((p) => (rang.has(p) ? rang.get(p) + 1 : 0)))));
+		for (let i = reihe.length - 1; i >= 0; i--) {
+			const id = reihe[i], k = kinder.get(id);
+			if (knoten.get(id).art === "kunde" || !k.length) continue;
+			rang.set(id, Math.max(rang.get(id), Math.min(...k.map((c) => rang.get(c))) - 1));
+		}
+		const maxCharge = Math.max(0, ...[...knoten.values()].filter((n) => n.art !== "kunde").map((n) => rang.get(n.id)));
+		knoten.forEach((n) => { if (n.art === "kunde") rang.set(n.id, maxCharge + 1); });
+		const min = Math.min(...rang.values());
+		const spalten = [];
+		knoten.forEach((n, id) => { const r = rang.get(id) - min; (spalten[r] = spalten[r] || []).push(id); });
+		for (let i = 0; i < spalten.length; i++) spalten[i] = spalten[i] || [];
+		const ord = (n) => [n.seite === "rueck" ? 0 : n.seite === "start" ? 1 : 2, n.art === "kunde" ? 99 : (STUFEN[n.stufe] || [0, 9])[1], n.name || ""];
+		spalten.forEach((s) => s.sort((a, b) => { const x = ord(knoten.get(a)), y = ord(knoten.get(b)); return x[0] - y[0] || x[1] - y[1] || String(x[2]).localeCompare(y[2]); }));
+		const lage = () => { const p = new Map(); spalten.forEach((s) => s.forEach((id, i) => p.set(id, i - (s.length - 1) / 2))); return p; };
+		for (let runde = 0; runde < 6; runde++) {
+			const vonLinks = runde % 2 === 0;
+			const p = lage();
+			const folge = vonLinks ? spalten : spalten.slice().reverse();
+			folge.forEach((s) => {
+				const wert = new Map(s.map((id) => {
+					const nb = vonLinks ? eltern.get(id) : kinder.get(id);
+					return [id, nb.length ? nb.reduce((a, b) => a + p.get(b), 0) / nb.length : p.get(id)];
+				}));
+				s.sort((a, b) => wert.get(a) - wert.get(b));
+				s.forEach((id, i) => p.set(id, i - (s.length - 1) / 2));
+			});
+		}
+		const hoch = Math.max(1, ...spalten.map((s) => s.length));
+		const pos = new Map();
+		spalten.forEach((s, c) => s.forEach((id, i) => pos.set(id, {
+			x: RAND + c * (W + SPALT),
+			y: RAND + KOPF + (i + (hoch - s.length) / 2) * (H + ZEILE),
+		})));
+		return {
+			pos, eltern, kinder, spalten,
+			breite: RAND * 2 + spalten.length * W + (spalten.length - 1) * SPALT,
+			hoehe: RAND * 2 + KOPF + hoch * H + (hoch - 1) * ZEILE,
+		};
+	}
+
+	function spaltenName(ids, knoten) {
+		const s = [...new Set(ids.map((id) => { const n = knoten.get(id); return n.art === "kunde" ? "Kunde" : n.stufe || ""; }))].filter(Boolean);
+		return s.length > 2 ? s.slice(0, 2).join(" · ") + " …" : s.join(" · ");
+	}
+
+	// ------------------------------------------------------------------ Zeichnen
+	function kastenHtml(n) {
+		let unter, m = "";
+		if (n.art === "kunde") unter = [n.lieferschein, n.datum].filter(Boolean).join(" · ");
+		else if (n.art === "gruppe") unter = n.teile.map((t) => t.name).join(", ");
+		else unter = [n.artikel, n.los ? "Los " + n.los : n.charge, n.mhd ? "MHD " + n.mhd : ""].filter(Boolean).join(" · ");
+		const zweite = n.art === "charge" && n.lieferant ? n.lieferant : n.art === "kunde" && n.bestellnummer ? "Best.-Nr. " + n.bestellnummer : "";
+		if (n.gesperrt) m += `<span class="marke rot">gesperrt</span>`;
+		if (n.auffaellig) m += `<span class="marke orange">Prüfung</span>`;
+		if (n.id === daten.start) m += `<span class="marke blau">Start</span>`;
+		const kl = ["kn", n.art, n.id === daten.start ? "start" : "", n.gesperrt ? "gesperrt" : "", n.id === gewaehlt ? "gewaehlt" : ""].filter(Boolean).join(" ");
+		return `<div xmlns="http://www.w3.org/1999/xhtml" class="${kl}" style="--streifen:${farbe(n)}" title="${esc(n.name)}">
+			<div class="m">${m}</div>
+			<div class="n" style="${m ? "padding-right:" + (m.split("marke").length - 1) * 58 + "px" : ""}">${esc(n.name)}</div>
+			<div class="u">${esc(unter)}</div>${zweite ? `<div class="u">${esc(zweite)}</div>` : ""}</div>`;
+	}
+
+	function weg(id) {
+		// alles, was in den gewählten Knoten einging, und alles, was daraus wurde
+		const auf = new Set([id]);
+		const hoch = [id], runter = [id];
+		while (hoch.length) (bild.eltern.get(hoch.pop()) || []).forEach((p) => { if (!auf.has(p)) { auf.add(p); hoch.push(p); } });
+		const ab = new Set([id]);
+		while (runter.length) (bild.kinder.get(runter.pop()) || []).forEach((c) => { if (!ab.has(c)) { ab.add(c); runter.push(c); } });
+		return { knoten: new Set([...auf, ...ab]), auf, ab };
+	}
+
+	function zeichnen(einpassen) {
+		const sl = $("scroll").scrollLeft, st = $("scroll").scrollTop;
+		const { knoten, kanten } = aufbereiten();
+		bild = { knoten, kanten, ...anordnen(knoten, kanten) };
+		if (gewaehlt && !knoten.has(gewaehlt)) gewaehlt = null;
+		const w = gewaehlt ? weg(gewaehlt) : null;
+		const kanteHell = (k) => w && ((w.auf.has(k.von) && w.auf.has(k.nach)) || (w.ab.has(k.von) && w.ab.has(k.nach)));
+		const pfade = [], mengen = [];
+		kanten.forEach((k) => {
+			const a = bild.pos.get(k.von), b = bild.pos.get(k.nach);
+			if (!a || !b) return;
+			const x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2;
+			const dx = Math.max(40, (x2 - x1) / 2);
+			const hell = kanteHell(k);
+			const kl = ["kante", k.nur_silo ? "silo" : "", hell ? "hell" : w ? "blass" : ""].filter(Boolean).join(" ");
+			pfade.push(`<path class="${kl}" d="M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}"><title>${esc(mengeText(k))}</title></path>`);
+			if (hell && k.menge && (k.von === gewaehlt || k.nach === gewaehlt)) mengen.push(`<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 - 4}" text-anchor="middle">${esc(mengeText(k))}</text>`);
+		});
+		const koepfe = bild.spalten.map((s, c) => s.length ? `<text class="spalte" x="${RAND + c * (W + SPALT) + 4}" y="${RAND + 10}">${esc(spaltenName(s, knoten))}</text>` : "").join("");
+		const kaesten = [...knoten.values()].map((n) => {
+			const p = bild.pos.get(n.id);
+			return `<foreignObject x="${p.x}" y="${p.y}" width="${W}" height="${H}" data-id="${esc(n.id)}" class="${w && !w.knoten.has(n.id) ? "blass" : ""}">${kastenHtml(n)}</foreignObject>`;
+		}).join("");
+		$("scroll").innerHTML = `<svg id="svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${bild.breite} ${bild.hoehe}">
+			${koepfe}<g>${pfade.join("")}</g><g class="mengen">${mengen.join("")}</g>${kaesten}</svg>`;
+		$("scroll").querySelectorAll("foreignObject").forEach((f) => f.addEventListener("click", (e) => { e.stopPropagation(); waehlen(f.dataset.id); }));
+		$("werkzeuge").hidden = false;
+		legende();
+		if (einpassen) passend(); else { groesse(); $("scroll").scrollLeft = sl; $("scroll").scrollTop = st; }
+		if (daten.abgeschnitten) $("scroll").insertAdjacentHTML("afterbegin", `<div class="fehler" style="position:sticky;left:0;top:0">Gekürzt: sehr viele Chargen. Vollständig in ERPNext unter Rückverfolgung.</div>`);
+	}
+	function mengeText(k) {
+		if (k.nur_silo) return "möglich (Silo)";
+		if (k.menge == null) return "";
+		const n = daten.knoten.find((x) => x.id === k.von);
+		return zahl(k.menge) + (n && n.einheit ? " " + n.einheit : "");
+	}
+	function legende() {
+		const da = new Set([...bild.knoten.values()].map((n) => n.art === "kunde" ? "Kunde" : n.stufe));
+		const eintraege = [["Rohstoff", "--s-rohstoff"], ["Packmittel", "--s-packmittel"], ["Zwischenstufe", "--s-zwischen", ["Halbfabrikat", "Grundteig", "Teig veredelt"]],
+			["Rework", "--s-rework"], ["Backware", "--s-backware"], ["Fertigware", "--s-fertig", ["Ware lose", "Fertigware"]], ["Kunde", "--s-kunde"]]
+			.filter(([n, , alle]) => (alle || [n]).some((x) => da.has(x)));
+		const silo = bild.kanten.some((k) => k.nur_silo);
+		$("legende").innerHTML = eintraege.map(([n, v]) => `<span><i style="background:var(${v})"></i>${esc(n)}</span>`).join("") +
+			(silo ? `<span><i class="strich"></i>möglich (Silo)</span>` : "");
+		$("legende").hidden = false;
+	}
+	function groesse() {
+		const svg = $("svg");
+		if (!svg) return;
+		svg.setAttribute("width", Math.round(bild.breite * massstab));
+		svg.setAttribute("height", Math.round(bild.hoehe * massstab));
+	}
+	function passend() {
+		const box = $("scroll");
+		// nicht kleiner als lesbar: lieber scrollen (Ziehen, Finger) als Kästen, die keiner lesen kann
+		massstab = Math.max(0.72, Math.min(1, (box.clientWidth - 8) / bild.breite, (box.clientHeight - 8) / bild.hoehe));
+		groesse();
+		// gewählten Knoten (Start) in die Mitte holen, falls nicht alles passt
+		const p = gewaehlt && bild.pos.get(gewaehlt);
+		if (p) { box.scrollLeft = p.x * massstab - box.clientWidth / 2 + W * massstab / 2; box.scrollTop = p.y * massstab - box.clientHeight / 2 + H * massstab / 2; }
+	}
+	function zoom(f) {
+		const box = $("scroll");
+		const mx = box.scrollLeft + box.clientWidth / 2, my = box.scrollTop + box.clientHeight / 2;
+		const alt = massstab;
+		massstab = Math.max(0.25, Math.min(2, massstab * f));
+		groesse();
+		box.scrollLeft = mx * massstab / alt - box.clientWidth / 2;
+		box.scrollTop = my * massstab / alt - box.clientHeight / 2;
+	}
+
+	// ------------------------------------------------------------------ Auswahl und Details
+	function waehlen(id) {
+		const n = bild.knoten.get(id);
+		if (n && n.art === "gruppe") { offen.add(n.ziel); gewaehlt = n.ziel; zeichnen(false); return details(n.ziel); }
+		gewaehlt = gewaehlt === id ? null : id;
+		zeichnen(false);
+		details(gewaehlt);
+	}
+
+	function liste(ids, richtung) {
+		return `<ul class="verw">${ids.map((id) => {
+			const n = bild.knoten.get(id);
+			const k = bild.kanten.find((x) => richtung === "rein" ? x.von === id && x.nach === gewaehlt : x.von === gewaehlt && x.nach === id);
+			return `<li data-id="${esc(id)}"><b>${esc(n.name)}</b><span>${esc(k ? mengeText(k) : "")}</span></li>`;
+		}).join("")}</ul>`;
+	}
+	function kv(paare) {
+		const p = paare.filter((x) => x[1]);
+		return p.length ? `<dl class="kv">${p.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl>` : "";
+	}
+
+	async function details(id) {
+		const el = $("details");
+		if (!id) { el.innerHTML = `<p class="hinweis">Einen Kasten anklicken: Details hier, der Weg im Bild wird hervorgehoben.</p>`; return; }
+		const n = bild.knoten.get(id);
+		if (!n) return;
+		const rein = bild.eltern.get(id) || [], raus = bild.kinder.get(id) || [];
+		const kopf = `<div class="stufe" style="--streifen:${farbe(n)}"><i></i>${esc(n.art === "kunde" ? "Kunde" : n.stufe || "")}</div><h2>${esc(n.name)}</h2>`;
+		if (n.art === "kunde") {
+			el.innerHTML = kopf + kv([["Lieferschein", n.lieferschein], ["Datum", n.datum], ["Bestellnummer Kunde", n.bestellnummer], ["Kunde", n.kunde]]) +
+				(rein.length ? `<h3>Geliefert</h3>${liste(rein, "rein")}` : "") +
+				`<div class="knoepfe"><a class="btn" href="/app/delivery-note/${encodeURIComponent(n.lieferschein)}" target="_blank">Lieferschein öffnen</a></div>`;
+			return verdrahten(el);
+		}
+		const marken = (n.gesperrt ? `<span class="marke rot">gesperrt</span> ` : "") + (n.auffaellig ? `<span class="marke orange">Prüfung auffällig</span> ` : "");
+		const grund = kopf + `<div class="unter">Artikel ${esc(n.artikel || "")} · ${esc(n.los ? "Los " + n.los + " · " : "")}Charge ${esc(n.charge)}</div>` +
+			(marken ? `<div style="margin-top:8px">${marken}</div>` : "") +
+			kv([["MHD", n.mhd], ["Hergestellt", n.hergestellt], ["Lieferant", n.lieferant], ["Kennzeichen", n.kennzeichen], ["Sperrgrund", n.sperrgrund]]) +
+			(rein.length ? `<h3>Besteht aus (${rein.length})</h3>${liste(rein, "rein")}` : "") +
+			(raus.length ? `<h3>Ging in (${raus.length})</h3>${liste(raus, "raus")}` : "");
+		const knoepfe = `<div class="knoepfe">${id !== daten.start ? `<button class="btn primaer" data-a="neu">Von hier aus zeichnen</button>` : ""}
+			<a class="btn" href="/akte?code=${encodeURIComponent(n.charge)}" target="_blank">Akte</a>
+			<a class="btn" href="/app/batch/${encodeURIComponent(n.charge)}" target="_blank">In ERPNext</a></div>`;
+		el.innerHTML = grund + `<p class="hinweis">Lädt Details …</p>` + knoepfe;
+		verdrahten(el, n);
+		try {
+			const d = await api("details", { charge: n.charge });
+			if (gewaehlt !== id) return;
+			el.innerHTML = grund + mehr(d) + knoepfe;
+			verdrahten(el, n);
+		} catch (e) {
+			el.innerHTML = grund + `<div class="fehler" style="margin:12px 0">${esc(e.message)}</div>` + knoepfe;
+			verdrahten(el, n);
+		}
+	}
+	function mehr(d) {
+		const t = [];
+		const w = d.wareneingang;
+		if (w) t.push(`<div class="ereignis"><b>Wareneingang</b> ${esc(w.zeit || "")}<small>${esc([w.lieferant, w.lieferschein ? "Lieferschein " + w.lieferschein : "", zahl(w.menge), w.silo ? "in " + w.silo : w.lager, w.beleg].filter(Boolean).join(" · "))}</small></div>`);
+		const f = d.freigabe;
+		if (f) t.push(`<div class="ereignis"><b>${f.aktion === "Freigeben" ? "Freigegeben" : "Gesperrt"}</b> ${esc(f.zeit || "")}<small>${esc([f.person, f.grund].filter(Boolean).join(" · "))}</small></div>`);
+		const h = d.herstellung;
+		if (h) t.push(`<div class="ereignis"><b>Hergestellt</b> ${esc(h.zeit || "")}<small>${esc([h.station, h.person, h.beleg].filter(Boolean).join(" · "))}</small></div>`);
+		(d.pruefungen || []).forEach((p) => t.push(`<div class="ereignis"><b>${esc(p.was)}</b> <span class="marke ${p.ergebnis === "OK" ? "grau" : "rot"}">${esc(p.ergebnis)}</span> ${esc(p.zeit || "")}<small>${esc([p.wert, p.station].filter(Boolean).join(" · "))}</small></div>`));
+		const fs = d.fundstellen || {};
+		const wo = [];
+		(fs.paletten || []).forEach((p) => wo.push(`Palette …${esc(String(p.nve).slice(-6))}: ${esc(p.dieses_los)} (${esc(p.status)})`));
+		(fs.behaelter || []).forEach((b) => wo.push(`${esc(b.typ)} ${esc(b.code)}`));
+		if (fs.lose) wo.push("Lose im Lager: " + esc(fs.lose));
+		return (t.length ? `<h3>Verlauf</h3>${t.join("")}` : "") +
+			`<h3>Wo liegt es jetzt?</h3>${wo.length ? wo.map((x) => `<div class="ereignis">${x}</div>`).join("") : `<p class="hinweis">Nicht mehr im Lager.</p>`}`;
+	}
+	function verdrahten(el, n) {
+		el.querySelectorAll(".verw li").forEach((li) => li.addEventListener("click", () => waehlen(li.dataset.id)));
+		const b = el.querySelector('[data-a="neu"]');
+		if (b && n) b.addEventListener("click", () => laden(n.charge));
+	}
+
+	// ------------------------------------------------------------------ Belegliste (Einkauf und Verkauf)
+	function belegeZeigen() {
+		const el = $("belege");
+		const alle = daten.belege || [];
+		if (!alle.length) { el.hidden = true; return; }
+		const zeilen = alle.filter((b) => belegFilter === "Alle" || b.art === belegFilter);
+		const anzahl = (a) => alle.filter((b) => a === "Alle" || b.art === a).length;
+		el.hidden = false;
+		el.innerHTML = `<div class="reihe"><h2>Belege in der Kette</h2>
+			<div class="reiter">${["Alle", "Einkauf", "Verkauf"].map((a) => `<button data-f="${a}" class="${a === belegFilter ? "an" : ""}">${a} ${anzahl(a)}</button>`).join("")}</div>
+			<button class="btn klein" id="csv">CSV</button><button class="btn klein" onclick="window.print()">Drucken</button></div>
+			<div class="tab-wrap"><table class="tab"><thead><tr><th>Art</th><th>Beleg</th><th>Datum</th><th>Lieferant / Kunde</th><th>Nummer extern</th>
+				<th>Artikel</th><th>Bezeichnung</th><th>Charge</th><th class="z">Menge</th></tr></thead>
+			<tbody>${zeilen.map((b) => `<tr data-c="${esc(b.charge)}"><td><span class="art ${b.art === "Einkauf" ? "ein" : "ver"}">${esc(b.art)}</span></td>
+				<td>${esc(b.beleg || "–")}</td><td>${esc(b.datum || "")}</td><td>${esc(b.partner || "")}</td><td>${esc(b.extern || "")}</td>
+				<td>${esc(b.artikel || "")}</td><td>${esc(b.artikelname || "")}</td><td>${esc(b.charge)}</td>
+				<td class="z">${esc(zahl(b.menge))} ${esc(b.einheit || "")}</td></tr>`).join("")}</tbody></table></div>`;
+		el.querySelectorAll("[data-f]").forEach((b) => b.addEventListener("click", () => { belegFilter = b.dataset.f; belegeZeigen(); }));
+		el.querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => {
+			const id = tr.dataset.c;
+			if (!bild.knoten.has(id)) { [...bild.knoten.values()].forEach((g) => { if (g.art === "gruppe" && g.teile.some((t) => t.id === id)) offen.add(g.ziel); }); }
+			gewaehlt = null; waehlen(id);
+			$("leinwand").scrollIntoView({ behavior: "smooth", block: "start" });
+		}));
+		$("csv").addEventListener("click", () => csv(alle));
+	}
+	function csv(alle) {
+		const kopf = ["Art", "Beleg", "Datum", "Lieferant/Kunde", "Nummer extern", "Artikel", "Bezeichnung", "Charge", "Menge", "Einheit"];
+		const feld = (v) => { const s = String(v == null ? "" : v); return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+		const text = [kopf].concat(alle.map((b) => [b.art, b.beleg, b.datum, b.partner, b.extern, b.artikel, b.artikelname, b.charge,
+			b.menge == null ? "" : String(b.menge).replace(".", ","), b.einheit])).map((z) => z.map(feld).join(";")).join("\r\n");
+		const a = document.createElement("a");
+		a.href = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
+		a.download = "rueckverfolgung-" + daten.start + ".csv";
+		a.click();
+		setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+	}
+
+	// ------------------------------------------------------------------ Bedienung
+	$("suche").addEventListener("submit", (e) => { e.preventDefault(); laden($("code").value); $("code").value = ""; });
+	$("werkzeuge").addEventListener("click", (e) => {
+		const z = e.target.closest("[data-z]");
+		if (!z || !bild) return;
+		if (z.dataset.z === "+") zoom(1.25);
+		else if (z.dataset.z === "-") zoom(0.8);
+		else if (z.dataset.z === "fit") passend();
+		else if (z.dataset.z === "alle") { [...bild.knoten.values()].forEach((g) => { if (g.art === "gruppe") offen.add(g.ziel); }); zeichnen(false); }
+	});
+	// Ziehen zum Verschieben (Maus); am Tablet scrollt der Finger ohnehin. Strg + Mausrad zoomt.
+	const box = $("scroll");
+	let zug = null;
+	box.addEventListener("pointerdown", (e) => {
+		if (e.pointerType !== "mouse" || e.target.closest("foreignObject")) return;
+		zug = { x: e.clientX, y: e.clientY, l: box.scrollLeft, t: box.scrollTop, bewegt: false };
+		box.classList.add("zieht");
+	});
+	window.addEventListener("pointermove", (e) => {
+		if (!zug) return;
+		box.scrollLeft = zug.l - (e.clientX - zug.x);
+		box.scrollTop = zug.t - (e.clientY - zug.y);
+		if (Math.abs(e.clientX - zug.x) + Math.abs(e.clientY - zug.y) > 4) zug.bewegt = true;
+	});
+	window.addEventListener("pointerup", () => {
+		if (zug && !zug.bewegt && gewaehlt && bild) { gewaehlt = null; zeichnen(false); details(null); }
+		zug = null; box.classList.remove("zieht");
+	});
+	box.addEventListener("wheel", (e) => { if (!e.ctrlKey || !bild) return; e.preventDefault(); zoom(e.deltaY < 0 ? 1.1 : 0.9); }, { passive: false });
+	window.addEventListener("popstate", (e) => { if (e.state && e.state.code) laden(e.state.code, false); });
+
+	const start = $("nz").dataset.code;
+	if (start) { history.replaceState({ code: start }, "", location.href); laden(start, false); }
+	else $("code").focus();
+})();
+</script>{% endraw %}
+{% endblock %}

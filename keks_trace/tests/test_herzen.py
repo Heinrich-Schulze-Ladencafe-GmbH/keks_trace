@@ -4,7 +4,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_months, getdate, nowdate
 
-from keks_trace import demo, demo_herzen, terminal
+from keks_trace import demo, demo_herzen, silo, terminal
 from keks_trace.trace import rueckwaerts
 from keks_trace.utils import regel_nur_hinweis
 
@@ -32,6 +32,13 @@ class TestHerzen(IntegrationTestCase):
 		mhd = add_days(nowdate(), 300)
 		cls.zucker = terminal.wareneingang("Lager", "HZ-PUDERZUCKER", f"PZ{cls.h}", 50, mhd)["charge"]
 		cls.eiweiss = terminal.wareneingang("Lager", "HZ-EIWEISS", f"EW{cls.h}", 5, mhd)["charge"]
+		# Der Zuckerguss wird jeden Morgen frisch angemischt, der Tank vorher geleert. Ohne das blieben Reste
+		# früherer Läufe (Haltbarkeit 2 Tage) drin, und die Tests hingen vom Datum des letzten Laufs ab.
+		silo.leermeldung("Zuckerguss Herzenboden", bemerkung="Test: Tank morgens leer")
+		terminal.herstellen(
+			"Herzen Garnieren", "HZ-GLASUR",
+			[{"code": cls.zucker, "menge": 9.5}, {"code": cls.eiweiss, "menge": 0.5}],
+		)  # fmt: skip
 		cls.pack = {
 			code: terminal.wareneingang("Lager", code, f"{code[-4:]}{cls.h}", 500)["charge"]
 			for code in demo_herzen.PACKMITTEL

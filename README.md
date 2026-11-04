@@ -419,6 +419,28 @@ Barcode-Erkennung: Chrome auf Android ja, Windows (Surface) nein – dort Handsc
 Eintippen. Die Kamera braucht **HTTPS**; auf dem Testserver mit `http://` erscheint der Kamera-Knopf deshalb
 nicht. Direktaufruf mit Code: `/akte?code=<NVE oder Los>`.
 
+### Netzbild der Rückverfolgung (`/netz`)
+
+Für Büro, QS und Audit am großen Bildschirm oder am Surface. Aufruf `/netz?code=<Los, Charge oder Palette>`
+oder aus der Akte über „Netzbild: woher und wohin“. Nur lesen, Leserecht auf Chargen.
+
+- Das gewählte Los steht in der Mitte. **Links** steht, woraus es besteht (bis zum Wareneingang), **rechts**,
+  wohin es ging (bis zum Lieferschein beim Kunden). Die Spalten folgen der Stufe: Rohstoff, Zwischenstufe,
+  Backware, Fertigware, Kunde.
+- **Farbe hat Bedeutung:** Der Streifen links zeigt die Stufe. Rote Marke heißt gesperrt, orange heißt
+  Prüfung mit Abweichung. Gestrichelt heißt „möglicherweise enthalten“ (Silo-Vermischung).
+- **Anklicken** hebt den ganzen Weg hervor (woher und wohin), der Rest wird blass. An den Linien steht die
+  Menge. Rechts stehen die Details: Wareneingang, Freigabe, Herstellung, Prüfungen und wo das Los jetzt liegt.
+  „Von hier aus zeichnen“ macht den Knoten zur neuen Mitte.
+- **Packmittel**, die nur in einen Schritt gehen, sind ab drei Stück zu einem Kasten gebündelt. Anklicken
+  klappt ihn auf.
+- **Belege in der Kette:** Einkauf (Wareneingang je Rohstoff und Packmittel) und Verkauf (Lieferschein mit
+  Bestellnummer des Kunden). Ein Klick auf eine Zeile zeigt das Los im Bild. Ausgabe als CSV (Excel) oder Druck.
+- Verschieben mit Maus oder Finger, Zoom mit −/+ oder Strg + Mausrad. Höchstens 300 Knoten; mehr steht
+  gekürzt da, vollständig im Bericht „Rückverfolgung“.
+- Eine Palette mit mehreren Losen fragt zuerst, welches Los gezeichnet wird. Bei einer schon versendeten
+  Palette zählt, was je auf ihr stand.
+
 ## Prüfungen (CP/CCP)
 
 Unter **Prüfplan** werden Kontrollen gepflegt: Lenkung (CCP, CP, GHP), Auslöser (Intervall in
