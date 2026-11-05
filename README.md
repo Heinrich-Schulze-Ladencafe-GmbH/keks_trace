@@ -130,6 +130,8 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | Bericht `Mengenbilanz` | Mengenbilanz einer Charge in der Oberfläche |
 | `keks_trace/demo.py` | Demo-Stammdaten und drei Produktionstage |
 | `keks_trace/tests/` | Abnahmetests |
+| `keks_trace/www/terminal.html` | Seite `/terminal` (Stil und Rahmen); das Skript liegt als ES-Module in `keks_trace/public/js/terminal/` (`main.js` lädt die Teile: `basis`, `tastatur`, `rahmen`, `station`, `linie`, `herstellen`, `rework`, `wareneingang`, `paletten`, `lieferung`, `lager`, `info`). Kein `bench build` nötig; `www/terminal.py` hängt einen Hash der Dateien an, damit Browser nach einem Update nichts Altes aus dem Cache nehmen |
+| `tests/terminal/` | Rauchtest im Browser ohne Frappe (siehe unten) und strenge ESLint-Regeln für die Terminal-Module |
 
 **Zusatzfelder:**
 - am Artikel: **Chargenstufe** (Rohstoff, Packmittel, Halbfabrikat, Grundteig, Teig veredelt,
@@ -141,6 +143,22 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 Haltbarkeiten nutzen die ERPNext-Standardfelder „Has Expiry Date“ und „Shelf Life In Days“ am Artikel:
 Standzeit bei Teigen, Höchstalter bei Rework, maximale Lagerdauer bei loser Ware, MHD bei Fertigware
 und Füllungen.
+
+## Prüfen ohne Server
+
+Die GitHub-Aktion **Prüfen** (`.github/workflows/pruefen.yml`) läuft bei jedem Push: `ruff` für Python,
+ESLint für die Terminal-Module und der **Rauchtest** des Terminals. Der Rauchtest lädt `/terminal` in Chromium mit
+nachgebildeten Server-Antworten (`tests/terminal/attrappen.mjs`), klickt sich je Stationstyp durch alle Knöpfe
+und meldet jeden JavaScript-Fehler. Lokal (Node 22, Playwright mit Chromium):
+
+```bash
+node tests/terminal/rauchtest.mjs                          # Tiefe 3, alle Stationen
+node tests/terminal/rauchtest.mjs --speichern /tmp/vorher  # vor einem Umbau alle Bildschirme festhalten
+node tests/terminal/rauchtest.mjs --vergleich /tmp/vorher  # danach: Bildschirme und API-Aufrufe gleich?
+```
+
+Neue Masken oder Felder brauchen passende Antworten in `attrappen.mjs`, sonst baut der Test sie nur halb auf.
+Die Integrationstests (`bench run-tests`) laufen weiter auf dem Testserver.
 
 ## Testserver auf Debian 13 in einem Lauf
 
