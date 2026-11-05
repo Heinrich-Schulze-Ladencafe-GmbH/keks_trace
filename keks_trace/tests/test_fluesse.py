@@ -7,8 +7,9 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, nowdate
 
-from keks_trace import anfrage, demo, demo_linie, linienbuchung, terminal
+from keks_trace import anfrage, demo, linienbuchung, terminal
 from keks_trace import palette as paletten
+from keks_trace.demo import linie as demo_linie
 from keks_trace.linienbuchung import LinienFehler
 
 VPC = "Verpackungs-PC"
@@ -162,7 +163,7 @@ class TestFluesse(IntegrationTestCase):
 
 	def test_behaelter_nur_an_ihrer_linie(self):
 		"""Leer melden und Karton anbrechen zeigen nur die Behälter der eigenen Linie (Herzenboden ≠ Backstube)."""
-		from keks_trace import demo_herzen
+		from keks_trace.demo import herzen as demo_herzen
 
 		demo_herzen.anlegen(vorrat=0)
 		herzen = {s["silo"] for s in terminal.silos("Herzen Garnieren")}
@@ -176,7 +177,7 @@ class TestFluesse(IntegrationTestCase):
 
 	def test_stueckware_rest_in_stueck(self):
 		"""Angebrochene Kartons mit Stückware: „19 Karton + 7 Stk“ statt „19,7 Karton“."""
-		from keks_trace import demo_herzen
+		from keks_trace.demo import herzen as demo_herzen
 
 		demo_herzen.anlegen(vorrat=0)
 		je = demo_herzen.STK_JE_KARTON["9"]
@@ -200,7 +201,8 @@ class TestFluesse(IntegrationTestCase):
 		aelter = [{"charge": "ALT-TEST", "mhd": "01.01.2027", "menge": 5}]
 		with (
 			einstellungen(fefo_rohstoffe="Grund Pflicht"),
-			mock.patch.object(terminal, "_fefo_aeltere", return_value=aelter),
+			# _fefo_aeltere dort ersetzen, wo es aufgerufen wird (Terminal-Paket, Modul zutaten)
+			mock.patch.object(terminal.zutaten, "_fefo_aeltere", return_value=aelter),
 		):
 			f = terminal.fefo_pruefen("Kneter", folie)
 			self.assertTrue(f["pflicht"] and f["aeltere"])

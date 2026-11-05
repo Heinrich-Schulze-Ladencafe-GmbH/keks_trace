@@ -4,7 +4,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_months, flt, getdate, nowdate
 
-from keks_trace import demo, demo_linie, linienbuchung, planung, pruefung, terminal
+from keks_trace import demo, haccp, linienbuchung, planung, terminal
+from keks_trace.demo import linie as demo_linie
 from keks_trace.linienbuchung import LinienFehler
 from keks_trace.utils import regel_nur_hinweis
 
@@ -82,10 +83,10 @@ class TestLinie(IntegrationTestCase):
 		demo.pruefungen_altern("Metallcheck InoTec", "Metallcheck Thürlings")
 		frappe.db.set_single_value("Keks Trace Einstellungen", "pruefung_sperrt", 1)
 		self.addCleanup(frappe.db.set_single_value, "Keks Trace Einstellungen", "pruefung_sperrt", 0)
-		faellig = [f["titel"] for f in pruefung.faellig("Paletten-Terminal") if f["faellig"]]
+		faellig = [f["titel"] for f in haccp.faellig("Paletten-Terminal") if f["faellig"]]
 		self.assertIn("Metallcheck InoTec", faellig)
 		self.assertNotIn("Metallcheck Thürlings", faellig)
-		with self.assertRaisesRegex(pruefung.PruefFehler, "Metallcheck InoTec"):
+		with self.assertRaisesRegex(haccp.PruefFehler, "Metallcheck InoTec"):
 			terminal.linie_palette("Paletten-Terminal", 10, "Karton", nve)
 		demo_linie.metallcheck_ok("Paletten-Terminal")
 		# eigenes Los (nicht das Tages-Los, in das heute vielleicht schon ältere lose Ware verpackt wurde)
@@ -116,7 +117,7 @@ class TestLinie(IntegrationTestCase):
 		# Metallcheck an der Packstation nicht bestanden: Lose dieser Anlage seit dem letzten OK gesperrt
 		frappe.db.set_value("Terminal Station", "Packstation", "aktueller_auftrag", self.pa.name)
 		koerper = frappe.get_doc("Pruefplan", "Metallcheck InoTec").koerper()
-		r = pruefung.erfassen(
+		r = haccp.erfassen(
 			"Packstation",
 			"Metallcheck InoTec",
 			{"koerper": {k: k != koerper[0] for k in koerper}},
@@ -241,7 +242,7 @@ class TestLinie(IntegrationTestCase):
 
 	def test_07_reichweite_und_kontrakt(self):
 		"""Einkauf: Kontrakt (Rahmenauftrag) mit Abrufen; Reichweite zeigt Bestand, bestellt, Kontrakt offen."""
-		from keks_trace import demo_einkauf
+		from keks_trace.demo import einkauf as demo_einkauf
 		from keks_trace.keks_trace.report.reichweite_rohstoffe.reichweite_rohstoffe import execute
 
 		k = demo_einkauf.anlegen()

@@ -1,6 +1,6 @@
 """Demo Einkauf: Zucker-Kontrakt (Rahmenauftrag) mit zwei Abrufen.
 
-    bench --site keks.localhost execute keks_trace.demo_einkauf.anlegen
+    bench --site keks.localhost execute keks_trace.demo.einkauf.anlegen
 
 Börsenware wird per Kontrakt gekauft: Menge und Preis fest, abgerufen wird nach Bedarf. In ERPNext ist das
 ein Rahmenauftrag (Blanket Order, Typ Einkauf); jede Bestellung zeigt auf ihn, ERPNext zählt mit, wie viel

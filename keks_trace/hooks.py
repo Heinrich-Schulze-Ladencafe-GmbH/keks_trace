@@ -29,7 +29,7 @@ doc_events = {
 	"Stock Entry": {
 		# Läuft VOR der ERPNext-Prüfung, damit Bediener klare deutsche Meldungen sehen:
 		# Sperren, Verfall, Rework-Regeln, Allergene, Behälter, Vollständigkeit.
-		"before_validate": "keks_trace.pruefungen.pruefe_stock_entry",
+		"before_validate": "keks_trace.buchungspruefung.pruefe_stock_entry",
 		# Genealogie-Kanten, Ursprungs-/Backtag-/MHD-Daten und Behälterinhalt.
 		"on_submit": [
 			"keks_trace.genealogie.on_submit",
@@ -72,4 +72,4 @@ doc_events = {
 
 # Demosysteme (Testserver mit Demo-Daten): jeden Morgen frischer Demostand, siehe demo_tag.py.
 # Auf allen anderen Systemen tut morgens() nichts.
-scheduler_events = {"cron": {"30 4 * * *": ["keks_trace.demo_tag.morgens"]}}
+scheduler_events = {"cron": {"30 4 * * *": ["keks_trace.demo.tag.morgens"]}}

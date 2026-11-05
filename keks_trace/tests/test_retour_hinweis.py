@@ -8,7 +8,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, flt, nowdate
 
-from keks_trace import demo_linie, linienbuchung, terminal
+from keks_trace import linienbuchung, terminal
+from keks_trace.demo import linie as demo_linie
 from keks_trace.linienbuchung import LinienFehler
 from keks_trace.utils import regel_nur_hinweis
 

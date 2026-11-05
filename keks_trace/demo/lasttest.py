@@ -1,9 +1,9 @@
 """Lasttest: Datenflut für den Demo-Server und Messung der Antwortzeiten.
 
-    bench --site keks.localhost execute keks_trace.lasttest.flut --kwargs "{'tage': 730}"
-    bench --site keks.localhost execute keks_trace.lasttest.buchungen --kwargs "{'anzahl': 300}"
-    bench --site keks.localhost execute keks_trace.lasttest.messen
-    bench --site keks.localhost execute keks_trace.lasttest.aufraeumen
+    bench --site keks.localhost execute keks_trace.demo.lasttest.flut --kwargs "{'tage': 730}"
+    bench --site keks.localhost execute keks_trace.demo.lasttest.buchungen --kwargs "{'anzahl': 300}"
+    bench --site keks.localhost execute keks_trace.demo.lasttest.messen
+    bench --site keks.localhost execute keks_trace.demo.lasttest.aufraeumen
 
 flut: erzeugt Chargen und Genealogie-Kanten für N Produktionstage direkt in der Datenbank (schnell),
 so wie sie ein Betrieb in dieser Größe erzeugt: Rohstoff-Lieferungen, Grundteige (bis ein Jahr alt

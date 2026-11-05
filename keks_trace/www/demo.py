@@ -1,4 +1,4 @@
-"""Drehbuch der Demo mit dem Stand von heute (demo_tag.py). Lesen für alle mit Leserecht auf Chargen;
+"""Drehbuch der Demo mit dem Stand von heute (demo/tag.py). Lesen für alle mit Leserecht auf Chargen;
 vorbereiten nur System Manager auf einem Demosystem."""
 
 import frappe

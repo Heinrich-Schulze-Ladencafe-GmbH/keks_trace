@@ -70,7 +70,7 @@
 	let warte = null;
 
 	async function api(methode, args, post) {
-		const r = await fetch("/api/method/keks_trace.demo_tag." + methode + (post ? "" : "?" + new URLSearchParams(args || {})), {
+		const r = await fetch("/api/method/keks_trace.demo.tag." + methode + (post ? "" : "?" + new URLSearchParams(args || {})), {
 			method: post ? "POST" : "GET",
 			headers: { Accept: "application/json", "Content-Type": "application/json", "X-Frappe-CSRF-Token": window.csrf_token || (window.frappe && frappe.csrf_token) || "" },
 			body: post ? JSON.stringify(args || {}) : undefined,

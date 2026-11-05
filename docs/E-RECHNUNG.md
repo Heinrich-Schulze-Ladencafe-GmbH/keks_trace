@@ -1,6 +1,6 @@
 # E-Rechnung und DATEV – Testlauf
 
-Stand 1.11.2026, ERPNext 16, Testsystem `keks.localhost`. Demo-Skript: `keks_trace/demo_erechnung.py`.
+Stand 1.11.2026, ERPNext 16, Testsystem `keks.localhost`. Demo-Skript: `keks_trace/demo/erechnung.py`.
 
 ## Ergebnis
 
@@ -72,13 +72,13 @@ Die Codelisten (Einheiten, Zahlungsarten, Steuerkategorien) importiert eu_einvoi
 ## Demo nachspielen
 
 ```bash
-bench --site keks.localhost execute keks_trace.demo_erechnung.einrichten
-bench --site keks.localhost execute keks_trace.demo_erechnung.rechnung                          # XRECHNUNG
-bench --site keks.localhost execute keks_trace.demo_erechnung.rechnung --kwargs "{'profil': 'EN 16931'}"
-bench --site keks.localhost execute keks_trace.demo_erechnung.zugferd --kwargs "{'rechnung': 'ACC-SINV-…'}"
-bench --site keks.localhost execute keks_trace.demo_erechnung.eingang
-bench --site keks.localhost execute keks_trace.demo_erechnung.datev
+bench --site keks.localhost execute keks_trace.demo.erechnung.einrichten
+bench --site keks.localhost execute keks_trace.demo.erechnung.rechnung                          # XRECHNUNG
+bench --site keks.localhost execute keks_trace.demo.erechnung.rechnung --kwargs "{'profil': 'EN 16931'}"
+bench --site keks.localhost execute keks_trace.demo.erechnung.zugferd --kwargs "{'rechnung': 'ACC-SINV-…'}"
+bench --site keks.localhost execute keks_trace.demo.erechnung.eingang
+bench --site keks.localhost execute keks_trace.demo.erechnung.datev
 ```
 
 `rechnung` nimmt den jüngsten noch nicht berechneten Lieferschein von „KT Demo Handel“.
-Beispiel-Eingangsrechnung: `keks_trace/demo_daten/eingangsrechnung_muehle.xml` (fiktive Mühle).
+Beispiel-Eingangsrechnung: `keks_trace/demo/daten/eingangsrechnung_muehle.xml` (fiktive Mühle).

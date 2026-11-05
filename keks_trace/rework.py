@@ -6,7 +6,7 @@ Blockierend:
 - Für die Kombination Rework-Artikel -> Teig muss eine aktive Rework-Regel existieren (Rework-Matrix).
 - Das Rework darf keine Allergene enthalten, die der Zielteig nicht hat (auch wenn eine Regel existiert).
 - Der Rework-Anteil am Teig darf das Maximum der Regel nicht überschreiten.
-- Abgelaufene Rework-Chargen sind gesperrt (siehe keks_trace.pruefungen, Verfall = Ursprungsdatum
+- Abgelaufene Rework-Chargen sind gesperrt (siehe keks_trace.buchungspruefung, Verfall = Ursprungsdatum
   + Haltbarkeit des Rework-Artikels).
 
 Nur Hinweis (FIFO): es gibt eine ältere, noch verfügbare Rework-Charge desselben Artikels.
@@ -30,7 +30,6 @@ from keks_trace.utils import (
 
 
 def pruefe(doc):
-
 	eingaenge = eingangs_zeilen(doc)
 	ausgaenge = [r for r in ausgangs_zeilen(doc) if r.is_finished_item] or ausgangs_zeilen(doc)
 	if not eingaenge or not ausgaenge:
