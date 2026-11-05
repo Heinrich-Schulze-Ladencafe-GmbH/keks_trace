@@ -10,8 +10,8 @@ Echt (aus Rezeptur und Spezifikation):
 
 PLATZHALTER (ausgedacht, bitte ersetzen): siehe PLATZHALTER unten.
 
-Anlegen:     bench --site <site> execute keks_trace.pilot.anlegen
-Durchspielen: bench --site <site> execute keks_trace.pilot.durchspielen
+Anlegen:     bench --site <site> execute keks_trace.demo.pilot.anlegen
+Durchspielen: bench --site <site> execute keks_trace.demo.pilot.durchspielen
 """
 
 import frappe

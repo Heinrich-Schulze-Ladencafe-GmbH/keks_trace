@@ -1,6 +1,6 @@
 """Demo-Tag: jeden Morgen ein sauberer Demostand, alle Daten relativ zu heute. Dazu das Drehbuch unter /demo.
 
-	bench --site <site> execute keks_trace.demo_tag.vorbereiten
+	bench --site <site> execute keks_trace.demo.tag.vorbereiten
 
 Was vorbereitet wird:
 1. Zuckerguss-Tank leeren und frisch anmischen (Haltbarkeit 2 Tage, sonst blockiert alter Guss das Garnieren).
@@ -19,7 +19,7 @@ import frappe
 from frappe import _
 from frappe.utils import add_days, flt, now_datetime, nowdate
 
-from keks_trace import demo_herzen
+from keks_trace.demo import herzen as demo_herzen
 from keks_trace.utils import demo_commit, regel_nur_hinweis
 
 STAND = "kt_demo_stand"
@@ -146,7 +146,7 @@ def starten(neu: int = 0) -> dict:
 	if not erlaubt():
 		frappe.throw(_("Der Demo-Tag läuft nur auf einem Test- oder Demosystem."))
 	frappe.cache.set_value("kt_demo_laeuft", now_datetime().strftime("%H:%M"), expires_in_sec=900)
-	frappe.enqueue("keks_trace.demo_tag._im_hintergrund", queue="long", timeout=1500, neu=int(neu))
+	frappe.enqueue("keks_trace.demo.tag._im_hintergrund", queue="long", timeout=1500, neu=int(neu))
 	return {"laeuft": True}
 
 

@@ -128,7 +128,7 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | DocType `Keks Trace Einstellungen` | Vollständigkeitsprüfung, Toleranz der Mengenbilanz |
 | Bericht `Rueckverfolgung` | Rückverfolgung in der Oberfläche |
 | Bericht `Mengenbilanz` | Mengenbilanz einer Charge in der Oberfläche |
-| `keks_trace/demo.py` | Demo-Stammdaten und drei Produktionstage |
+| `keks_trace/demo/` | Demo-Stammdaten und drei Produktionstage (`keks_trace.demo.run`), dazu die weiteren Demos und Testhilfen: `linie`, `pilot`, `herzen`, `einkauf`, `erechnung`, `tag`, `lasttest`. Läuft nicht im Echtbetrieb |
 | `keks_trace/tests/` | Abnahmetests |
 | `keks_trace/www/terminal.html` | Seite `/terminal` (Stil und Rahmen); das Skript liegt als ES-Module in `keks_trace/public/js/terminal/` (`main.js` lädt die Teile: `basis`, `tastatur`, `rahmen`, `station`, `linie`, `herstellen`, `rework`, `wareneingang`, `paletten`, `lieferung`, `lager`, `info`). Kein `bench build` nötig; `www/terminal.py` hängt einen Hash der Dateien an, damit Browser nach einem Update nichts Altes aus dem Cache nehmen |
 | `tests/terminal/` | Rauchtest im Browser ohne Frappe (siehe unten) und strenge ESLint-Regeln für die Terminal-Module |
@@ -328,13 +328,13 @@ legt die Demo-Stationen an.
 ## Pilot Honig Lebkuchen
 
 ```bash
-bench --site keks.localhost execute keks_trace.pilot.anlegen       # Stammdaten
-bench --site keks.localhost execute keks_trace.pilot.durchspielen  # ein Tag komplett
+bench --site keks.localhost execute keks_trace.demo.pilot.anlegen       # Stammdaten
+bench --site keks.localhost execute keks_trace.demo.pilot.durchspielen  # ein Tag komplett
 ```
 
 Echte Rezepturen 5812 (Grundteig Honig) und 5888 (Honig Moppen), Artikel 17846/17670 mit EANs,
 MHD 32 Monate. Ausgedachte Werte (Beutelgrößen, Gebinde, Ruhezeit, Packmittel) stehen in
-`keks_trace/pilot.py` unter `PLATZHALTER`.
+`keks_trace/demo/pilot.py` unter `PLATZHALTER`.
 
 ## Paletten (NVE / SSCC)
 
@@ -532,7 +532,7 @@ Palette. Abweichung sperrt die Lose, die seit dem letzten OK auf dieser Anlage v
 einer Linie zeigen nur Artikel und Aufträge dieser Linie, Stationen ohne Linie nur Artikel ohne Linie;
 der Versand sieht alle Aufträge. Die Planung plant je Linie nur ihre Artikel und meldet Artikel ohne Linie.
 
-**Herzenboden** (`keks_trace.demo_herzen.anlegen`): Eigene Linie „Herzenboden“ mit den Stationen Herzen Garnieren und
+**Herzenboden** (`keks_trace.demo.herzen.anlegen`): Eigene Linie „Herzenboden“ mit den Stationen Herzen Garnieren und
 Herzen Verpackung. Herzen in Stück, je Größe ein Artikel
 (Platzhalter 12, 18, 25 cm). Rohling backen (Backstube, aus Grundteig) → Zuckerglasur nach eigener
 Rezeptur (Halbfabrikat, max. 2 Tage; Haken „begrenzt das MHD des Endprodukts nicht“) → Garnieren
@@ -541,7 +541,7 @@ Rezeptur (Halbfabrikat, max. 2 Tage; Haken „begrenzt das MHD des Endprodukts n
 **Kübel:** Produktträger „Teigbehälter“ mit Nummer K-001 …; `/kuebel_code` erzeugt je Kübel
 Data Matrix + Nummer als SVG zum Einlasern.
 
-Demo: `bench --site keks.localhost execute keks_trace.demo_linie.anlegen` (Linie „Backstraße“,
+Demo: `bench --site keks.localhost execute keks_trace.demo.linie.anlegen` (Linie „Backstraße“,
 Abschnitte mit Demo-Leistungen, Stationen Former, Nachfüllen …, Packstation, Paletten-Terminal,
 40 Kübel, Großkunden A/B/C mit 120.000 / 80.000 / 50.000 Beuteln, Planung, erster Tag freigegeben).
 
@@ -618,7 +618,7 @@ MHD-Begrenzung durch die Füllung (MHD = MHD des Nougats statt Backtag + 270 Tag
 ### Demo-Tag und Drehbuch (`/demo`)
 
 ```bash
-bench --site <site> execute keks_trace.demo_tag.vorbereiten   # oder auf /demo: „Für heute vorbereiten“
+bench --site <site> execute keks_trace.demo.tag.vorbereiten   # oder auf /demo: „Für heute vorbereiten“
 ```
 
 Legt jeden Morgen einen sauberen Demostand an, alle Daten relativ zu heute:
@@ -644,9 +644,9 @@ Terminal-Direktlink: `/terminal?station=Lager` setzt die Station und öffnet sie
 # Linie, Artikel, Behälter, drei Kundenaufträge in Stück (einer mit MHD höchstens 6 Monate)
 # und Vorrat: Puderzucker, Eiweiß, Packmittel (je ein Karton angebrochen), Zuckerguss im Behälter,
 # 200 Rohlinge und 200 garnierte Herzen je Größe. Füllt bei jedem Lauf nur auf, was fehlt.
-bench --site keks.localhost execute keks_trace.demo_herzen.anlegen
+bench --site keks.localhost execute keks_trace.demo.herzen.anlegen
 # Ein Herz durch alle Abteilungen bis zum Lieferschein, mit Protokoll und Rückverfolgung
-bench --site keks.localhost execute keks_trace.demo_herzen.durchlauf --kwargs "{'groesse': '9', 'stueck': 100}"
+bench --site keks.localhost execute keks_trace.demo.herzen.durchlauf --kwargs "{'groesse': '9', 'stueck': 100}"
 ```
 
 ## Einkauf: Kontrakte und Reichweite
@@ -659,13 +659,13 @@ Eingekauft wird nach Auftragslage und Börse, nicht nach Bestellvorschlag. ERPNe
 - Bericht **Reichweite Rohstoffe** (Workspace Keks Trace → Einkauf): Bestand, bestellt, Kontrakt offen,
   Verbrauch je Tag, reicht bis, Bedarf aus offenen Kundenaufträgen (über die Rezepte bis zum Rohstoff).
 
-Demo: `bench --site keks.localhost execute keks_trace.demo_einkauf.anlegen` (50 t Zucker-Kontrakt, zwei Abrufe).
+Demo: `bench --site keks.localhost execute keks_trace.demo.einkauf.anlegen` (50 t Zucker-Kontrakt, zwei Abrufe).
 
 ## E-Rechnung und DATEV
 
 Mit den Apps `eu_einvoice` und `erpnext_datev` (ALYF, GPLv3): XRechnung und ZUGFeRD aus der Rechnung, Prüfung nach
 EN 16931, Eingangsrechnungen einlesen, DATEV-Export. Testlauf, Pflichtfelder und Stolpersteine:
-[docs/E-RECHNUNG.md](docs/E-RECHNUNG.md), Demo `keks_trace/demo_erechnung.py`.
+[docs/E-RECHNUNG.md](docs/E-RECHNUNG.md), Demo `keks_trace/demo/erechnung.py`.
 
 ## Lasttest (Datenflut)
 
@@ -673,13 +673,13 @@ Wie schnell bleibt das System, wenn Jahre an Daten drin sind? Auf dem Demo-Serve
 
 ```bash
 # 2 Jahre Produktion als Chargen und Genealogie (Sekunden; faktor=3 = dreifache Tagesmenge)
-bench --site keks.localhost execute keks_trace.lasttest.flut --kwargs "{'tage': 730}"
+bench --site keks.localhost execute keks_trace.demo.lasttest.flut --kwargs "{'tage': 730}"
 # echte Terminal-Buchungen (Wareneingang + Herstellen) ins Lagerbuch, misst die Buchungszeit
-bench --site keks.localhost execute keks_trace.lasttest.buchungen --kwargs "{'anzahl': 300}"
+bench --site keks.localhost execute keks_trace.demo.lasttest.buchungen --kwargs "{'anzahl': 300}"
 # Antwortzeiten messen: Rückruf vorwärts, Reklamation rückwärts, Scan, Listen, Mengenbilanz
-bench --site keks.localhost execute keks_trace.lasttest.messen
+bench --site keks.localhost execute keks_trace.demo.lasttest.messen
 # Lasttest-Chargen wieder entfernen (Präfix LT-)
-bench --site keks.localhost execute keks_trace.lasttest.aufraeumen
+bench --site keks.localhost execute keks_trace.demo.lasttest.aufraeumen
 ```
 
 ## Tests

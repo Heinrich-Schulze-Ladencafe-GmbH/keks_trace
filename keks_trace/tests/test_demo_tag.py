@@ -8,7 +8,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import getdate, now_datetime, nowdate
 
-from keks_trace import demo_tag, silo, terminal
+from keks_trace import silo, terminal
+from keks_trace.demo import tag as demo_tag
 
 
 class TestDemoTag(IntegrationTestCase):

@@ -72,4 +72,4 @@ doc_events = {
 
 # Demosysteme (Testserver mit Demo-Daten): jeden Morgen frischer Demostand, siehe demo_tag.py.
 # Auf allen anderen Systemen tut morgens() nichts.
-scheduler_events = {"cron": {"30 4 * * *": ["keks_trace.demo_tag.morgens"]}}
+scheduler_events = {"cron": {"30 4 * * *": ["keks_trace.demo.tag.morgens"]}}

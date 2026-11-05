@@ -1,6 +1,6 @@
 """Demo Herzenboden: garnierte Lebkuchenherzen in Stück, Größen Gr. 3 bis Gr. 11, Varianten je Spruch.
 
-    bench --site keks.localhost execute keks_trace.demo_herzen.anlegen
+    bench --site keks.localhost execute keks_trace.demo.herzen.anlegen
 
 Ablauf: Rohling backen (Backstraße: Kneter, Verpackungs-PC bucht Rohlinge im Karton ins Lager; vorproduziert
 nach Gefühl) -> Lager lagert die Rohlinge an den Herzenboden um (wie für einen Kunden) -> Zuckerglasur kochen (eigene
@@ -14,7 +14,8 @@ je Größe), je Spruch eine Variante („Gr. 9 · Ich liebe Dich“, siehe keks_
 import frappe
 from frappe.utils import add_days, nowdate
 
-from keks_trace import demo, pilot, varianten
+from keks_trace import demo, varianten
+from keks_trace.demo import pilot
 from keks_trace.utils import demo_commit
 
 # Größe: (Teig je Rohling kg, Guss-Richtwert je Herz kg) - Demo-Werte. Gleicher Teig für alle Größen; der Guss
@@ -184,7 +185,7 @@ def _behaelter(ctx):
 
 @frappe.whitelist()
 def anlegen(vorrat: int = 1) -> frappe._dict:
-	from keks_trace import demo_linie
+	from keks_trace.demo import linie as demo_linie
 
 	ctx = frappe._dict({**pilot.anlegen(), **demo_linie.stammdaten()})  # Grundteig 5812, Backstraße
 	_linie(ctx)
@@ -382,7 +383,7 @@ def vorrat_anlegen(ctx=None) -> dict:
 	Puderzucker, Eiweiß und Packmittel im Lager, je ein Karton Folie/Etikett/Schleife angebrochen,
 	Zuckerguss im Behälter, Rohlinge und garnierte Herzen aller Größen. Füllt nur auf, was fehlt.
 
-	bench --site keks.localhost execute keks_trace.demo_herzen.vorrat_anlegen
+	bench --site keks.localhost execute keks_trace.demo.herzen.vorrat_anlegen
 	"""
 	from keks_trace import demo, terminal
 
@@ -496,7 +497,7 @@ def _durchlauf(groesse: str = "9", stueck: int = 100, spruch: str = STANDARD) ->
 	Palette für den Kundenauftrag) → Versand (Lieferschein) → Rückverfolgung vom Los zurück und vom
 	Puderzucker vorwärts bis zum Kunden.
 
-	bench --site keks.localhost execute keks_trace.demo_herzen.durchlauf
+	bench --site keks.localhost execute keks_trace.demo.herzen.durchlauf
 	"""
 	from keks_trace import demo, sperre, terminal
 	from keks_trace.trace import rueckverfolgung

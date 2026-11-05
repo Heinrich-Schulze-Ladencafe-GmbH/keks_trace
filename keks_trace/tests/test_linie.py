@@ -4,7 +4,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_months, flt, getdate, nowdate
 
-from keks_trace import demo, demo_linie, linienbuchung, planung, pruefung, terminal
+from keks_trace import demo, linienbuchung, planung, pruefung, terminal
+from keks_trace.demo import linie as demo_linie
 from keks_trace.linienbuchung import LinienFehler
 from keks_trace.utils import regel_nur_hinweis
 
@@ -241,7 +242,7 @@ class TestLinie(IntegrationTestCase):
 
 	def test_07_reichweite_und_kontrakt(self):
 		"""Einkauf: Kontrakt (Rahmenauftrag) mit Abrufen; Reichweite zeigt Bestand, bestellt, Kontrakt offen."""
-		from keks_trace import demo_einkauf
+		from keks_trace.demo import einkauf as demo_einkauf
 		from keks_trace.keks_trace.report.reichweite_rohstoffe.reichweite_rohstoffe import execute
 
 		k = demo_einkauf.anlegen()

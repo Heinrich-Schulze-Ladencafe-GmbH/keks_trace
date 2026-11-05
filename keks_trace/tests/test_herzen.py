@@ -4,7 +4,8 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_months, getdate, nowdate
 
-from keks_trace import demo, demo_herzen, silo, terminal
+from keks_trace import demo, silo, terminal
+from keks_trace.demo import herzen as demo_herzen
 from keks_trace.trace import rueckwaerts
 from keks_trace.utils import regel_nur_hinweis
 

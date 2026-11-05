@@ -2,8 +2,8 @@
 
 Nur Testdaten (fiktive Adressen, Beispiel-IBAN, Steuernummern aus den Tests von eu_einvoice).
 
-    bench --site keks.localhost execute keks_trace.demo_erechnung.einrichten
-    bench --site keks.localhost execute keks_trace.demo_erechnung.rechnung --kwargs "{'lieferschein': 'MAT-DN-…'}"
+    bench --site keks.localhost execute keks_trace.demo.erechnung.einrichten
+    bench --site keks.localhost execute keks_trace.demo.erechnung.rechnung --kwargs "{'lieferschein': 'MAT-DN-…'}"
 """
 
 import os
@@ -201,7 +201,7 @@ def druck_html(rechnung):
 
 
 LIEFERANT = "KT Demo Mühle"
-BEISPIEL_EINGANG = os.path.join(os.path.dirname(__file__), "demo_daten", "eingangsrechnung_muehle.xml")
+BEISPIEL_EINGANG = os.path.join(os.path.dirname(__file__), "daten", "eingangsrechnung_muehle.xml")
 
 
 def eingang(xml=BEISPIEL_EINGANG):

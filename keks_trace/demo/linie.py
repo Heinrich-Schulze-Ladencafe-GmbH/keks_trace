@@ -1,6 +1,6 @@
 """Demo Backstraße: Linie, Abschnitte mit Leistung, Stationen, Kübel, drei Großkunden, Planung.
 
-    bench --site keks.localhost execute keks_trace.demo_linie.anlegen
+    bench --site keks.localhost execute keks_trace.demo.linie.anlegen
 
 Alle Zahlen sind Demo-Werte (bitte durch echte ersetzen): Leistungen je Abschnitt, Laufzeit 8 h,
 Umrüstzeit 30 min, Großkunden A/B/C mit 120.000 / 80.000 / 50.000 Beuteln Honig Lebkuchen 200 g.
@@ -9,7 +9,8 @@ Umrüstzeit 30 min, Großkunden A/B/C mit 120.000 / 80.000 / 50.000 Beuteln Honi
 import frappe
 from frappe.utils import add_days, flt, getdate, nowdate
 
-from keks_trace import demo, pilot, planung
+from keks_trace import demo, planung
+from keks_trace.demo import pilot
 from keks_trace.utils import demo_commit
 
 LINIE = "Backstraße"

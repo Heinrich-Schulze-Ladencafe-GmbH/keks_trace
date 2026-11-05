@@ -11,6 +11,11 @@ Ablauf: Grundteig (Silo/Säcke) -> Veredelung (weitere Zutaten, Rework) -> Backe
 Legt Demo-Stammdaten an (Artikel mit Präfix KT-), bucht drei Tage mit Rework und Behältern,
 verpackt, liefert an einen Demo-Kunden und gibt die Rückverfolgung aus.
 Jeder Lauf erzeugt neue Chargen und Behälter (eindeutiges Kürzel), Stammdaten werden wiederverwendet.
+
+Weitere Demos und Testhilfen in diesem Paket (nichts davon läuft im Echtbetrieb, außer demo.tag.morgens,
+das auf Nicht-Demosystemen nichts tut): linie (Backstraße mit Produktionsaufträgen), pilot (Honig Lebkuchen),
+herzen (Herzenboden), einkauf (Kontrakt), erechnung (E-Rechnung, DATEV), tag (Demo-Tag mit Drehbuch /demo),
+lasttest (Massendaten und Messung). Die Tests nutzen stammdaten() und die Helfer hier.
 """
 
 import frappe
@@ -1015,7 +1020,7 @@ def lagerware() -> dict:
 
 	from keks_trace import los as los_modul
 	from keks_trace import palette as paletten
-	from keks_trace import pilot
+	from keks_trace.demo import pilot
 
 	ctx = pilot.anlegen()
 	ergebnis = []

@@ -310,18 +310,18 @@ demo() {  # demo METHODE [KWARGS]
 }
 if [ "$DEMO" -eq 1 ] && [ ! -f "$MARKE" ]; then
 	demo demo.run
-	demo demo_linie.anlegen
-	demo pilot.anlegen
-	demo pilot.durchspielen
-	demo demo_herzen.anlegen
-	demo demo_herzen.durchlauf "{'groesse': '9', 'stueck': 100}"
-	demo demo_einkauf.anlegen
-	demo demo_erechnung.einrichten
-	demo demo_erechnung.datev        # DATEV-Testfirma mit SKR04-Kontonummern und Beispielbelegen
+	demo demo.linie.anlegen
+	demo demo.pilot.anlegen
+	demo demo.pilot.durchspielen
+	demo demo.herzen.anlegen
+	demo demo.herzen.durchlauf "{'groesse': '9', 'stueck': 100}"
+	demo demo.einkauf.anlegen
+	demo demo.erechnung.einrichten
+	demo demo.erechnung.datev        # DATEV-Testfirma mit SKR04-Kontonummern und Beispielbelegen
 	sudo -u "$BENCH_USER" touch "$MARKE"
 fi
 if [ -f "$MARKE" ]; then
-	demo demo_tag.vorbereiten   # Stand für heute und Drehbuch unter /demo
+	demo demo.tag.vorbereiten   # Stand für heute und Drehbuch unter /demo
 	als_frappe "bench --site ${SITE} scheduler enable" >/dev/null   # danach jeden Morgen um 4:30 Uhr
 fi
 
