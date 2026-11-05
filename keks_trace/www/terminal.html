@@ -249,7 +249,7 @@
 	function laden(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 
 	const BUCHUNGEN = /^(herstellen|linie_|palette|pruefung_erfassen|umlagern|lieferung|paket_lieferung|anbrechen|wareneingang|rework_erfassen|rework_linie$|silo_leer|behaelter_)/;
-	// Anfrage-ID nur für Methoden, die der Server mit @einmalig schützt (terminal.py); Test test_anfrage_liste
+	// Anfrage-ID nur für Methoden, die der Server mit @einmalig schützt (Paket keks_trace/terminal); Test test_anfrage_liste
 	const MIT_ANFRAGE_ID = new Set(["anbrechen", "behaelter_reinigung", "etikett_drucken", "etikett_vormerken", "herstellen", "karton_abnehmen", "karton_auf_palette", "lieferung", "linie_beenden", "linie_lose", "linie_palette", "linie_rueckgabe", "linie_zufuehren", "paket_karton", "paket_lieferung", "palette_beladen", "palette_neu", "palette_umpacken", "palette_versandbereit", "pruefung_erfassen", "rework_erfassen", "rework_linie", "silo_leer", "umlagern", "wareneingang"]);
 	async function api(methode, args) {
 		let r;

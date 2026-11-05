@@ -83,12 +83,27 @@ class TestBehaelterReinigung(IntegrationTestCase):
 
 class TestAnfrageId(IntegrationTestCase):
 	def test_anfrage_liste(self):
-		"""MIT_ANFRAGE_ID in terminal.html == alle @einmalig-Methoden in terminal.py."""
-		ordner = os.path.dirname(terminal.__file__)
-		py = open(terminal.__file__).read()
+		"""MIT_ANFRAGE_ID in terminal.html == alle @einmalig-Methoden im Paket keks_trace.terminal."""
+		paket = os.path.dirname(terminal.__file__)
+		ordner = os.path.dirname(paket)
+		py = "".join(open(os.path.join(paket, f)).read() for f in os.listdir(paket) if f.endswith(".py"))
 		html = open(os.path.join(ordner, "www", "terminal.html")).read()
 		einmalig = set(re.findall(r"@einmalig\ndef (\w+)", py))
 		liste = set(
 			re.findall(r'"(\w+)"', re.search(r"MIT_ANFRAGE_ID = new Set\(\[(.*?)\]\)", html).group(1))
 		)
 		self.assertEqual(liste, einmalig)
+
+	def test_paket_bietet_alle_funktionen(self):
+		"""Jede Funktion der Untermodule ist unter keks_trace.terminal.<name> erreichbar (API-Pfad)."""
+		import importlib
+		import inspect
+
+		paket = os.path.dirname(terminal.__file__)
+		for datei in sorted(os.listdir(paket)):
+			if not datei.endswith(".py") or datei == "__init__.py":
+				continue
+			modul = importlib.import_module("keks_trace.terminal." + datei[:-3])
+			for name, f in inspect.getmembers(modul, inspect.isfunction):
+				if f.__module__ == modul.__name__:
+					self.assertIs(getattr(terminal, name, None), f, f"{datei}: {name}")

@@ -200,7 +200,8 @@ class TestFluesse(IntegrationTestCase):
 		aelter = [{"charge": "ALT-TEST", "mhd": "01.01.2027", "menge": 5}]
 		with (
 			einstellungen(fefo_rohstoffe="Grund Pflicht"),
-			mock.patch.object(terminal, "_fefo_aeltere", return_value=aelter),
+			# _fefo_aeltere dort ersetzen, wo es aufgerufen wird (Terminal-Paket, Modul zutaten)
+			mock.patch.object(terminal.zutaten, "_fefo_aeltere", return_value=aelter),
 		):
 			f = terminal.fefo_pruefen("Kneter", folie)
 			self.assertTrue(f["pflicht"] and f["aeltere"])

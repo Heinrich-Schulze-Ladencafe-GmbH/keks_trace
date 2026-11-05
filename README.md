@@ -109,6 +109,7 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | `keks_trace/traeger.py` | Behälter befüllen, entnehmen, freigeben, Storno |
 | `keks_trace/genealogie.py` | Genealogie-Kanten, Ursprung, Backtag, Komponenten-MHD, Verfall |
 | `keks_trace/trace.py` | Rekursive Rückverfolgung vorwärts/rückwärts, Kunden |
+| `keks_trace/terminal/` | Schnittstelle der Terminals, nach Bereichen: `basis`, `bestand`, `stammdaten`, `scan`, `einwaage`, `zutaten`, `arbeitsliste`, `buchen`, `eingang`, `versand`, `palette`, `behaelter`, `linie`. Aufgerufen wird weiter `keks_trace.terminal.<funktion>` |
 | `keks_trace/api.py` | `rueckverfolgung`, `mengenbilanz`, `traeger_info` und `silo_info` für Scanner und Terminals |
 | `keks_trace/sperre.py` | Sperren, Freigeben, Rückrufsperre, Prüfung bei Buchung und Lieferung |
 | `keks_trace/schutz.py` | Unveränderbarkeit von Protokollen, Belegen und Chargendaten |
