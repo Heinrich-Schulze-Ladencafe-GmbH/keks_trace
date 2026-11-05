@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, formatdate, getdate, now_datetime, nowdate
 
-from keks_trace import kennzeichnung, pruefung
+from keks_trace import haccp, kennzeichnung
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
 from keks_trace.anfrage import einmalig
@@ -182,7 +182,7 @@ def herstellen(
 	s = _station(station)
 	r = rezept(ziel, station=s.name)
 	_darf(s, "herstellen")
-	pruefung.pruefe_station_frei(s.name)
+	haccp.pruefe_station_frei(s.name)
 	if r["stufe"] not in s.stufen_liste():
 		_fehler(_("{0} wird nicht an der Station {1} hergestellt.").format(r["name"], s.name))
 	linie = frappe.get_cached_value("Item", ziel, "kt_linie")
@@ -194,8 +194,8 @@ def herstellen(
 		_fehler(_("Keine Zutaten gescannt."))
 	fefo = _pruefe_fefo(eingaenge, fefo_grund)
 	rezept_abw = _pruefe_rezept(ziel, sollmenge, eingaenge, rezept_grund)
-	pruef_ergebnisse = pruefung.bei_buchung(pruefung.HERSTELLEN, ziel, pruefwerte, s.name)
-	pruefung.verweigern_herstellen(pruef_ergebnisse, s.name, _("Herstellen {0}").format(r["name"]))
+	pruef_ergebnisse = haccp.bei_buchung(haccp.HERSTELLEN, ziel, pruefwerte, s.name)
+	haccp.verweigern_herstellen(pruef_ergebnisse, s.name, _("Herstellen {0}").format(r["name"]))
 
 	summe = sum(
 		z["menge"]
@@ -285,7 +285,7 @@ def herstellen(
 			s.name, "Verpackung", "Stock Entry", se.name,
 		)  # fmt: skip
 
-	hinweise = pruefung.nach_buchung(pruef_ergebnisse, s.name, charge, se.name)
+	hinweise = haccp.nach_buchung(pruef_ergebnisse, s.name, charge, se.name)
 	hinweise += list(se.flags.kt_fifo_warnungen or [])
 	verfall = frappe.db.get_value("Batch", charge, "expiry_date")
 	if mhd and verfall and getdate(verfall) < getdate(mhd):

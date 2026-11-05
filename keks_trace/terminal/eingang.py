@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, flt, formatdate, getdate, now_datetime, nowdate
 
-from keks_trace import gs1, kennzeichnung, pruefung
+from keks_trace import gs1, haccp, kennzeichnung
 from keks_trace import palette as paletten
 from keks_trace.anfrage import einmalig
 from keks_trace.terminal.basis import (
@@ -121,7 +121,7 @@ def wareneingang_artikel() -> list[dict]:
 			if (not eigene or x["lieferant"] in eigene) and (x["bio_ok"] or not a["bio"])
 		]
 		a["pruefungen"] = [
-			pruefung.beschreibung(p) for p in pruefung.fuer_artikel(pruefung.WARENEINGANG, a["artikel"])
+			haccp.beschreibung(p) for p in haccp.fuer_artikel(haccp.WARENEINGANG, a["artikel"])
 		]
 		a["bestellungen"] = _bestellungen(a["artikel"])
 	return artikel
@@ -268,12 +268,12 @@ def wareneingang(
 	if kennzeichnung.BIO in kennzeichnung.artikel_kennzeichen(artikel):
 		kennzeichnung.pruefe_bio_lieferant(lieferant, artikel)
 
-	pruef_ergebnisse = pruefung.bei_buchung(pruefung.WARENEINGANG, artikel, pruefwerte, s.name)
-	abgelehnt = pruefung.verweigert(pruef_ergebnisse)
+	pruef_ergebnisse = haccp.bei_buchung(haccp.WARENEINGANG, artikel, pruefwerte, s.name)
+	abgelehnt = haccp.verweigert(pruef_ergebnisse)
 	if abgelehnt:
 		# Annahme verweigern: nichts buchen, aber die Prüfung protokollieren
 		for p, ok, felder in pruef_ergebnisse:
-			pruefung.protokoll(
+			haccp.protokoll(
 				p, ok, felder, station=s.name,
 				folge=_("Annahme verweigert") if not ok else None,
 				bemerkung=_("Lieferantencharge {0}, {1} {2}").format(lieferantencharge, menge, artikel),
@@ -284,7 +284,7 @@ def wareneingang(
 			"gruende": [
 				_("{0}: gemessen {1} {2}, erlaubt {3}").format(
 					p.titel,
-					pruefung._zahl(f["wert"]) if "wert" in f else "-",
+					haccp._zahl(f["wert"]) if "wert" in f else "-",
 					f.get("einheit") or "",
 					f.get("grenzwert"),
 				)
@@ -341,7 +341,7 @@ def wareneingang(
 	)
 	se.insert()
 	se.submit()
-	pruef_hinweise = pruefung.nach_buchung(pruef_ergebnisse, s.name, charge, se.name)
+	pruef_hinweise = haccp.nach_buchung(pruef_ergebnisse, s.name, charge, se.name)
 	b = frappe.db.get_value("Batch", charge, ["kt_status", "kt_sperrgrund", "expiry_date"], as_dict=True)
 	return {
 		"charge": charge,

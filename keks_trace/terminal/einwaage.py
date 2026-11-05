@@ -4,7 +4,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from keks_trace import kennzeichnung, pruefung
+from keks_trace import haccp, kennzeichnung
 from keks_trace import palette as paletten
 from keks_trace.install import REWORK_ZIELE
 from keks_trace.terminal.basis import _fehler, _silo_je_artikel, _station, _vorraete
@@ -85,7 +85,7 @@ def rezept(artikel: str, menge: float | None = None, station: str | None = None)
 		"rezept_pflicht": _rezept_modus() == "Grund Pflicht",
 		"ausgabe_silo": silos.get(artikel),
 		"einheiten": paletten.einheiten(artikel) if artikel_stufe(artikel) == "Fertigware" else [],
-		"pruefungen": [pruefung.beschreibung(p) for p in pruefung.fuer_herstellen(artikel, station)],
+		"pruefungen": [haccp.beschreibung(p) for p in haccp.fuer_herstellen(artikel, station)],
 		"kennzeichen": sorted(kennzeichnung.artikel_kennzeichen(artikel), key=kennzeichnung.ALLE.index),
 		"kuebel": _kuebel_fuer(zutaten),
 		"umstellung_bio": bool(station and kennzeichnung.umstellung_noetig(station, artikel)),

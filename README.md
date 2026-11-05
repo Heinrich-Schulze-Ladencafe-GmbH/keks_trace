@@ -104,7 +104,8 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | --- | --- |
 | `keks_trace/hooks.py` | Hängt Prüfungen, Genealogie und Behälter an Lagerbuchungen |
 | `keks_trace/install.py` | Chargenstufen, Zusatzfelder, Chargenverwaltung aktivieren |
-| `keks_trace/pruefungen.py` | Einstieg für alle Prüfungen vor dem Buchen, Ablaufprüfung |
+| `keks_trace/buchungspruefung.py` | Einstieg für alle Prüfungen vor dem Buchen, Ablaufprüfung |
+| `keks_trace/haccp.py` | Prüfungen nach Prüfplan (CP/CCP): fällig an der Station, beim Herstellen, beim Wareneingang; Sperren bei Abweichung |
 | `keks_trace/rework.py` | Rework-Matrix, Allergene, Höchstanteil, FIFO |
 | `keks_trace/traeger.py` | Behälter befüllen, entnehmen, freigeben, Storno |
 | `keks_trace/genealogie.py` | Genealogie-Kanten, Ursprung, Backtag, Komponenten-MHD, Verfall |

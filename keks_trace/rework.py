@@ -6,7 +6,7 @@ Blockierend:
 - Für die Kombination Rework-Artikel -> Teig muss eine aktive Rework-Regel existieren (Rework-Matrix).
 - Das Rework darf keine Allergene enthalten, die der Zielteig nicht hat (auch wenn eine Regel existiert).
 - Der Rework-Anteil am Teig darf das Maximum der Regel nicht überschreiten.
-- Abgelaufene Rework-Chargen sind gesperrt (siehe keks_trace.pruefungen, Verfall = Ursprungsdatum
+- Abgelaufene Rework-Chargen sind gesperrt (siehe keks_trace.buchungspruefung, Verfall = Ursprungsdatum
   + Haltbarkeit des Rework-Artikels).
 
 Nur Hinweis (FIFO): es gibt eine ältere, noch verfügbare Rework-Charge desselben Artikels.

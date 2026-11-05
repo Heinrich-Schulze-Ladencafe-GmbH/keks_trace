@@ -22,7 +22,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, formatdate, getdate, now_datetime, nowdate
 
-from keks_trace import kennzeichnung, pruefung
+from keks_trace import haccp, kennzeichnung
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
 from keks_trace.utils import artikel_stufe
@@ -267,7 +267,7 @@ def lose_fertig(
 	s = _station(station)
 	linie = _linie(s)
 	pa = _laufender(s)
-	pruefung.pruefe_station_frei(s.name)
+	haccp.pruefe_station_frei(s.name)
 	artikel = lose_artikel(pa.artikel)
 	if not artikel:
 		_fehler(_("Zu {0} gibt es keine lose Ware im Rezept.").format(pa.artikel))
@@ -986,7 +986,7 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 		_fehler(_("An der Station {0} werden keine Paletten der Linie gebucht.").format(s.name))
 	linie = _linie(s)
 	pa = _laufender(s)
-	pruefung.pruefe_station_frei(s.name)
+	haccp.pruefe_station_frei(s.name)
 	if flt(anzahl) <= EPS:
 		_fehler(_("Bitte die Anzahl eingeben."))
 	kg = flt(flt(anzahl) * paletten.faktor(pa.artikel, einheit), 6)

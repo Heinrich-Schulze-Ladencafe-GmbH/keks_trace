@@ -529,9 +529,9 @@ def _pruefplaene():
 
 def metalldetektor_ok(station: str = "Verpackung"):
 	"""Bestandene Metalldetektor-Prüfung erfassen (Demo und Tests)."""
-	from keks_trace import pruefung
+	from keks_trace import haccp
 
-	for p in pruefung.fuer_station(station):
+	for p in haccp.fuer_station(station):
 		eingabe = (
 			{"koerper": {k: True for k in p.koerper()}}
 			if p.art == "Prüfkörper"
@@ -539,7 +539,7 @@ def metalldetektor_ok(station: str = "Verpackung"):
 			if p.art == "Ja/Nein"
 			else {"wert": p.grenze("max_wert") or p.grenze("min_wert")}
 		)
-		pruefung.erfassen(station, p.name, eingabe)
+		haccp.erfassen(station, p.name, eingabe)
 
 
 def _blatt(doctype: str, bevorzugt: str | None) -> str:

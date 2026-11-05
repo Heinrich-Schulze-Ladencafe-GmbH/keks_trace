@@ -4,7 +4,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, nowdate
 
-from keks_trace import demo, kennzeichnung, pruefung, terminal
+from keks_trace import demo, haccp, kennzeichnung, terminal
 from keks_trace.kennzeichnung import KennzeichenFehler
 from keks_trace.utils import regel_nur_hinweis
 
@@ -112,9 +112,9 @@ class TestBio(IntegrationTestCase):
 		self.assertTrue(r["umstellung_bio"])
 		self.assertEqual(r["kennzeichen"], ["Bio", "Vegan", "Vegetarisch"])
 		self.assertIn("Reinigung vor Bio", [p["pruefplan"] for p in r["pruefungen"]])
-		with self.assertRaisesRegex(pruefung.PruefFehler, "Reinigung vor Bio"):
+		with self.assertRaisesRegex(haccp.PruefFehler, "Reinigung vor Bio"):
 			terminal.herstellen("Backstube", "KT-BIO-GT", self._zeilen())
-		with self.assertRaisesRegex(pruefung.PruefFehler, "Nicht gebucht"):
+		with self.assertRaisesRegex(haccp.PruefFehler, "Nicht gebucht"):
 			terminal.herstellen(
 				"Backstube", "KT-BIO-GT", self._zeilen(), pruefwerte={"Reinigung vor Bio": {"ok": False}}
 			)

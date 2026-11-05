@@ -8,7 +8,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, add_months, flt, getdate, nowdate
 
-from keks_trace import demo, los, palette, pruefung, sperre, terminal
+from keks_trace import demo, haccp, los, palette, sperre, terminal
 from keks_trace.terminal import TerminalFehler
 from keks_trace.utils import regel_nur_hinweis
 
@@ -617,10 +617,10 @@ class TestTerminal(IntegrationTestCase):
 		demo.pruefungen_altern("Metalldetektor Herzenboden")
 		frappe.db.set_single_value("Keks Trace Einstellungen", "pruefung_sperrt", 1)
 		self.addCleanup(frappe.db.set_single_value, "Keks Trace Einstellungen", "pruefung_sperrt", 0)
-		with self.assertRaisesRegex(pruefung.PruefFehler, "Metalldetektor Herzenboden"):
-			pruefung.pruefe_station_frei("Herzen Verpackung")
+		with self.assertRaisesRegex(haccp.PruefFehler, "Metalldetektor Herzenboden"):
+			haccp.pruefe_station_frei("Herzen Verpackung")
 		demo.metalldetektor_ok("Herzen Verpackung")
-		pruefung.pruefe_station_frei("Herzen Verpackung")
+		haccp.pruefe_station_frei("Herzen Verpackung")
 		f = {x["titel"]: x for x in terminal.pruefungen_faellig("Herzen Verpackung")}
 		self.assertFalse(f["Metalldetektor Herzenboden"]["faellig"])
 
@@ -630,7 +630,7 @@ class TestTerminal(IntegrationTestCase):
 		e = self._verpacken(5)
 		koerper = {k: True for k in frappe.get_doc("Pruefplan", "Metalldetektor Verpackung").koerper()}
 		koerper["Edelstahl 2,5 mm"] = False
-		with self.assertRaisesRegex(pruefung.PruefFehler, "Korrekturmaßnahme"):
+		with self.assertRaisesRegex(haccp.PruefFehler, "Korrekturmaßnahme"):
 			terminal.pruefung_erfassen("Verpackung", "Metalldetektor Verpackung", {"koerper": koerper})
 		r = terminal.pruefung_erfassen(
 			"Verpackung", "Metalldetektor Verpackung", {"koerper": koerper}, "Detektor neu eingestellt"
@@ -644,14 +644,14 @@ class TestTerminal(IntegrationTestCase):
 		# Bis zur bestandenen Prüfung ist die Verpackung gesperrt (wenn die Sperre eingeschaltet ist)
 		frappe.db.set_single_value("Keks Trace Einstellungen", "pruefung_sperrt", 1)
 		self.addCleanup(frappe.db.set_single_value, "Keks Trace Einstellungen", "pruefung_sperrt", 0)
-		with self.assertRaises(pruefung.PruefFehler):
+		with self.assertRaises(haccp.PruefFehler):
 			self._verpacken(1)
 		demo.metalldetektor_ok("Verpackung")
 		self.assertTrue(self._verpacken(1)["charge"])
 
 	def test_22_brix_beim_herstellen(self):
 		zucker = self.silo["KT-ZUCKER"]
-		with self.assertRaisesRegex(pruefung.PruefFehler, "Messwert"):
+		with self.assertRaisesRegex(haccp.PruefFehler, "Messwert"):
 			terminal.herstellen("Backstube", "KT-SIRUP", [{"code": zucker, "menge": 6}], ausbringung=10)
 		schlecht = terminal.herstellen(
 			"Backstube", "KT-SIRUP", [{"code": zucker, "menge": 6}], ausbringung=10,

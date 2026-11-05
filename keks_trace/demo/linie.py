@@ -306,8 +306,8 @@ def anlegen(planen: int = 1) -> dict:
 
 def metallcheck_ok(station: str = "Packstation"):
 	"""Bestandenen Metallcheck der Anlage erfassen, auf der an der Station gerade verpackt wird (Demo, Tests)."""
-	from keks_trace import pruefung
+	from keks_trace import haccp
 
-	for p in pruefung.fuer_station(station):
+	for p in haccp.fuer_station(station):
 		if p.get("verpackungsanlage"):
-			pruefung.erfassen(station, p.name, {"koerper": {k: True for k in p.koerper()}})
+			haccp.erfassen(station, p.name, {"koerper": {k: True for k in p.koerper()}})

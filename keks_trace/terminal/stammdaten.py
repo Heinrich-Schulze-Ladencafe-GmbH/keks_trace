@@ -3,7 +3,7 @@
 import frappe
 from frappe.utils import cint, flt, formatdate, now_datetime
 
-from keks_trace import etiketten, pruefung
+from keks_trace import etiketten, haccp
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
 from keks_trace.anfrage import einmalig
@@ -34,7 +34,7 @@ def start(station: str) -> dict:
 		"umlager_ziel": s.umlager_ziel,
 		"vorraete": bool(s.f_silo and frappe.db.exists("Silo", {**_silo_filter(s), "typ": VORRAT})),
 		"linie": s.linie,
-		"pruefungen": pruefung.faellig(s.name),
+		"pruefungen": haccp.faellig(s.name),
 		"drucker": etiketten.drucker_der_station(s.name),
 	}
 
@@ -107,7 +107,7 @@ def kopfdaten(station: str) -> dict:
 				f"{_menge_text(pa.artikel, pa.gebucht_kg)} von {_menge_text(pa.artikel, pa.menge_kg)}"
 			)
 	try:
-		liste = pruefung.faellig(s.name)
+		liste = haccp.faellig(s.name)
 	except Exception:
 		liste = []
 	if liste:
@@ -128,14 +128,14 @@ def kopfdaten(station: str) -> dict:
 
 @frappe.whitelist()
 def pruefungen_faellig(station: str) -> list[dict]:
-	return pruefung.faellig(_station(station).name)
+	return haccp.faellig(_station(station).name)
 
 
 @frappe.whitelist()
 @einmalig
 def pruefung_erfassen(station: str, pruefplan: str, eingabe, bemerkung: str | None = None) -> dict:
 	s = _station(station)
-	return pruefung.erfassen(s.name, pruefplan, eingabe, bemerkung)
+	return haccp.erfassen(s.name, pruefplan, eingabe, bemerkung)
 
 
 @frappe.whitelist()

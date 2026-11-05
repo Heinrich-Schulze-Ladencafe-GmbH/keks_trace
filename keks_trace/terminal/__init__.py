@@ -4,7 +4,7 @@ Jedes Terminal ist als seine Station angemeldet. Gescannt wird mit dem Handscann
 Tastatureingabe: ein Code ist ein Behälter, ein Silo/Tank oder eine Charge.
 
 Die Prüfungen am Terminal (pruefe_zeile) geben sofort grün oder rot. Beim Buchen laufen
-zusätzlich alle Regeln aus keks_trace.pruefungen (Rework-Anteil, FIFO, Vollständigkeit, ...).
+zusätzlich alle Regeln aus keks_trace.buchungspruefung (Rework-Anteil, FIFO, Vollständigkeit, ...).
 Die Daten vom Terminal werden beim Buchen serverseitig neu aufgelöst, nie blind übernommen.
 
 Die Funktionen liegen nach Bereichen in den Untermodulen. Hier werden alle wieder
