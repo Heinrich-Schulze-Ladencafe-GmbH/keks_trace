@@ -147,7 +147,9 @@ und Füllungen.
 
 ## Prüfen ohne Server
 
-Die GitHub-Aktion **Prüfen** (`.github/workflows/pruefen.yml`) läuft bei jedem Push: `ruff` für Python,
+Die GitHub-Aktion **Prüfen** (`.github/workflows/pruefen.yml`) läuft bei jedem Push: `ruff` für Python, der
+**Verweis-Check** (`tests/verweise.py`: importiert alle Module und prüft jeden Pfad `keks_trace.…` in Hooks,
+JavaScript, Skripten und Doku; findet Liegengebliebenes nach dem Umbenennen von Modulen),
 ESLint für die Terminal-Module und der **Rauchtest** des Terminals. Der Rauchtest lädt `/terminal` in Chromium mit
 nachgebildeten Server-Antworten (`tests/terminal/attrappen.mjs`), klickt sich je Stationstyp durch alle Knöpfe
 und meldet jeden JavaScript-Fehler. Lokal (Node 22, Playwright mit Chromium):

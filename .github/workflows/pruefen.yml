@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   python:
-    name: Python (ruff)
+    name: Python (ruff, Verweise)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,6 +22,9 @@ jobs:
       - run: pip install ruff==0.14.10
       - run: ruff check keks_trace
       - run: ruff format --check keks_trace
+      # Pfade wie keks_trace.demo.tag.morgens in hooks.py, JavaScript, Skripten und Doku auflösbar?
+      - name: Verweis-Check
+        run: python tests/verweise.py
 
   terminal:
     name: Terminal (ESLint, Rauchtest im Browser)
