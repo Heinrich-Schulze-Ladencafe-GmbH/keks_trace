@@ -5,8 +5,9 @@ from frappe import _
 from frappe.utils import cint, now_datetime
 
 from keks_trace.anfrage import einmalig
-from keks_trace.terminal.basis import _darf, _fehler, _meldungen, _station
-from keks_trace.terminal.scan import aufloesen
+from keks_trace.buchung.basis import _fehler
+from keks_trace.buchung.scan import aufloesen
+from keks_trace.terminal.basis import _darf, _meldungen, _station
 
 
 @frappe.whitelist()

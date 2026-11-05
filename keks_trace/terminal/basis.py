@@ -4,40 +4,8 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
 
-from keks_trace.utils import artikel_stufe
-
-EPS = 1e-6
-
-
-class TerminalFehler(frappe.ValidationError):
-	pass
-
-
-def _fehler(text):
-	frappe.throw(text, TerminalFehler, title=_("Nicht möglich"))
-
-
-def _silo_je_artikel():
-	"""Artikel -> Silo (bei mehreren Silos für einen Artikel das zuletzt angelegte)."""
-	return {
-		s.artikel: s.name
-		for s in frappe.get_all(
-			"Silo", filters={"aktiv": 1}, fields=["name", "artikel"], order_by="creation asc"
-		)
-	}
-
-
-VORRAT = "Vorrat am Tisch"
-
-
-def _vorraete():
-	"""Artikel -> Vorrat am Tisch (offener Karton, Rolle, Behälter ohne Code)."""
-	return {
-		s.artikel: s.name
-		for s in frappe.get_all("Silo", filters={"aktiv": 1, "typ": VORRAT}, fields=["name", "artikel"])
-	}
+from keks_trace.buchung.basis import _fehler
 
 
 def _silo_filter(s) -> dict:
@@ -96,46 +64,6 @@ def _mit_hinweis(zeilen: list[dict]) -> None:
 	)
 	for z in zeilen:
 		z["hinweis"] = (text.get(z.get("auftrag")) or "").strip() or None
-
-
-def _neue_charge(artikel, herstelldatum=None, charge_id=None, lieferant=None, verfall=None):
-	if not charge_id:
-		# Fertigware bekommt eine kurze Los-Nummer (passt auf Beutel und ins GS1-Etikett)
-		kurz = artikel_stufe(artikel) == "Fertigware"
-		praefix = ("L" if kurz else f"{artikel}-") + f"{now_datetime().strftime('%y%m%d')}-"
-		n = frappe.db.count("Batch", {"name": ["like", praefix + "%"]}) + 1
-		while frappe.db.exists("Batch", f"{praefix}{n:02d}"):
-			n += 1
-		charge_id = f"{praefix}{n:02d}"
-	werte = {
-		"doctype": "Batch",
-		"item": artikel,
-		"batch_id": charge_id,
-		"manufacturing_date": herstelldatum,
-		"supplier": lieferant,
-	}
-	if verfall:
-		werte["expiry_date"] = verfall
-	if artikel_stufe(artikel) == "Fertigware":
-		werte["kt_los"] = charge_id
-	return frappe.get_doc(werte).insert().name
-
-
-def _se_zeile(z, s_warehouse=None, t_warehouse=None):
-	uom = frappe.get_cached_value("Item", z["artikel"], "stock_uom")
-	return {
-		"item_code": z["artikel"],
-		"qty": z["menge"],
-		"transfer_qty": z["menge"],
-		"uom": uom,
-		"stock_uom": uom,
-		"conversion_factor": 1,
-		"s_warehouse": s_warehouse,
-		"t_warehouse": t_warehouse,
-		"use_serial_batch_fields": 1,
-		"batch_no": z.get("charge"),
-		"kt_traeger": z.get("behaelter"),
-	}
 
 
 def _meldungen():

@@ -7,7 +7,7 @@ import frappe
 from frappe.tests import IntegrationTestCase
 from frappe.utils import add_days, nowdate
 
-from keks_trace import anfrage, demo, linienbuchung, terminal
+from keks_trace import anfrage, buchung, demo, linienbuchung, terminal
 from keks_trace import palette as paletten
 from keks_trace.demo import linie as demo_linie
 from keks_trace.linienbuchung import LinienFehler
@@ -201,7 +201,9 @@ class TestFluesse(IntegrationTestCase):
 		aelter = [{"charge": "ALT-TEST", "mhd": "01.01.2027", "menge": 5}]
 		with (
 			einstellungen(fefo_rohstoffe="Grund Pflicht"),
-			# _fefo_aeltere dort ersetzen, wo es aufgerufen wird (Terminal-Paket, Modul zutaten)
+			# _fefo_aeltere dort ersetzen, wo es aufgerufen wird: beim Zuführen (buchung.zutat._pruefe_fefo)
+			# und in der Abfrage am Terminal (terminal.zutaten.fefo_pruefen)
+			mock.patch.object(buchung.zutat, "_fefo_aeltere", return_value=aelter),
 			mock.patch.object(terminal.zutaten, "_fefo_aeltere", return_value=aelter),
 		):
 			f = terminal.fefo_pruefen("Kneter", folie)

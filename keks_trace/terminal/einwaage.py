@@ -6,8 +6,9 @@ from frappe.utils import flt
 
 from keks_trace import haccp, kennzeichnung
 from keks_trace import palette as paletten
+from keks_trace.buchung.basis import _fehler, _silo_je_artikel, _vorraete
 from keks_trace.install import REWORK_ZIELE
-from keks_trace.terminal.basis import _fehler, _silo_je_artikel, _station, _vorraete
+from keks_trace.terminal.basis import _station
 from keks_trace.utils import artikel_stufe, einstellung
 
 

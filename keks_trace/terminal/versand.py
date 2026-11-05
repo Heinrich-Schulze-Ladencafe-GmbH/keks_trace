@@ -6,15 +6,12 @@ from frappe.utils import cint, flt, now_datetime
 
 from keks_trace import palette as paletten
 from keks_trace.anfrage import einmalig
-from keks_trace.terminal.basis import EPS, _darf, _fehler, _liste, _meldungen, _se_zeile, _station
-from keks_trace.terminal.bestand import (
-	_lager_chargen,
-	_pruefe_charge,
-	_verfuegbar,
-	_verkaufslager,
-	charge_lager,
-)
-from keks_trace.terminal.scan import aufloesen
+from keks_trace.buchung.basis import EPS, _fehler
+from keks_trace.buchung.beleg import _se_zeile
+from keks_trace.buchung.bestand import _lager_chargen, _pruefe_charge, _verkaufslager, charge_lager
+from keks_trace.buchung.scan import aufloesen
+from keks_trace.terminal.basis import _darf, _liste, _meldungen, _station
+from keks_trace.terminal.bestand import _verfuegbar
 from keks_trace.utils import versandfaehig
 
 

@@ -22,7 +22,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt, formatdate, getdate, now_datetime, nowdate
 
-from keks_trace import haccp, kennzeichnung
+from keks_trace import buchung, haccp, kennzeichnung
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
 from keks_trace.utils import artikel_stufe
@@ -262,7 +262,6 @@ def lose_fertig(
 	eine Palette. Ziel „linienlager“: Kartons warten an der Linie und werden später verpackt (F7, Verpackungs-PC
 	„Lose Ware verpacken“). Wannen werden nicht gebucht. Verbraucht wird wie bei den Kartons der Teig von der
 	Linie und die Füllung aus dem Lager. Jede Buchung ergibt eine eigene Charge (ein Lagerort je Charge)."""
-	from keks_trace import terminal
 
 	s = _station(station)
 	linie = _linie(s)
@@ -285,13 +284,13 @@ def lose_fertig(
 			_fehler(_("Kartons im Linienlager kommen auf keine Palette, sie werden später verpackt."))
 		lager = linie.linienlager
 	else:
-		lager = linie.fertiglager or terminal._ziel_lager(s, artikel)
+		lager = linie.fertiglager or buchung._ziel_lager(s, artikel)
 	nve = paletten.finde(palette) if palette else None
 	if palette and not nve:
 		_fehler(_("{0} ist keine Palette.").format(palette))
 	if nve:
 		paletten._offen(nve)
-	behaelter = terminal._ziel_behaelter(kiste) if kiste else None
+	behaelter = buchung._ziel_behaelter(kiste) if kiste else None
 	zeilen, hinweise, vom_teig = _verbrauch(pa, artikel, kg, linie)
 	if not vom_teig:
 		_fehler(
@@ -299,9 +298,9 @@ def lose_fertig(
 				"Für Auftrag {0} ist noch nichts auf der Linie gebucht. Erst am Kneter die Kübel scannen."
 			).format(pa.name)
 		)
-	charge = terminal._neue_charge(artikel, getdate(nowdate()))
+	charge = buchung._neue_charge(artikel, getdate(nowdate()))
 	jetzt = now_datetime()
-	ausgabe = terminal._se_zeile(
+	ausgabe = buchung._se_zeile(
 		{"artikel": artikel, "charge": charge, "menge": kg, "behaelter": behaelter}, t_warehouse=lager
 	)
 	ausgabe["is_finished_item"] = 1
@@ -316,7 +315,7 @@ def lose_fertig(
 			"posting_time": jetzt.time().strftime("%H:%M:%S"),
 			"kt_station": s.name,
 			"kt_produktionsauftrag": pa.name,
-			"items": [terminal._se_zeile(z, s_warehouse=z["lager"]) for z in zeilen] + [ausgabe],
+			"items": [buchung._se_zeile(z, s_warehouse=z["lager"]) for z in zeilen] + [ausgabe],
 		}
 	)
 	se.insert()
@@ -421,7 +420,6 @@ def kuebel_vorschlag(artikel: list[str], anzahl: int = 5) -> list[dict]:
 def zufuehren(station: str, code: str, menge: float | None = None, fefo_grund: str | None = None) -> dict:
 	"""Kübel, Gebinde oder Tank an die Linie. fefo_grund: Pflicht, wenn ein Rohstoff/Packmittel mit späterem
 	MHD zugeführt wird, obwohl ein früheres im Lager liegt (wie beim Herstellen)."""
-	from keks_trace import terminal
 	from keks_trace.silo import bestand as silo_bestand
 
 	s = _station(station)
@@ -430,7 +428,7 @@ def zufuehren(station: str, code: str, menge: float | None = None, fefo_grund: s
 	linie = _linie(s)
 	pa = _laufender(s)
 	rezept = linienrezept(pa.artikel)
-	r = terminal.aufloesen(code)
+	r = buchung.aufloesen(code)
 	if r["typ"] == "palette":
 		_fehler(_("{0} ist eine Palette.").format(r["code"]))
 	artikel = r.get("artikel")
@@ -473,7 +471,7 @@ def zufuehren(station: str, code: str, menge: float | None = None, fefo_grund: s
 		_pruefe_rework_anteil(pa, artikel, rework_ziel, sum(m for _c, m, _b in teile))
 	hinweise = []
 	for charge, _m, _b in teile:
-		terminal._pruefe_charge(charge, artikel)
+		buchung._pruefe_charge(charge, artikel)
 		kennzeichnung.pruefe_zutat(pa.artikel, charge, artikel, r.get("silo"))
 	if r["typ"] == "behaelter" and r.get("behaelter"):
 		aelter = [k for k in kuebel_vorschlag([artikel], 3) if k["code"] != r["behaelter"]]
@@ -494,7 +492,7 @@ def zufuehren(station: str, code: str, menge: float | None = None, fefo_grund: s
 	uom = frappe.get_cached_value("Item", artikel, "stock_uom")
 	fefo = None
 	if r["typ"] != "silo":
-		fefo = terminal._pruefe_fefo(
+		fefo = buchung._pruefe_fefo(
 			[{"artikel": artikel, "charge": r["charge"], "typ": r["typ"], "einheit": uom,
 			  "name": frappe.get_cached_value("Item", artikel, "item_name")}],
 			fefo_grund,
@@ -832,7 +830,6 @@ def laufende_auftraege() -> list[dict]:
 def rework_von_linie(station: str, auftrag: str, rework_artikel: str, kg: float, behaelter: str) -> dict:
 	"""Backstube: Rework-Behälter von der Linie gewogen. Der Teig dieses Auftrags auf der Linie wird zu
 	Rework (neue Rework-Charge im Behälter, Herkunft = Teigchargen). So zählt Rework nicht als Linienrest."""
-	from keks_trace import terminal
 
 	s = _station(station)
 	pa = frappe.get_doc("Produktionsauftrag", auftrag)
@@ -849,7 +846,7 @@ def rework_von_linie(station: str, auftrag: str, rework_artikel: str, kg: float,
 		_fehler(_("Bitte das Gewicht von der Waage eingeben."))
 	if not behaelter:
 		_fehler(_("Bitte den Rework-Behälter scannen oder antippen."))
-	behaelter = terminal._ziel_behaelter(behaelter)
+	behaelter = buchung._ziel_behaelter(behaelter)
 	if frappe.db.get_value("Produkttraeger", behaelter, "typ") != "Rework-Behälter":
 		_fehler(_("{0} ist kein Rework-Behälter.").format(behaelter))
 	linie = frappe.get_cached_doc("Linie", pa.linie)
@@ -873,7 +870,7 @@ def rework_von_linie(station: str, auftrag: str, rework_artikel: str, kg: float,
 		nimm = min(offen, z["menge"])
 		zeilen.append({"artikel": z["artikel"], "charge": z["charge"], "menge": flt(nimm, 6)})
 		offen -= nimm
-	charge = terminal._neue_charge(rework_artikel, getdate(nowdate()))
+	charge = buchung._neue_charge(rework_artikel, getdate(nowdate()))
 	jetzt = now_datetime()
 	se = frappe.get_doc(
 		{
@@ -887,11 +884,11 @@ def rework_von_linie(station: str, auftrag: str, rework_artikel: str, kg: float,
 			"kt_station": s.name,
 			"kt_produktionsauftrag": pa.name,
 			"remarks": _("Rework von der Linie, Auftrag {0}").format(pa.name),
-			"items": [terminal._se_zeile(z, s_warehouse=linie.lagerort) for z in zeilen]
+			"items": [buchung._se_zeile(z, s_warehouse=linie.lagerort) for z in zeilen]
 			+ [
-				terminal._se_zeile(
+				buchung._se_zeile(
 					{"artikel": rework_artikel, "charge": charge, "menge": kg, "behaelter": behaelter},
-					t_warehouse=terminal._ziel_lager(s, rework_artikel),
+					t_warehouse=buchung._ziel_lager(s, rework_artikel),
 				)
 			],
 		}
@@ -920,7 +917,6 @@ def _verbrauch(pa, artikel_aus, kg, linie):
 	"""Verbrauch für kg von artikel_aus laut Linienrezept: erst was für diesen Auftrag auf der Linie liegt
 	(Teig vom Kneter), der Rest (Füllung, Glasur, Schokolade, Packmittel) automatisch aus dem Lager bzw.
 	Tank, älteste zuerst. Nachgefüllt wird an der Linie nicht gebucht. Gibt (zeilen, hinweise, vom_teig)."""
-	from keks_trace import terminal
 
 	vorrat = defaultdict(list)
 	ersatz = rework_ersatz()
@@ -930,7 +926,7 @@ def _verbrauch(pa, artikel_aus, kg, linie):
 			vorrat[ziel].append(z)  # Rework am Kneter zugeführt: wird mit dem Teig verbraucht
 	for liste in vorrat.values():
 		liste.sort(key=lambda z: (z["zugefuehrt"] or now_datetime(), z["charge"]))
-	silos = terminal._silo_je_artikel()
+	silos = buchung._silo_je_artikel()
 	zeilen, hinweise, vom_teig = [], [], False
 	for artikel, je in linienrezept(artikel_aus).items():
 		bedarf = je * kg
@@ -953,14 +949,14 @@ def _verbrauch(pa, artikel_aus, kg, linie):
 			offen -= nimm
 			vom_teig = vom_teig or artikel_stufe(artikel) != "Packmittel"
 		quellen = (
-			[{"code": silos[artikel], "menge": offen}] if artikel in silos else terminal._quellen(artikel)
+			[{"code": silos[artikel], "menge": offen}] if artikel in silos else buchung._quellen(artikel)
 		)
 		for q in quellen:
 			if offen <= EPS:
 				break
 			nimm = min(offen, q["menge"])
 			try:
-				z = terminal._zeile(q["code"], nimm)
+				z = buchung._zeile(q["code"], nimm)
 			except frappe.ValidationError:
 				continue
 			zeilen.append({**z, "menge": flt(nimm, 6)})
@@ -979,8 +975,6 @@ def _verbrauch(pa, artikel_aus, kg, linie):
 
 
 def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | None = None) -> dict:
-	from keks_trace import terminal
-
 	s = _station(station)
 	if not s.f_palette_fertig:
 		_fehler(_("An der Station {0} werden keine Paletten der Linie gebucht.").format(s.name))
@@ -1014,11 +1008,11 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 			else None
 		)
 		if not charge:
-			charge = terminal._neue_charge(pa.artikel, getdate(nowdate()))
+			charge = buchung._neue_charge(pa.artikel, getdate(nowdate()))
 			if vorgabe:
 				frappe.db.set_value("Batch", charge, "kt_mhd_vorgabe", vorgabe)
 	jetzt = now_datetime()
-	ausgabe = terminal._se_zeile(
+	ausgabe = buchung._se_zeile(
 		{"artikel": pa.artikel, "charge": charge, "menge": kg}, t_warehouse=linie.fertiglager
 	)
 	ausgabe["is_finished_item"] = 1
@@ -1034,7 +1028,7 @@ def palette_fertig(station: str, anzahl: float, einheit: str, palette: str | Non
 			"kt_station": s.name,
 			"kt_produktionsauftrag": pa.name,
 			"kt_kundenauftrag": pa.kundenauftrag,
-			"items": [terminal._se_zeile(z, s_warehouse=z["lager"]) for z in zeilen] + [ausgabe],
+			"items": [buchung._se_zeile(z, s_warehouse=z["lager"]) for z in zeilen] + [ausgabe],
 		}
 	)
 	se.insert()
