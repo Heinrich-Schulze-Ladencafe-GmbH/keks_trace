@@ -132,7 +132,7 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | DocType `Keks Trace Einstellungen` | Vollständigkeitsprüfung, Toleranz der Mengenbilanz |
 | Bericht `Rueckverfolgung` | Rückverfolgung in der Oberfläche |
 | Bericht `Mengenbilanz` | Mengenbilanz einer Charge in der Oberfläche |
-| `keks_trace/demo/` | Demo-Stammdaten und drei Produktionstage (`keks_trace.demo.run`), dazu die weiteren Demos und Testhilfen: `linie`, `pilot`, `herzen`, `einkauf`, `erechnung`, `tag`, `lasttest`. Läuft nicht im Echtbetrieb |
+| `keks_trace/demo/` | Demo-Stammdaten und drei Produktionstage (`keks_trace.demo.run`; aufgeteilt in `konstanten`, `grunddaten`, `helfer`, `kette`), dazu die weiteren Demos und Testhilfen: `linie`, `pilot`, `herzen`, `einkauf`, `erechnung`, `tag`, `lasttest`. Läuft nicht im Echtbetrieb |
 | `keks_trace/tests/` | Abnahmetests |
 | `keks_trace/www/terminal.html` | Seite `/terminal` (Stil und Rahmen); das Skript liegt als ES-Module in `keks_trace/public/js/terminal/` (`main.js` lädt die Teile: `basis`, `tastatur`, `rahmen`, `station`, `linie`, `herstellen`, `rework`, `wareneingang`, `paletten`, `lieferung`, `lager`, `info`). Kein `bench build` nötig; `www/terminal.py` hängt einen Hash der Dateien an, damit Browser nach einem Update nichts Altes aus dem Cache nehmen |
 | `tests/terminal/` | Rauchtest im Browser ohne Frappe (siehe unten) und strenge ESLint-Regeln für die Terminal-Module |
