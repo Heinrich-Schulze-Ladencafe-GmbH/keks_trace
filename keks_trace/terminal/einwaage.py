@@ -6,8 +6,10 @@ from frappe.utils import flt
 
 from keks_trace import haccp, kennzeichnung
 from keks_trace import palette as paletten
+from keks_trace.buchung.basis import _fehler, _silo_je_artikel, _vorraete
 from keks_trace.install import REWORK_ZIELE
-from keks_trace.terminal.basis import _fehler, _silo_je_artikel, _station, _vorraete
+from keks_trace.linienbuchung import kuebel_vorschlag
+from keks_trace.terminal.basis import _station
 from keks_trace.utils import artikel_stufe, einstellung
 
 
@@ -179,7 +181,6 @@ def _pruefe_rezept(ziel: str, sollmenge, eingaenge: list[dict], grund: str | Non
 
 def _kuebel_fuer(zutaten) -> list[dict]:
 	"""Älteste belegte Kübel mit dem Grundteig des Rezepts (Vorschlag am Kneter bzw. bei der Veredelung)."""
-	from keks_trace.linienbuchung import kuebel_vorschlag
 
 	return kuebel_vorschlag([z["artikel"] for z in zutaten if z["stufe"] == "Grundteig"])
 

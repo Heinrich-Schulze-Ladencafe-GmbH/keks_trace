@@ -117,6 +117,10 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | `keks_trace/vollstaendigkeit.py` | Fehlende Rezeptzutaten erkennen |
 | `keks_trace/bilanz.py` | Mengenbilanz je Charge |
 | `keks_trace/silo.py` | Silo/Tank: FIFO-Zuteilung, Vermischung, Leermeldung (`leermeldung`), Silo-Info |
+| `keks_trace/akte/` | Akte für Terminal und Audit-Ansicht `/akte`: `lebenslauf` (Palette, Behälter), `suche` („Wo ist dieses Los?“), `baum` („Woraus besteht das?“), `basis` |
+| `keks_trace/linienbuchung/` | Buchen an der Backstraße, nach Bereichen: `basis`, `rezept` (Linienrezept, Verbrauch), `auftrag`, `lose` (lose Ware F7–F9), `zufuhr`, `retour`, `uebersicht`, `rework` (F18/F19), `fertig` (Palette fertig, Auftrag beenden, Packstation). Aufgerufen wird weiter `keks_trace.linienbuchung.<funktion>` |
+| `keks_trace/buchung/` | Bausteine fürs Buchen, die Terminal und Linie gemeinsam nutzen (untere Schicht): `basis`, `beleg` (neue Charge, Buchungszeilen, Ziel), `bestand`, `scan` (Scan auflösen), `zutat` (Zutat prüfen, FEFO) |
+| `keks_trace/palette/` | Paletten mit NVE (SSCC), nach Bereichen: `basis`, `einheit`, `nve`, `bestand`, `versandkarton`, `bewegung`, `belege` (Hooks an Lieferschein und Lagerbuchung), `rueckverfolgung`. Aufgerufen wird weiter `keks_trace.palette.<funktion>` |
 | DocType `Allergengruppe` | Allergene je Teig, Füllung, Rework |
 | DocType `Rework Regel` | Rework-Matrix |
 | DocType `Produkttraeger` | Behälter, Kiste oder Palette mit Code (QR) |
@@ -129,7 +133,7 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | DocType `Keks Trace Einstellungen` | Vollständigkeitsprüfung, Toleranz der Mengenbilanz |
 | Bericht `Rueckverfolgung` | Rückverfolgung in der Oberfläche |
 | Bericht `Mengenbilanz` | Mengenbilanz einer Charge in der Oberfläche |
-| `keks_trace/demo/` | Demo-Stammdaten und drei Produktionstage (`keks_trace.demo.run`), dazu die weiteren Demos und Testhilfen: `linie`, `pilot`, `herzen`, `einkauf`, `erechnung`, `tag`, `lasttest`. Läuft nicht im Echtbetrieb |
+| `keks_trace/demo/` | Demo-Stammdaten und drei Produktionstage (`keks_trace.demo.run`; aufgeteilt in `konstanten`, `grunddaten`, `helfer`, `kette`), dazu die weiteren Demos und Testhilfen: `linie`, `pilot`, `herzen`, `einkauf`, `erechnung`, `tag`, `lasttest`. Läuft nicht im Echtbetrieb |
 | `keks_trace/tests/` | Abnahmetests |
 | `keks_trace/www/terminal.html` | Seite `/terminal` (Stil und Rahmen); das Skript liegt als ES-Module in `keks_trace/public/js/terminal/` (`main.js` lädt die Teile: `basis`, `tastatur`, `rahmen`, `station`, `linie`, `herstellen`, `rework`, `wareneingang`, `paletten`, `lieferung`, `lager`, `info`). Kein `bench build` nötig; `www/terminal.py` hängt einen Hash der Dateien an, damit Browser nach einem Update nichts Altes aus dem Cache nehmen |
 | `tests/terminal/` | Rauchtest im Browser ohne Frappe (siehe unten) und strenge ESLint-Regeln für die Terminal-Module |
@@ -149,7 +153,10 @@ und Füllungen.
 
 Die GitHub-Aktion **Prüfen** (`.github/workflows/pruefen.yml`) läuft bei jedem Push: `ruff` für Python, der
 **Verweis-Check** (`tests/verweise.py`: importiert alle Module und prüft jeden Pfad `keks_trace.…` in Hooks,
-JavaScript, Skripten und Doku; findet Liegengebliebenes nach dem Umbenennen von Modulen),
+JavaScript, Skripten und Doku; findet Liegengebliebenes nach dem Umbenennen von Modulen), der **Zyklen-Check**
+(`tests/zyklen.py`: die Kernmodule hängen nur in eine Richtung voneinander ab, z. B. `terminal` → `linienbuchung` →
+`buchung`, auch Imports innerhalb von Funktionen zählen), der **Größen-Check** (`tests/groesse.py`: keine Datei über 700
+Zeilen, Hinweis ab 600),
 ESLint für die Terminal-Module und der **Rauchtest** des Terminals. Der Rauchtest lädt `/terminal` in Chromium mit
 nachgebildeten Server-Antworten (`tests/terminal/attrappen.mjs`), klickt sich je Stationstyp durch alle Knöpfe
 und meldet jeden JavaScript-Fehler. Lokal (Node 22, Playwright mit Chromium):

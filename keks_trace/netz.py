@@ -10,6 +10,7 @@ from frappe import _
 from frappe.utils import flt
 
 from keks_trace import akte as akte_modul
+from keks_trace import buchung
 
 # Obergrenze, damit Rework über viele Generationen die Seite nicht sprengt
 MAX_KNOTEN = 300
@@ -159,9 +160,8 @@ def netz(charge: str) -> dict:
 		frappe.throw(_("Bitte ein Los, eine Charge oder eine Palette angeben."))
 	if not frappe.db.exists("Batch", charge):
 		from keks_trace import palette as paletten
-		from keks_trace import terminal
 
-		r = terminal.aufloesen(charge)
+		r = buchung.aufloesen(charge)
 		if r.get("palette") and not r.get("charge"):
 			# alles, was je auf der Palette stand (auch nach dem Versand) und was in ihren Versandkartons ist
 			lose = sorted(

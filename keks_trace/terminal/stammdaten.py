@@ -7,8 +7,10 @@ from keks_trace import etiketten, haccp
 from keks_trace import los as los_modul
 from keks_trace import palette as paletten
 from keks_trace.anfrage import einmalig
-from keks_trace.terminal.basis import EPS, VORRAT, _silo_filter, _station
-from keks_trace.terminal.bestand import _lager_chargen, _verkaufslager
+from keks_trace.buchung.basis import EPS, VORRAT
+from keks_trace.buchung.bestand import _lager_chargen, _verkaufslager
+from keks_trace.linienbuchung import _menge_text
+from keks_trace.terminal.basis import _silo_filter, _station
 from keks_trace.utils import VERSANDFAEHIG
 
 
@@ -100,8 +102,6 @@ def kopfdaten(station: str) -> dict:
 			as_dict=True,
 		)
 		if pa and pa.status == "Läuft":
-			from keks_trace.linienbuchung import _menge_text
-
 			daten["auftrag"] = (
 				f"{pa.name} · {frappe.get_cached_value('Item', pa.artikel, 'item_name')} · "
 				f"{_menge_text(pa.artikel, pa.gebucht_kg)} von {_menge_text(pa.artikel, pa.menge_kg)}"

@@ -4,8 +4,10 @@ import frappe
 from frappe import _
 from frappe.utils import cint
 
+from keks_trace import linienbuchung
 from keks_trace.anfrage import einmalig
-from keks_trace.terminal.basis import _darf, _fehler, _station
+from keks_trace.buchung.basis import _fehler
+from keks_trace.terminal.basis import _darf, _station
 
 
 def _linien_station(station):
@@ -18,7 +20,6 @@ def _linien_station(station):
 @frappe.whitelist()
 def linie_retour_liste(station: str) -> list[dict]:
 	"""Retour: was vom laufenden Auftrag unbenutzt zurück ins Lager kann."""
-	from keks_trace import linienbuchung
 
 	return linienbuchung.retour_liste(_linien_station(station).name)
 
@@ -26,15 +27,12 @@ def linie_retour_liste(station: str) -> list[dict]:
 @frappe.whitelist()
 @einmalig
 def linie_rueckgabe(station: str, charge: str, menge: float) -> dict:
-	from keks_trace import linienbuchung
-
 	return linienbuchung.rueckgabe(_linien_station(station).name, charge, menge)
 
 
 @frappe.whitelist()
 def tagesuebersicht(station: str, datum: str | None = None) -> dict:
 	"""Aufträge des Tages je Linie (nur lesen, jede Station)."""
-	from keks_trace import linienbuchung
 
 	_station(station)
 	frappe.has_permission("Produktionsauftrag", "read", throw=True)
@@ -43,22 +41,16 @@ def tagesuebersicht(station: str, datum: str | None = None) -> dict:
 
 @frappe.whitelist()
 def linie_auftraege(station: str) -> list[dict]:
-	from keks_trace import linienbuchung
-
 	return linienbuchung.auftraege(_linien_station(station).name)
 
 
 @frappe.whitelist()
 def linie_waehlen(station: str, auftrag: str) -> dict:
-	from keks_trace import linienbuchung
-
 	return linienbuchung.waehlen(_linien_station(station).name, auftrag)
 
 
 @frappe.whitelist()
 def linie_info(station: str) -> dict:
-	from keks_trace import linienbuchung
-
 	s = _linien_station(station)
 	name = frappe.db.get_value("Terminal Station", s.name, "aktueller_auftrag")
 	return linienbuchung.info(name) if name else {}
@@ -69,8 +61,6 @@ def linie_info(station: str) -> dict:
 def linie_zufuehren(
 	station: str, code: str, menge: float | None = None, fefo_grund: str | None = None
 ) -> dict:
-	from keks_trace import linienbuchung
-
 	s = _station(station)
 	_darf(s, "linie")
 	return linienbuchung.zufuehren(s.name, code, menge, fefo_grund)
@@ -79,8 +69,6 @@ def linie_zufuehren(
 @frappe.whitelist()
 @einmalig
 def linie_palette(station: str, anzahl: float, einheit: str, palette: str | None = None) -> dict:
-	from keks_trace import linienbuchung
-
 	s = _station(station)
 	_darf(s, "palette_fertig")
 	return linienbuchung.palette_fertig(s.name, anzahl, einheit, palette)
@@ -97,7 +85,6 @@ def linie_lose(
 	kiste: str | None = None,
 ) -> dict:
 	"""Lose Ware vom laufenden Auftrag: Kartons ins Lager (F5, optional auf Palette) oder ins Linienlager (F6)."""
-	from keks_trace import linienbuchung
 
 	s = _station(station)
 	_darf(s, "palette_fertig")
@@ -107,7 +94,6 @@ def linie_lose(
 @frappe.whitelist()
 def rework_linie_auftraege(station: str) -> list[dict]:
 	"""Backstube: laufende Linienaufträge, je mit den passenden Rework-Sorten (Filter) und freien Behältern."""
-	from keks_trace import linienbuchung
 
 	s = _station(station)
 	_darf(s, "rework")
@@ -128,7 +114,6 @@ def freie_rework_behaelter(station: str) -> list[dict]:
 @einmalig
 def rework_linie(station: str, auftrag: str, rework_artikel: str, kg: float, behaelter: str) -> dict:
 	"""Backstube bucht einen gewogenen Rework-Behälter von der Linie (Flussschema F18)."""
-	from keks_trace import linienbuchung
 
 	s = _station(station)
 	_darf(s, "rework")
@@ -138,8 +123,6 @@ def rework_linie(station: str, auftrag: str, rework_artikel: str, kg: float, beh
 @frappe.whitelist()
 @einmalig
 def linie_beenden(station: str, auftrag: str | None = None, abbrechen: int = 0) -> dict:
-	from keks_trace import linienbuchung
-
 	s = _station(station)
 	_darf(s, "palette_fertig")
 	return linienbuchung.beenden(s.name, auftrag, bool(cint(abbrechen)))
@@ -147,8 +130,6 @@ def linie_beenden(station: str, auftrag: str | None = None, abbrechen: int = 0) 
 
 @frappe.whitelist()
 def packstation(station: str) -> dict:
-	from keks_trace import linienbuchung
-
 	s = _station(station)
 	if not s.f_palette_fertig:  # Verpackungs-PC zeigt den Verpackungsauftrag auch
 		_darf(s, "packstation")

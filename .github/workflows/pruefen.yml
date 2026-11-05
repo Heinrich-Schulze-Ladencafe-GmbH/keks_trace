@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   python:
-    name: Python (ruff, Verweise)
+    name: Python (ruff, Verweise, Zyklen, Größe)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +25,12 @@ jobs:
       # Pfade wie keks_trace.demo.tag.morgens in hooks.py, JavaScript, Skripten und Doku auflösbar?
       - name: Verweis-Check
         run: python tests/verweise.py
+      # Kernmodule hängen nur in eine Richtung voneinander ab (auch Imports in Funktionen zählen)
+      - name: Zyklen-Check
+        run: python tests/zyklen.py
+      # keine Datei über 700 Zeilen (Hinweis ab 600)
+      - name: Größen-Check
+        run: python tests/groesse.py
 
   terminal:
     name: Terminal (ESLint, Rauchtest im Browser)

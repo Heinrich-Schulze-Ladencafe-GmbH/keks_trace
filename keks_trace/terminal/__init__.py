@@ -11,6 +11,45 @@ Die Funktionen liegen nach Bereichen in den Untermodulen. Hier werden alle wiede
 angeboten, damit die Aufrufe von außen gleich bleiben (API keks_trace.terminal.<funktion>).
 """
 
+# Bausteine aus der unteren Schicht keks_trace.buchung, hier weiter angeboten (terminal._zeile usw.)
+from keks_trace.buchung.basis import (
+	EPS,
+	VORRAT,
+	TerminalFehler,
+	_fehler,
+	_silo_je_artikel,
+	_vorraete,
+)
+from keks_trace.buchung.beleg import (
+	_neue_charge,
+	_se_zeile,
+	_ziel_behaelter,
+	_ziel_lager,
+)
+from keks_trace.buchung.bestand import (
+	_lager_chargen,
+	_offene_auftraege,
+	_pruefe_charge,
+	_quellen,
+	_verkaufslager,
+	charge_lager,
+)
+from keks_trace.buchung.scan import (
+	_artikel_zur_gtin,
+	_charge_aus_los_oder_buchung,
+	_charge_name,
+	_charge_zum_eigenen_los,
+	aufloesen,
+)
+from keks_trace.buchung.zutat import (
+	FEFO_STUFEN,
+	_fefo_aeltere,
+	_fefo_modus,
+	_fefo_text,
+	_pruefe_fefo,
+	_pruefe_rework_fuer,
+	_zeile,
+)
 from keks_trace.terminal.arbeitsliste import (
 	_fertig_fuer,
 	_hauptzutat,
@@ -21,40 +60,24 @@ from keks_trace.terminal.arbeitsliste import (
 	zum_verpacken,
 )
 from keks_trace.terminal.basis import (
-	EPS,
 	FUNKTIONSNAMEN,
-	VORRAT,
-	TerminalFehler,
 	_darf,
-	_fehler,
 	_liste,
 	_meldungen,
 	_mit_hinweis,
-	_neue_charge,
-	_se_zeile,
 	_silo_filter,
-	_silo_je_artikel,
 	_station,
-	_vorraete,
 )
 from keks_trace.terminal.behaelter import (
 	behaelter_reinigung,
 	silo_leer,
 )
 from keks_trace.terminal.bestand import (
-	_lager_chargen,
 	_lager_chargen_alle,
-	_offene_auftraege,
-	_pruefe_charge,
-	_quellen,
 	_reserviert,
 	_verfuegbar,
-	_verkaufslager,
-	charge_lager,
 )
 from keks_trace.terminal.buchen import (
-	_ziel_behaelter,
-	_ziel_lager,
 	anbrechen,
 	herstellen,
 	rework_erfassen,
@@ -116,12 +139,7 @@ from keks_trace.terminal.palette import (
 	palette_versandbereit,
 )
 from keks_trace.terminal.scan import (
-	_artikel_zur_gtin,
-	_charge_aus_los_oder_buchung,
-	_charge_name,
-	_charge_zum_eigenen_los,
 	akte,
-	aufloesen,
 	herkunft,
 	info,
 )
@@ -161,13 +179,6 @@ from keks_trace.terminal.versand import (
 	umlagern,
 )
 from keks_trace.terminal.zutaten import (
-	FEFO_STUFEN,
-	_fefo_aeltere,
-	_fefo_modus,
-	_fefo_text,
-	_pruefe_fefo,
-	_pruefe_rework_fuer,
-	_zeile,
 	auswahl,
 	fefo_pruefen,
 	pruefe_zeile,

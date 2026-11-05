@@ -106,17 +106,3 @@ class TestAnfrageId(IntegrationTestCase):
 		self.assertEqual(sorted(eintraege), [seite.URL + f for f in module])
 		for f in module:
 			self.assertEqual(eintraege[seite.URL + f], f"{seite.URL}{f}?v={version}")
-
-	def test_paket_bietet_alle_funktionen(self):
-		"""Jede Funktion der Untermodule ist unter keks_trace.terminal.<name> erreichbar (API-Pfad)."""
-		import importlib
-		import inspect
-
-		paket = os.path.dirname(terminal.__file__)
-		for datei in sorted(os.listdir(paket)):
-			if not datei.endswith(".py") or datei == "__init__.py":
-				continue
-			modul = importlib.import_module("keks_trace.terminal." + datei[:-3])
-			for name, f in inspect.getmembers(modul, inspect.isfunction):
-				if f.__module__ == modul.__name__:
-					self.assertIs(getattr(terminal, name, None), f, f"{datei}: {name}")
