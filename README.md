@@ -155,7 +155,8 @@ Die GitHub-Aktion **Prüfen** (`.github/workflows/pruefen.yml`) läuft bei jedem
 **Verweis-Check** (`tests/verweise.py`: importiert alle Module und prüft jeden Pfad `keks_trace.…` in Hooks,
 JavaScript, Skripten und Doku; findet Liegengebliebenes nach dem Umbenennen von Modulen), der **Zyklen-Check**
 (`tests/zyklen.py`: die Kernmodule hängen nur in eine Richtung voneinander ab, z. B. `terminal` → `linienbuchung` →
-`buchung`, auch Imports innerhalb von Funktionen zählen),
+`buchung`, auch Imports innerhalb von Funktionen zählen), der **Größen-Check** (`tests/groesse.py`: keine Datei über 700
+Zeilen, Hinweis ab 600),
 ESLint für die Terminal-Module und der **Rauchtest** des Terminals. Der Rauchtest lädt `/terminal` in Chromium mit
 nachgebildeten Server-Antworten (`tests/terminal/attrappen.mjs`), klickt sich je Stationstyp durch alle Knöpfe
 und meldet jeden JavaScript-Fehler. Lokal (Node 22, Playwright mit Chromium):
