@@ -117,6 +117,7 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | `keks_trace/vollstaendigkeit.py` | Fehlende Rezeptzutaten erkennen |
 | `keks_trace/bilanz.py` | Mengenbilanz je Charge |
 | `keks_trace/silo.py` | Silo/Tank: FIFO-Zuteilung, Vermischung, Leermeldung (`leermeldung`), Silo-Info |
+| `keks_trace/palette/` | Paletten mit NVE (SSCC), nach Bereichen: `basis`, `einheit`, `nve`, `bestand`, `versandkarton`, `bewegung`, `belege` (Hooks an Lieferschein und Lagerbuchung), `rueckverfolgung`. Aufgerufen wird weiter `keks_trace.palette.<funktion>` |
 | DocType `Allergengruppe` | Allergene je Teig, Füllung, Rework |
 | DocType `Rework Regel` | Rework-Matrix |
 | DocType `Produkttraeger` | Behälter, Kiste oder Palette mit Code (QR) |
