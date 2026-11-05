@@ -13,7 +13,7 @@ import pkgutil
 
 from frappe.tests import IntegrationTestCase
 
-PAKETE = ("keks_trace.terminal", "keks_trace.palette", "keks_trace.buchung")
+PAKETE = ("keks_trace.terminal", "keks_trace.palette", "keks_trace.buchung", "keks_trace.linienbuchung")
 
 
 class TestPakete(IntegrationTestCase):

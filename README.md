@@ -117,6 +117,7 @@ Lieferschein). Der ERPNext-Kern wird nicht verändert.
 | `keks_trace/vollstaendigkeit.py` | Fehlende Rezeptzutaten erkennen |
 | `keks_trace/bilanz.py` | Mengenbilanz je Charge |
 | `keks_trace/silo.py` | Silo/Tank: FIFO-Zuteilung, Vermischung, Leermeldung (`leermeldung`), Silo-Info |
+| `keks_trace/linienbuchung/` | Buchen an der Backstraße, nach Bereichen: `basis`, `rezept` (Linienrezept, Verbrauch), `auftrag`, `lose` (lose Ware F7–F9), `zufuhr`, `retour`, `uebersicht`, `rework` (F18/F19), `fertig` (Palette fertig, Auftrag beenden, Packstation). Aufgerufen wird weiter `keks_trace.linienbuchung.<funktion>` |
 | `keks_trace/buchung/` | Bausteine fürs Buchen, die Terminal und Linie gemeinsam nutzen (untere Schicht): `basis`, `beleg` (neue Charge, Buchungszeilen, Ziel), `bestand`, `scan` (Scan auflösen), `zutat` (Zutat prüfen, FEFO) |
 | `keks_trace/palette/` | Paletten mit NVE (SSCC), nach Bereichen: `basis`, `einheit`, `nve`, `bestand`, `versandkarton`, `bewegung`, `belege` (Hooks an Lieferschein und Lagerbuchung), `rueckverfolgung`. Aufgerufen wird weiter `keks_trace.palette.<funktion>` |
 | DocType `Allergengruppe` | Allergene je Teig, Füllung, Rework |
