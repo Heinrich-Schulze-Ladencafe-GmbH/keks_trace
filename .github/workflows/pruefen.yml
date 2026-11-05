@@ -1,0 +1,43 @@
+# Schnelle Prüfungen bei jedem Push und Pull Request, ohne Frappe-Site.
+# Die Integrationstests (bench run-tests) laufen weiter auf dem Testserver.
+name: Prüfen
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      # dieselbe Version wie in .pre-commit-config.yaml
+      - run: pip install ruff==0.14.10
+      - run: ruff check keks_trace
+      - run: ruff format --check keks_trace
+
+  terminal:
+    name: Terminal (ESLint, Rauchtest im Browser)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: ESLint (fehlende Imports, Zuweisung an Imports)
+        run: npx --yes eslint@10.1.0 -c tests/terminal/eslint.config.mjs --no-config-lookup keks_trace/public/js/terminal
+      - name: Playwright mit Chromium
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Rauchtest (alle Stationen, zwei Klicks tief)
+        run: node tests/terminal/rauchtest.mjs
+        env:
+          KT_TIEFE: "2"

@@ -30,7 +30,6 @@ from keks_trace.utils import (
 
 
 def pruefe(doc):
-
 	eingaenge = eingangs_zeilen(doc)
 	ausgaenge = [r for r in ausgangs_zeilen(doc) if r.is_finished_item] or ausgangs_zeilen(doc)
 	if not eingaenge or not ausgaenge:
