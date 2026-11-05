@@ -25,7 +25,8 @@ jobs:
 
   terminal:
     name: Terminal (ESLint, Rauchtest im Browser)
-    runs-on: ubuntu-latest
+    # fest, weil Playwright neue Ubuntu-Versionen erst später unterstützt
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
